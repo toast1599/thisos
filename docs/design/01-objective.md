@@ -1,0 +1,34 @@
+# 01. Objective, scope and trust
+
+- **Day:** 1 (Wed 2026-10-14)
+- **Status:** In progress
+
+## Covers
+
+The purpose of the OS, its scope, the threat model, and what the system trusts.
+
+## Decided
+
+- [0001](../decisions/0001-general-purpose-os.md) General-purpose production OS
+- [0002](../decisions/0002-kernel-mode-verified-execution.md) All code runs in kernel mode, isolated by verification (superseded by [0014](../decisions/0014-microkernel.md))
+- [0003](../decisions/0003-rust-std-no-libc.md) Rust is the system language; the Rust standard library replaces libc
+- [0004](../decisions/0004-not-unix.md) Not Unix-like
+- [0008](../decisions/0008-architecture-neutral-design.md) Architecture-neutral design
+- [0009](../decisions/0009-x86-64-first.md) x86_64 is the first architecture
+- [0010](../decisions/0010-64-bit-only.md) 64-bit architectures only
+- [0011](../decisions/0011-aarch64-second.md) AArch64 is the second architecture
+- [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode
+- [0015](../decisions/0015-clean-apis.md) APIs and ABIs are designed for this system: inspired by others, never bound to them
+- [0016](../decisions/0016-threat-model-scope.md) Threat model: speculative leaks between programs and denial of service are in scope
+- [0019](../decisions/0019-kernel-minimality.md) Kernel minimality: anything that can reasonably run in user mode does
+
+## Open questions
+
+- **Second architecture timing:** the point by which AArch64 has to be up ([0011](../decisions/0011-aarch64-second.md)). The decision so far is "later, but not too late" ([0009](../decisions/0009-x86-64-first.md)).
+- **Scope of [0008](../decisions/0008-architecture-neutral-design.md):**
+  - Does it also cover platform-specific code: interrupt controllers, timers, firmware tables?
+  - Does it apply to third-party programs, or only to OS code?
+- **Kernel contents.** Under [0019](../decisions/0019-kernel-minimality.md), the kernel keeps only what can't reasonably run in user mode, and each mechanism is judged on its own.
+  - The starting point is seL4's set: address spaces, threads and scheduling, IPC, interrupt delivery and capabilities.
+  - Even within those, scheduling policy and memory-allocation policy may move to user mode.
+- **Project name.** Deferred: it isn't needed until the first crates are created. It also becomes the OS name in the Rust target.
