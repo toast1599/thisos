@@ -116,7 +116,7 @@ Neither A nor B stops speculative reads inside one shared address space. Once ad
   - review of the generated code for critical paths;
   - a check of the compiled binary against the source, as seL4 does.
 - **What is checked before a program runs.** Isolation no longer depends on it. Are programs still signed or checked, and for what: provenance, policy, or nothing?
-- **Executable format.** What exactly is shipped (ELF or something else), and what it declares, for example the capabilities it needs ([05-interfaces](05-interfaces.md)).
+- **Executable format.** What exactly is shipped (ELF or something else), and what it declares, for example the capabilities it needs ([05-interfaces](05-interfaces.md)). Under [0031](../decisions/0031-user-mode-loader.md), it's read by a user-mode loader, not by the kernel.
 - **Per-architecture or neutral program format.** Shipping native code means a separate build for each architecture. A neutral format compiled on the device would mean one artifact for every architecture ([0008](../decisions/0008-architecture-neutral-design.md)).
 - **The audited set** ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)). List the kernel's unsafe code and the shared wrappers the OS's own services use, with an audit record for each part. Also decide which components count as shipped by the OS.
 - **Runtime code generators.** JIT compilers are now ordinary user-mode programs ([0006](../decisions/0006-non-rust-software.md)). What remains is policy: whether a program may make memory executable, and under what conditions.

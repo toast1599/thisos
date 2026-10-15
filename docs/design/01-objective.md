@@ -26,9 +26,10 @@ The purpose of the OS, its scope, the threat model, and what the system trusts.
 
 - **Second architecture timing:** the point by which AArch64 has to be up ([0011](../decisions/0011-aarch64-second.md)). The decision so far is "later, but not too late" ([0009](../decisions/0009-x86-64-first.md)).
 - **Scope of [0008](../decisions/0008-architecture-neutral-design.md):**
-  - Does it also cover platform-specific code: interrupt controllers, timers, firmware tables?
+  - Does it also cover platform-specific code: interrupt controllers, timers, firmware tables? [0032](../decisions/0032-minimal-hardware-discovery.md) limits the kernel's own platform code to the interrupt controller, the timer and reading the memory map.
   - Does it apply to third-party programs, or only to OS code?
 - **Kernel contents.** Under [0019](../decisions/0019-kernel-minimality.md), the kernel keeps only what can't reasonably run in user mode, and each mechanism is judged on its own.
   - The starting point is seL4's set: address spaces, threads and scheduling, IPC, interrupt delivery and capabilities.
-  - Even within those, scheduling policy and memory-allocation policy may move to user mode.
+  - Even within those, scheduling policy may move to user mode.
+  - Already moved out: physical memory management [0025](../decisions/0025-user-mode-memory.md), page-fault handling [0027](../decisions/0027-user-mode-pagers.md), program loading [0031](../decisions/0031-user-mode-loader.md) and most hardware discovery [0032](../decisions/0032-minimal-hardware-discovery.md).
 - **Project name.** Deferred: it isn't needed until the first crates are created. It also becomes the OS name in the Rust target.

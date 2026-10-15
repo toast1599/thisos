@@ -39,3 +39,16 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0021](0021-ipc-simple-upgradable.md) | IPC starts simple and modular, and is designed to be upgraded | Accepted | 2026-10-15 |
 | [0022](0022-explicit-spawn.md) | Programs start other programs by explicit spawn | Accepted | 2026-10-15 |
 | [0023](0023-no-quotas.md) | No quotas: a program's resources are limited only by the hardware and what's available | Accepted | 2026-10-15 |
+| [0024](0024-root-task.md) | At boot, one root task receives every initial capability | Accepted | 2026-10-15 |
+| [0025](0025-user-mode-memory.md) | Physical memory is managed from user mode | Accepted | 2026-10-15 |
+| [0026](0026-programs-pay-kernel-objects.md) | Programs pay for their kernel objects with memory they hold | Accepted | 2026-10-15 |
+| [0027](0027-user-mode-pagers.md) | Page faults are handled by user-mode pagers | Accepted | 2026-10-15 |
+| [0028](0028-namespace-at-spawn.md) | Programs find services through a namespace handed over at spawn | Accepted | 2026-10-15 |
+| [0029](0029-users-as-capabilities.md) | A user is the set of capabilities a login service grants | Accepted | 2026-10-15 |
+| [0030](0030-filesystem-decides-access.md) | The filesystem service decides who may open stored data | Accepted | 2026-10-15 |
+| [0031](0031-user-mode-loader.md) | The program loader runs in user mode, and starting programs needs a capability | Accepted | 2026-10-15 |
+| [0032](0032-minimal-hardware-discovery.md) | The kernel reads only the hardware information it needs to start | Accepted | 2026-10-15 |
+| [0033](0033-cpu-fairness.md) | CPU fairness: fair sharing within each priority, and priorities as capabilities | Accepted | 2026-10-15 |
+| [0034](0034-smt-trusted-pairs.md) | Only programs that trust each other share a CPU core | Accepted | 2026-10-15 |
+| [0035](0035-predictor-flush-on-request.md) | Branch predictors are flushed only on request | Accepted | 2026-10-15 |
+| [0036](0036-ipc-message-max.md) | One IPC message has a small fixed maximum size; larger data goes through shared memory | Accepted | 2026-10-15 |
