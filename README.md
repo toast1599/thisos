@@ -31,7 +31,7 @@ These are rough estimates. They will be revisited at the freeze.
 | Weeks 2–3 | Toolchain, build, boot in QEMU, serial output, panic and logging, test harness | Kernel builds on `core` only |
 | Weeks 3–5 | Physical and virtual memory, kernel heap | `alloc` in the kernel |
 | Weeks 5–7 | Interrupts, timers, scheduler, context switching | — |
-| Weeks 7–9 | System calls and IPC, loader, first user-mode program | Custom target, std built with `-Zbuild-std`. Minimal std: allocation, stdout, args, exit, panics. |
+| Weeks 7–9 | System calls and IPC, loader, first user-mode program on x86_64 and AArch64 | Custom target, std built with `-Zbuild-std`. Minimal std: allocation, stdout, args, exit, panics. |
 | Weeks 9–12 | User-mode drivers, filesystem, init, shell | Threads, thread-local storage, locks, time |
 | Month 3+ | SMP, networking | Filesystem, networking, process spawning. Ports of key crates. |
 | Later | WebAssembly runtime for software not written in Rust | Get the target accepted upstream in rust-lang/rust |

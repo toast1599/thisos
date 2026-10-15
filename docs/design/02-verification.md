@@ -13,6 +13,14 @@ What the system has to trust, how programs are built and checked before they run
 - [0012](../decisions/0012-no-memory-cap.md) No fixed limit on program memory
 - [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode
 - [0017](../decisions/0017-unsafe-code-kernel-and-services.md) Unsafe code: one closed, audited set for the kernel and the OS's own services
+- [0037](../decisions/0037-kernel-toolchain.md) The kernel is built with one pinned, audited toolchain
+- [0038](../decisions/0038-elf-container.md) Programs ship as ELF, used only as a file container
+- [0039](../decisions/0039-native-per-arch.md) Programs ship as native code, built separately for each architecture
+- [0040](../decisions/0040-signed-programs-owner-policy.md) Programs are signed, and the device owner's policy decides which signers may run
+- [0041](../decisions/0041-immutable-packages.md) Installed programs are immutable packages named by their content hash
+- [0042](../decisions/0042-updates.md) The system updates atomically as one image; third-party programs update package by package
+- [0043](../decisions/0043-executable-memory-capability.md) Making memory executable at run time needs a capability
+- [0044](../decisions/0044-system-image-is-os-shipped.md) Everything in the system image counts as shipped by the OS
 
 ## Key finding: the Rust compiler is not itself a soundness proof
 
@@ -111,14 +119,8 @@ Neither A nor B stops speculative reads inside one shared address space. Once ad
 
 ## Open questions
 
-- **Toolchain trust for the kernel.** The compiler no longer isolates programs, but it still builds the kernel, where a miscompilation is a kernel bug. How much assurance does that need?
-  - a pinned, audited toolchain ([07-engineering](07-engineering.md));
-  - review of the generated code for critical paths;
-  - a check of the compiled binary against the source, as seL4 does.
-- **What is checked before a program runs.** Isolation no longer depends on it. Are programs still signed or checked, and for what: provenance, policy, or nothing?
-- **Executable format.** What exactly is shipped (ELF or something else), and what it declares, for example the capabilities it needs ([05-interfaces](05-interfaces.md)). Under [0031](../decisions/0031-user-mode-loader.md), it's read by a user-mode loader, not by the kernel.
-- **Per-architecture or neutral program format.** Shipping native code means a separate build for each architecture. A neutral format compiled on the device would mean one artifact for every architecture ([0008](../decisions/0008-architecture-neutral-design.md)).
-- **The audited set** ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)). List the kernel's unsafe code and the shared wrappers the OS's own services use, with an audit record for each part. Also decide which components count as shipped by the OS.
-- **Runtime code generators.** JIT compilers are now ordinary user-mode programs ([0006](../decisions/0006-non-rust-software.md)). What remains is policy: whether a program may make memory executable, and under what conditions.
-- **Storage of programs.** Where are they kept, and how are they protected from tampering?
-- **Updates.** Every program statically links its own std ([0003](../decisions/0003-rust-std-no-libc.md)). How do fixes to the kernel, to std or to a program reach installed systems?
+- **Signing** ([0040](../decisions/0040-signed-programs-owner-policy.md)): the default owner policy, how signing keys are managed, who signs the system image, and where the check runs, in the loader or a separate service.
+- **Program sections** ([0038](../decisions/0038-elf-container.md)): what the ELF sections carry, such as requested capabilities, the signature and package metadata ([05-interfaces](05-interfaces.md)).
+- **Packages** ([0041](../decisions/0041-immutable-packages.md)): the hash function, the package layout and the service that stores packages.
+- **Outdated std in third-party programs** ([0042](../decisions/0042-updates.md)). A std fix reaches a third-party program only when its publisher rebuilds it. What does the OS do about programs built with a flawed std?
+- **The audited set** ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)). List the kernel's unsafe code and the shared wrappers the OS's own services use, with an audit record for each part.

@@ -52,3 +52,14 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0034](0034-smt-trusted-pairs.md) | Only programs that trust each other share a CPU core | Accepted | 2026-10-15 |
 | [0035](0035-predictor-flush-on-request.md) | Branch predictors are flushed only on request | Accepted | 2026-10-15 |
 | [0036](0036-ipc-message-max.md) | One IPC message has a small fixed maximum size; larger data goes through shared memory | Accepted | 2026-10-15 |
+| [0037](0037-kernel-toolchain.md) | The kernel is built with one pinned, audited toolchain | Accepted | 2026-10-15 |
+| [0038](0038-elf-container.md) | Programs ship as ELF, used only as a file container | Accepted | 2026-10-15 |
+| [0039](0039-native-per-arch.md) | Programs ship as native code, built separately for each architecture | Accepted | 2026-10-15 |
+| [0040](0040-signed-programs-owner-policy.md) | Programs are signed, and the device owner's policy decides which signers may run | Accepted | 2026-10-15 |
+| [0041](0041-immutable-packages.md) | Installed programs are immutable packages named by their content hash | Accepted | 2026-10-15 |
+| [0042](0042-updates.md) | The system updates atomically as one image; third-party programs update package by package | Accepted | 2026-10-15 |
+| [0043](0043-executable-memory-capability.md) | Making memory executable at run time needs a capability | Accepted | 2026-10-15 |
+| [0044](0044-system-image-is-os-shipped.md) | Everything in the system image counts as shipped by the OS | Accepted | 2026-10-15 |
+| [0045](0045-aarch64-with-first-user-program.md) | AArch64 is brought up together with the first user-mode program | Accepted | 2026-10-15 |
+| [0046](0046-scope-of-0008.md) | Scope of 0008: the OS's own code, including platform-specific code | Accepted | 2026-10-15 |
+| [0047](0047-kernel-mapping.md) | The kernel stays mapped in every address space unless the CPU requires otherwise | Accepted | 2026-10-15 |

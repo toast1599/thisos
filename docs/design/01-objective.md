@@ -21,13 +21,11 @@ The purpose of the OS, its scope, the threat model, and what the system trusts.
 - [0015](../decisions/0015-clean-apis.md) APIs and ABIs are designed for this system: inspired by others, never bound to them
 - [0016](../decisions/0016-threat-model-scope.md) Threat model: speculative leaks between programs and denial of service are in scope
 - [0019](../decisions/0019-kernel-minimality.md) Kernel minimality: anything that can reasonably run in user mode does
+- [0045](../decisions/0045-aarch64-with-first-user-program.md) AArch64 is brought up together with the first user-mode program
+- [0046](../decisions/0046-scope-of-0008.md) Scope of 0008: the OS's own code, including platform-specific code
 
 ## Open questions
 
-- **Second architecture timing:** the point by which AArch64 has to be up ([0011](../decisions/0011-aarch64-second.md)). The decision so far is "later, but not too late" ([0009](../decisions/0009-x86-64-first.md)).
-- **Scope of [0008](../decisions/0008-architecture-neutral-design.md):**
-  - Does it also cover platform-specific code: interrupt controllers, timers, firmware tables? [0032](../decisions/0032-minimal-hardware-discovery.md) limits the kernel's own platform code to the interrupt controller, the timer and reading the memory map.
-  - Does it apply to third-party programs, or only to OS code?
 - **Kernel contents.** Under [0019](../decisions/0019-kernel-minimality.md), the kernel keeps only what can't reasonably run in user mode, and each mechanism is judged on its own.
   - The starting point is seL4's set: address spaces, threads and scheduling, IPC, interrupt delivery and capabilities.
   - Even within those, scheduling policy may move to user mode.
