@@ -63,3 +63,35 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0045](0045-aarch64-with-first-user-program.md) | AArch64 is brought up together with the first user-mode program | Accepted | 2026-10-15 |
 | [0046](0046-scope-of-0008.md) | Scope of 0008: the OS's own code, including platform-specific code | Accepted | 2026-10-15 |
 | [0047](0047-kernel-mapping.md) | The kernel stays mapped in every address space unless the CPU requires otherwise | Accepted | 2026-10-15 |
+| [0048](0048-reserve-on-grant.md) | Memory is reserved when it's granted; the system never promises more than it has | Accepted | 2026-10-15 |
+| [0049](0049-memory-fair-share.md) | When memory runs short, it's shared fairly within each memory priority | Accepted | 2026-10-15 |
+| [0050](0050-clients-pay.md) | Clients pay for the state services keep for them | Accepted | 2026-10-15 |
+| [0051](0051-kernel-clears-memory.md) | The kernel clears memory before it's made into anything new | Accepted | 2026-10-15 |
+| [0052](0052-user-mode-page-tables.md) | Page tables are kernel objects that user mode builds | Accepted | 2026-10-15 |
+| [0053](0053-revoke-destroys-derived.md) | Revoking memory destroys everything made from it | Accepted | 2026-10-15 |
+| [0054](0054-kernel-enforces-execute.md) | The kernel enforces the right to make memory executable | Accepted | 2026-10-15 |
+| [0055](0055-kernel-maps-only-objects.md) | The kernel maps its own memory and kernel objects, not all of physical memory | Accepted | 2026-10-15 |
+| [0056](0056-pager-chosen-at-spawn.md) | A program's pager is chosen when it's spawned | Accepted | 2026-10-15 |
+| [0057](0057-pager-fault-chain.md) | A pager's own faults go to its pager, up a chain that ends at the root task | Accepted | 2026-10-15 |
+| [0058](0058-shared-and-handed-over.md) | Programs share bulk data through regions that are shared or handed over | Accepted | 2026-10-15 |
+| [0059](0059-caller-allocates.md) | Memory that crosses an interface is allocated by the caller, and its use moves only by handover | Accepted | 2026-10-15 |
+| [0060](0060-kernel-stack-per-core.md) | The kernel has one stack per CPU core, and its worst-case depth is checked at build time | Accepted | 2026-10-15 |
+| [0061](0061-no-randomization-yet.md) | Nothing is randomized at first, and the design keeps randomization possible | Accepted | 2026-10-15 |
+| [0062](0062-memory-priority-capability.md) | Memory priority is a capability of its own | Accepted | 2026-10-15 |
+| [0063](0063-widest-addressing.md) | The kernel turns on the widest virtual addressing the CPU offers | Accepted | 2026-10-15 |
+| [0064](0064-memory-belongs-to-payer.md) | Memory belongs to the program it was granted to; lending, sharing and handover move only access | Accepted | 2026-10-15 |
+| [0065](0065-lost-memory-is-an-error.md) | Touching memory that was taken back is an error, not a crash | Accepted | 2026-10-15 |
+| [0066](0066-kernel-upper-half.md) | The kernel sits in the upper half of every address space, and programs in the lower half | Accepted | 2026-10-15 |
+| [0067](0067-object-window-offset.md) | Kernel objects are mapped at their physical address plus a fixed offset | Accepted | 2026-10-15 |
+| [0068](0068-no-kernel-heap.md) | The kernel has no heap | Accepted | 2026-10-15 |
+| [0069](0069-all-page-sizes.md) | The kernel supports every page size the hardware offers | Accepted | 2026-10-15 |
+| [0070](0070-position-independent-programs.md) | Programs are built position-independent | Accepted | 2026-10-15 |
+| [0071](0071-three-memory-programs.md) | The root task, the memory service and the default pager are three separate programs | Accepted | 2026-10-15 |
+| [0072](0072-registers-only.md) | System calls and IPC carry data only in registers; the kernel never reads program data | Accepted | 2026-10-15 |
+| [0073](0073-kernel-layout-in-implementation.md) | The kernel's internal layout is chosen during implementation | Accepted | 2026-10-15 |
+| [0074](0074-low-64k-unmapped.md) | The lowest 64 KiB of every program's half stays unmapped | Accepted | 2026-10-15 |
+| [0075](0075-user-guards-always-on.md) | The kernel's guards against touching or running program memory are always on | Accepted | 2026-10-15 |
+| [0076](0076-memory-notice-deadline.md) | Programs over their fair share get a notice, then a deadline | Accepted | 2026-10-15 |
+| [0077](0077-swap-in-default-pager.md) | Swap is a feature of the default pager; it comes later and is encrypted | Accepted | 2026-10-15 |
+| [0078](0078-low-addresses-on-request.md) | Programs that need low addresses ask for them | Accepted | 2026-10-15 |
+| [0079](0079-pointer-tagging-off.md) | Hardware pointer tagging stays off for now | Accepted | 2026-10-15 |

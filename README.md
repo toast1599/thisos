@@ -29,7 +29,7 @@ These are rough estimates. They will be revisited at the freeze.
 | When | Kernel | Rust standard library |
 |---|---|---|
 | Weeks 2–3 | Toolchain, build, boot in QEMU, serial output, panic and logging, test harness | Kernel builds on `core` only |
-| Weeks 3–5 | Physical and virtual memory, kernel heap | `alloc` in the kernel |
+| Weeks 3–5 | Physical and virtual memory: memory capabilities, kernel objects, page-table objects, revoke | — (the kernel has no heap and stays on `core`) |
 | Weeks 5–7 | Interrupts, timers, scheduler, context switching | — |
 | Weeks 7–9 | System calls and IPC, loader, first user-mode program on x86_64 and AArch64 | Custom target, std built with `-Zbuild-std`. Minimal std: allocation, stdout, args, exit, panics. |
 | Weeks 9–12 | User-mode drivers, filesystem, init, shell | Threads, thread-local storage, locks, time |

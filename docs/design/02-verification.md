@@ -120,7 +120,7 @@ Neither A nor B stops speculative reads inside one shared address space. Once ad
 ## Open questions
 
 - **Signing** ([0040](../decisions/0040-signed-programs-owner-policy.md)): the default owner policy, how signing keys are managed, who signs the system image, and where the check runs, in the loader or a separate service.
-- **Program sections** ([0038](../decisions/0038-elf-container.md)): what the ELF sections carry, such as requested capabilities, the signature and package metadata ([05-interfaces](05-interfaces.md)).
+- **Program sections** ([0038](../decisions/0038-elf-container.md)): what the ELF sections carry, such as requested capabilities, the signature and package metadata ([05-interfaces](05-interfaces.md)). Programs are built position-independent [0070](../decisions/0070-position-independent-programs.md). Which relocations they may carry is open, and so is whether a program can ask for its own image to be placed at low addresses [0078](../decisions/0078-low-addresses-on-request.md).
 - **Packages** ([0041](../decisions/0041-immutable-packages.md)): the hash function, the package layout and the service that stores packages.
 - **Outdated std in third-party programs** ([0042](../decisions/0042-updates.md)). A std fix reaches a third-party program only when its publisher rebuilds it. What does the OS do about programs built with a flawed std?
 - **The audited set** ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)). List the kernel's unsafe code and the shared wrappers the OS's own services use, with an audit record for each part.

@@ -12,6 +12,7 @@ The toolchain, build system, repository layout, testing, standards, and the free
 - [0018](../decisions/0018-kernel-assurance.md) Kernel assurance: review, tests and fuzzing from the start; formal proofs later
 - [0019](../decisions/0019-kernel-minimality.md) Kernel minimality: anything that can reasonably run in user mode does
 - [0037](../decisions/0037-kernel-toolchain.md) The kernel is built with one pinned, audited toolchain
+- [0060](../decisions/0060-kernel-stack-per-core.md) The kernel has one stack per CPU core, and its worst-case depth is checked at build time
 
 ## Open questions
 
@@ -25,6 +26,7 @@ The toolchain, build system, repository layout, testing, standards, and the free
 - **Repository layout.**
 - **Testing:** a QEMU test harness and CI.
 - **Kernel assurance details** ([0018](../decisions/0018-kernel-assurance.md)): review rules, test coverage targets and the fuzzing setup.
+- **Kernel stack depth check** ([0060](../decisions/0060-kernel-stack-per-core.md)): which tool checks the kernel's worst-case stack depth at build time, and how it rejects recursion.
 - **Enforcing kernel minimality** ([0019](../decisions/0019-kernel-minimality.md)): review rules, a size budget, or both.
 - **Coding and documentation standards.**
 - **License.**
