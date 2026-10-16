@@ -1,6 +1,6 @@
 # 0067. Kernel objects are mapped at their physical address plus a fixed offset
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0096](0096-object-window-lazy-unmap.md)
 - **Date:** 2026-10-15
 
 ## Context

@@ -1,6 +1,6 @@
 # 0055. The kernel maps its own memory and kernel objects, not all of physical memory
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0096](0096-object-window-lazy-unmap.md)
 - **Date:** 2026-10-15
 
 ## Context

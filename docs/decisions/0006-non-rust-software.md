@@ -1,6 +1,6 @@
 # 0006. Non-Rust software is supported later; route still open
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0082](0082-corrections.md)
 - **Date:** 2026-10-14
 
 ## Context

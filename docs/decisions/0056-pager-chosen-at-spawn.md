@@ -1,6 +1,6 @@
 # 0056. A program's pager is chosen when it's spawned
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0081](0081-pager-per-thread.md)
 - **Date:** 2026-10-15
 
 ## Context

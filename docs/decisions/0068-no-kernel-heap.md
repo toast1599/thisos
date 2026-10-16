@@ -1,6 +1,6 @@
 # 0068. The kernel has no heap
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0097](0097-user-mode-starts-cores.md)
 - **Date:** 2026-10-15
 
 ## Context

@@ -1,6 +1,6 @@
 # 0027. Page faults are handled by user-mode pagers
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0081](0081-pager-per-thread.md)
 - **Date:** 2026-10-15
 
 ## Context

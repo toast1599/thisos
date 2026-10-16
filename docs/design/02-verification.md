@@ -11,7 +11,7 @@ What the system has to trust, how programs are built and checked before they run
 
 - [0005](../decisions/0005-unsafe-code-policy.md) Unsafe code exists only in one closed, audited trusted set (superseded by [0017](../decisions/0017-unsafe-code-kernel-and-services.md))
 - [0012](../decisions/0012-no-memory-cap.md) No fixed limit on program memory
-- [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode
+- [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode (amended by [0082](../decisions/0082-corrections.md))
 - [0017](../decisions/0017-unsafe-code-kernel-and-services.md) Unsafe code: one closed, audited set for the kernel and the OS's own services
 - [0037](../decisions/0037-kernel-toolchain.md) The kernel is built with one pinned, audited toolchain
 - [0038](../decisions/0038-elf-container.md) Programs ship as ELF, used only as a file container
@@ -30,7 +30,7 @@ Measured on 2026-10-14 with rustc 1.100.0-nightly (2026-09-01) and rustc 1.99.0 
 - This is rust-lang/rust#25860 ("Implied bounds on nested references + variance = soundness hole"), open since 2015 and still open on 2026-10-14. The higher-ranked `fn`-pointer form that was tested is the shape the `cve-rs` crate uses. The plain form from the issue is now rejected; the higher-ranked form is not.
 - As of 2026-10-14, rust-lang/rust had 141 open issues labelled `I-unsound`.
 
-**Implication for this OS.** "The compiler accepted the program" is not equivalent to "the program cannot violate memory safety." Under [0002](../decisions/0002-kernel-mode-verified-execution.md), a verifier that trusts `rustc` acceptance inherits every one of these holes as a full kernel-mode compromise. This is the central tension the verification design has to resolve, and it bears directly on the first open question below. It does not mean the goal is unreachable; it means the trusted check cannot be "rustc exited 0." Directions to weigh on Day 2:
+**Implication for this OS.** "The compiler accepted the program" is not equivalent to "the program cannot violate memory safety." Under [0002](../decisions/0002-kernel-mode-verified-execution.md), a verifier that trusts `rustc` acceptance inherits every one of these holes as a full kernel-mode compromise. This is the central tension the verification design has to resolve. It does not mean the goal is unreachable; it means the trusted check cannot be "rustc exited 0." Directions to weigh on Day 2:
 
 - Pin a known-good toolchain and maintain a denylist of patterns that trigger known holes (weakest; a denylist never proves completeness).
 - Add an independent check on the compiler's *output* rather than trusting its *acceptance*, so a `rustc` front-end bug cannot by itself pass bad code (the Verve/typed-output approach).

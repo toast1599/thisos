@@ -1,6 +1,6 @@
 # 0033. CPU fairness: fair sharing within each priority, and priorities as capabilities
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0084](0084-shares-belong-to-accounts.md)
 - **Date:** 2026-10-15
 
 ## Context

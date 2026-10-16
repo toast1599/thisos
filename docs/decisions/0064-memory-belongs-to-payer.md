@@ -1,6 +1,6 @@
 # 0064. Memory belongs to the program it was granted to; lending, sharing and handover move only access
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0084](0084-shares-belong-to-accounts.md)
 - **Date:** 2026-10-15
 
 ## Context

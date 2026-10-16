@@ -1,7 +1,7 @@
 # 04. Programs, isolation and scheduling
 
 - **Day:** 4 (Sat 2026-10-17)
-- **Status:** Not started
+- **Status:** In progress
 
 ## Covers
 
@@ -12,19 +12,47 @@ What a program is, how programs run and are scheduled, and what happens when one
 - [0022](../decisions/0022-explicit-spawn.md) Programs start other programs by explicit spawn
 - [0023](../decisions/0023-no-quotas.md) No quotas: a program's resources are limited only by the hardware and what's available
 - [0031](../decisions/0031-user-mode-loader.md) The program loader runs in user mode, and starting programs needs a capability
-- [0033](../decisions/0033-cpu-fairness.md) CPU fairness: fair sharing within each priority, and priorities as capabilities
+- [0033](../decisions/0033-cpu-fairness.md) CPU fairness: fair sharing within each priority, and priorities as capabilities (amended by [0084](../decisions/0084-shares-belong-to-accounts.md))
 - [0034](../decisions/0034-smt-trusted-pairs.md) Only programs that trust each other share a CPU core
-- [0035](../decisions/0035-predictor-flush-on-request.md) Branch predictors are flushed only on request
-- [0049](../decisions/0049-memory-fair-share.md) When memory runs short, it's shared fairly within each memory priority
-- [0056](../decisions/0056-pager-chosen-at-spawn.md) A program's pager is chosen when it's spawned
+- [0035](../decisions/0035-predictor-flush-on-request.md) Branch predictors are flushed only on request (superseded by [0080](../decisions/0080-predictor-flush-both-ways.md))
+- [0049](../decisions/0049-memory-fair-share.md) When memory runs short, it's shared fairly within each memory priority (amended by [0084](../decisions/0084-shares-belong-to-accounts.md))
+- [0056](../decisions/0056-pager-chosen-at-spawn.md) A program's pager is chosen when it's spawned (amended by [0081](../decisions/0081-pager-per-thread.md))
 - [0062](../decisions/0062-memory-priority-capability.md) Memory priority is a capability of its own
+- [0080](../decisions/0080-predictor-flush-both-ways.md) Branch predictors are flushed when switching to or away from a program that asks
+- [0081](../decisions/0081-pager-per-thread.md) Page faults go to the faulting thread's pager
+- [0083](../decisions/0083-program-is-address-space.md) To the kernel, a program is an address space and the threads bound to it
+- [0084](../decisions/0084-shares-belong-to-accounts.md) Fair shares of CPU time and memory belong to accounts (amended by [0092](../decisions/0092-scheduler-keeps-time.md))
+- [0085](../decisions/0085-clients-pay-cpu-time.md) Clients pay for the CPU time services spend on them
+- [0086](../decisions/0086-priorities-per-program-shares-per-account.md) Priorities stay per program, and each priority is shared by account
+- [0087](../decisions/0087-thread-priorities.md) A thread runs at any CPU priority up to its program's
+- [0088](../decisions/0088-user-mode-scheduler.md) Scheduling policy runs in user mode (amended by [0090](../decisions/0090-priorities-in-kernel.md))
+- [0089](../decisions/0089-interrupts-off-in-kernel.md) The kernel runs with interrupts off between its interruption points
+- [0090](../decisions/0090-priorities-in-kernel.md) Strict priorities stay in the kernel, and the scheduler orders threads within each priority
+- [0091](../decisions/0091-direct-switch-on-calls.md) Calls and replies switch directly between client and service
+- [0092](../decisions/0092-scheduler-keeps-time.md) The scheduler keeps the CPU time books, from the kernel's reports
+- [0093](../decisions/0093-scheduler-per-core.md) The scheduler has a thread on each core, which decides for that core
+- [0094](../decisions/0094-one-deadline-per-core.md) Each core has one timer deadline, set by its scheduler thread
+- [0095](../decisions/0095-one-kernel-lock.md) One lock guards the kernel on multicore
+- [0097](../decisions/0097-user-mode-starts-cores.md) User mode finds the CPUs, and the root task asks the kernel to start each one
+- [0098](../decisions/0098-core-sharing-capability.md) Programs share a core only if both hold the same core-sharing capability
+- [0099](../decisions/0099-kernel-beside-sibling.md) The kernel doesn't pause a sibling hardware thread when it runs
+- [0100](../decisions/0100-cpu-flaw-mitigations.md) The kernel applies each CPU's documented mitigations for speculative-execution flaws
+- [0101](../decisions/0101-eager-fpu-state.md) Floating-point and vector registers are saved and restored on every switch
+- [0102](../decisions/0102-exception-handler.md) Each thread names an exception handler besides its pager
+- [0103](../decisions/0103-fault-without-handler.md) A fault with nowhere to go suspends the thread, and in the root task halts the system (amended by [0115](../decisions/0115-root-task-fault-boot-setting.md))
+- [0104](../decisions/0104-supervisor.md) Every program has a supervisor, named at spawn, that learns how it ended
+- [0105](../decisions/0105-supervisor-reclaims.md) A failed program's supervisor has its memory taken back, and decides on a restart
+- [0106](../decisions/0106-pager-passes-on-faults.md) A pager passes faults it won't resolve to the thread's exception handler
+- [0107](../decisions/0107-loader-writes-startup-data.md) The loader writes a new program's startup information into its memory
+- [0108](../decisions/0108-startup-information.md) What a new program receives when it's spawned
+- [0109](../decisions/0109-panic-strategy.md) Third-party programs unwind on panic by default, and the OS's own services abort
+- [0110](../decisions/0110-kernel-panic.md) A kernel panic is logged, then the machine halts or reboots by a boot setting
+- [0111](../decisions/0111-resource-accounting.md) Each service reports the resource use it already tracks
+- [0112](../decisions/0112-time-service.md) Programs read the time from a time service
+- [0113](../decisions/0113-counter-capability.md) Only programs holding a capability may read the CPU's time counter
+- [0114](../decisions/0114-scheduler-priority.md) Each core's scheduler thread runs above every priority it schedules
+- [0115](../decisions/0115-root-task-fault-boot-setting.md) A fault in the root task is handled like a kernel panic
 
 ## Open questions
 
-- **What a "program" is:** the unit of isolation, of verification, and of resource accounting. Under [0014](../decisions/0014-microkernel.md), a program is a user-mode process: an address space and its threads. What else it holds, beyond its capabilities ([0020](../decisions/0020-capabilities.md)), is open.
-- **Startup information.** Under [0022](../decisions/0022-explicit-spawn.md), a new program receives exactly the capabilities and arguments its creator hands it. Which ones, and in what form ([02-verification](02-verification.md))? They include the program's namespace [0028](../decisions/0028-namespace-at-spawn.md), its pager [0027](../decisions/0027-user-mode-pagers.md), named by the spawner and normally the default pager [0056](../decisions/0056-pager-chosen-at-spawn.md), [0071](../decisions/0071-three-memory-programs.md), and its CPU and memory priorities [0033](../decisions/0033-cpu-fairness.md), [0062](../decisions/0062-memory-priority-capability.md).
-- **Threads and scheduling:** threads, scheduler policy, preemption, SMP. Which parts of scheduling live in the kernel ([01-objective](01-objective.md)). Fairness is set by [0033](../decisions/0033-cpu-fairness.md) and core sharing by [0034](../decisions/0034-smt-trusted-pairs.md). Still open: time slices, preemption, SMP, how the scheduler learns which programs trust each other, priority inversion when a high-priority program waits on a lower-priority service, and whether the kernel runs with interrupts off between interruption points [0060](../decisions/0060-kernel-stack-per-core.md).
-- **Fault isolation:** cleaning up after a program that crashes or hangs. Under [0053](../decisions/0053-revoke-destroys-derived.md), revoking the memory a failed program was granted destroys everything made from it. Who notices the failure and has the memory service take that memory back is open. Whether and how failed drivers and services are restarted, as MINIX 3 does, is open. So is who is told when a program is stopped to free memory [0049](../decisions/0049-memory-fair-share.md).
-- **Panic strategy:** unwind or abort. Unwinding needs an unwinder, while aborting pairs with killing the program and cleaning up after it.
-- **Resource accounting:** measuring each program's memory, CPU time and handles, without capping them ([0023](../decisions/0023-no-quotas.md)).
-- **What counts as one share.** CPU time [0033](../decisions/0033-cpu-fairness.md) and memory [0049](../decisions/0049-memory-fair-share.md) are both shared fairly. Are shares counted per program, or along the spawn tree, so that a program can't enlarge its share by spawning children?
+None are left in this document.

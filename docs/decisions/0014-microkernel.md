@@ -1,6 +1,6 @@
 # 0014. Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0082](0082-corrections.md)
 - **Date:** 2026-10-15
 
 ## Context

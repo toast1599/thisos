@@ -1,6 +1,6 @@
 # 0077. Swap is a feature of the default pager; it comes later and is encrypted
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0082](0082-corrections.md)
 - **Date:** 2026-10-15
 
 ## Context

@@ -1,6 +1,6 @@
 # 0035. Branch predictors are flushed only on request
 
-- **Status:** Accepted
+- **Status:** Superseded by [0080](0080-predictor-flush-both-ways.md)
 - **Date:** 2026-10-15
 
 ## Context

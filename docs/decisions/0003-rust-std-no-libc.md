@@ -1,6 +1,6 @@
 # 0003. Rust is the system language; the Rust standard library replaces libc
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0082](0082-corrections.md)
 - **Date:** 2026-10-14
 
 ## Context

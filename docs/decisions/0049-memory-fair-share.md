@@ -1,6 +1,6 @@
 # 0049. When memory runs short, it's shared fairly within each memory priority
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0084](0084-shares-belong-to-accounts.md)
 - **Date:** 2026-10-15
 
 ## Context
