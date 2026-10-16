@@ -1,6 +1,6 @@
 # 0085. Clients pay for the CPU time services spend on them
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0121](0121-callers-help-busy-services.md)
 - **Date:** 2026-10-16
 
 ## Context

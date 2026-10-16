@@ -1,6 +1,6 @@
 # 0007. ABI: C calling convention, interfaces defined in an IDL, add-only versioning
 
-- **Status:** Proposed
+- **Status:** Superseded by [0144](0144-c-calls-and-what-crosses.md) (never accepted)
 - **Date:** 2026-10-14
 
 ## Context

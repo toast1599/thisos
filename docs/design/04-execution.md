@@ -22,7 +22,7 @@ What a program is, how programs run and are scheduled, and what happens when one
 - [0081](../decisions/0081-pager-per-thread.md) Page faults go to the faulting thread's pager
 - [0083](../decisions/0083-program-is-address-space.md) To the kernel, a program is an address space and the threads bound to it
 - [0084](../decisions/0084-shares-belong-to-accounts.md) Fair shares of CPU time and memory belong to accounts (amended by [0092](../decisions/0092-scheduler-keeps-time.md))
-- [0085](../decisions/0085-clients-pay-cpu-time.md) Clients pay for the CPU time services spend on them
+- [0085](../decisions/0085-clients-pay-cpu-time.md) Clients pay for the CPU time services spend on them (amended by [0121](../decisions/0121-callers-help-busy-services.md))
 - [0086](../decisions/0086-priorities-per-program-shares-per-account.md) Priorities stay per program, and each priority is shared by account
 - [0087](../decisions/0087-thread-priorities.md) A thread runs at any CPU priority up to its program's
 - [0088](../decisions/0088-user-mode-scheduler.md) Scheduling policy runs in user mode (amended by [0090](../decisions/0090-priorities-in-kernel.md))
@@ -44,7 +44,7 @@ What a program is, how programs run and are scheduled, and what happens when one
 - [0105](../decisions/0105-supervisor-reclaims.md) A failed program's supervisor has its memory taken back, and decides on a restart
 - [0106](../decisions/0106-pager-passes-on-faults.md) A pager passes faults it won't resolve to the thread's exception handler
 - [0107](../decisions/0107-loader-writes-startup-data.md) The loader writes a new program's startup information into its memory
-- [0108](../decisions/0108-startup-information.md) What a new program receives when it's spawned
+- [0108](../decisions/0108-startup-information.md) What a new program receives when it's spawned (amended by [0146](../decisions/0146-startup-data-block.md))
 - [0109](../decisions/0109-panic-strategy.md) Third-party programs unwind on panic by default, and the OS's own services abort
 - [0110](../decisions/0110-kernel-panic.md) A kernel panic is logged, then the machine halts or reboots by a boot setting
 - [0111](../decisions/0111-resource-accounting.md) Each service reports the resource use it already tracks

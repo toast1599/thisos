@@ -17,7 +17,7 @@ The toolchain, the build system, the license, and the final review of the design
 ## Open questions
 
 - **Toolchain:** pinned nightly with `-Zbuild-std`, or our own toolchain fork. Also, how often to upgrade. [0037](../decisions/0037-kernel-toolchain.md) requires the kernel's toolchain to be pinned and every upgrade reviewed.
-- **Build system:** how it enforces the unsafe policy for the kernel and the OS's own services ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)).
+- **Build system:** how it enforces the unsafe policy for the kernel and the OS's own services ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)), and how it runs the IDL compiler and the compatibility checker, so that no incompatible interface change can be merged ([0142](../decisions/0142-own-idl.md), [0143](../decisions/0143-add-only-versioning.md)).
 - **Enforcing [0008](../decisions/0008-architecture-neutral-design.md):** a build check that rejects `cfg(target_arch)` and `core::arch` outside architecture-specific code. Under [0046](../decisions/0046-scope-of-0008.md), it covers the OS's own code, platform-specific code included.
 - **Kernel stack depth check** ([0060](../decisions/0060-kernel-stack-per-core.md)): which tool checks the kernel's worst-case stack depth at build time, and how it rejects recursion.
 - **License.**

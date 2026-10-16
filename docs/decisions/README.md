@@ -23,7 +23,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0004](0004-not-unix.md) | Not Unix-like: `target_family` is not `unix` | Accepted | 2026-10-14 |
 | [0005](0005-unsafe-code-policy.md) | Unsafe code exists only in one closed, audited trusted set | Superseded by [0017](0017-unsafe-code-kernel-and-services.md) | 2026-10-14 |
 | [0006](0006-non-rust-software.md) | Non-Rust software is supported later; route still open | Accepted, amended by [0082](0082-corrections.md) | 2026-10-14 |
-| [0007](0007-abi-calls-and-interfaces.md) | ABI: C calling convention, interfaces defined in an IDL, add-only versioning | Proposed | 2026-10-14 |
+| [0007](0007-abi-calls-and-interfaces.md) | ABI: C calling convention, interfaces defined in an IDL, add-only versioning | Superseded by [0144](0144-c-calls-and-what-crosses.md) (never accepted) | 2026-10-14 |
 | [0008](0008-architecture-neutral-design.md) | Architecture-neutral design | Accepted, amended by [0082](0082-corrections.md) | 2026-10-14 |
 | [0009](0009-x86-64-first.md) | x86_64 is the first architecture | Accepted | 2026-10-14 |
 | [0010](0010-64-bit-only.md) | 64-bit architectures only | Accepted | 2026-10-14 |
@@ -101,7 +101,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0082](0082-corrections.md) | Corrections to 0003, 0006, 0008, 0014 and 0077 | Accepted | 2026-10-16 |
 | [0083](0083-program-is-address-space.md) | To the kernel, a program is an address space and the threads bound to it | Accepted | 2026-10-16 |
 | [0084](0084-shares-belong-to-accounts.md) | Fair shares of CPU time and memory belong to accounts | Accepted, amended by [0092](0092-scheduler-keeps-time.md) | 2026-10-16 |
-| [0085](0085-clients-pay-cpu-time.md) | Clients pay for the CPU time services spend on them | Accepted | 2026-10-16 |
+| [0085](0085-clients-pay-cpu-time.md) | Clients pay for the CPU time services spend on them | Accepted, amended by [0121](0121-callers-help-busy-services.md) | 2026-10-16 |
 | [0086](0086-priorities-per-program-shares-per-account.md) | Priorities stay per program, and each priority is shared by account | Accepted | 2026-10-16 |
 | [0087](0087-thread-priorities.md) | A thread runs at any CPU priority up to its program's | Accepted | 2026-10-16 |
 | [0088](0088-user-mode-scheduler.md) | Scheduling policy runs in user mode | Accepted, amended by [0090](0090-priorities-in-kernel.md) | 2026-10-16 |
@@ -124,7 +124,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0105](0105-supervisor-reclaims.md) | A failed program's supervisor has its memory taken back, and decides on a restart | Accepted | 2026-10-16 |
 | [0106](0106-pager-passes-on-faults.md) | A pager passes faults it won't resolve to the thread's exception handler | Accepted | 2026-10-16 |
 | [0107](0107-loader-writes-startup-data.md) | The loader writes a new program's startup information into its memory | Accepted | 2026-10-16 |
-| [0108](0108-startup-information.md) | What a new program receives when it's spawned | Accepted | 2026-10-16 |
+| [0108](0108-startup-information.md) | What a new program receives when it's spawned | Accepted, amended by [0146](0146-startup-data-block.md) | 2026-10-16 |
 | [0109](0109-panic-strategy.md) | Third-party programs unwind on panic by default, and the OS's own services abort | Accepted | 2026-10-16 |
 | [0110](0110-kernel-panic.md) | A kernel panic is logged, then the machine halts or reboots by a boot setting | Accepted | 2026-10-16 |
 | [0111](0111-resource-accounting.md) | Each service reports the resource use it already tracks | Accepted | 2026-10-16 |
@@ -133,3 +133,35 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0114](0114-scheduler-priority.md) | Each core's scheduler thread runs above every priority it schedules | Accepted | 2026-10-16 |
 | [0115](0115-root-task-fault-boot-setting.md) | A fault in the root task is handled like a kernel panic | Accepted | 2026-10-16 |
 | [0116](0116-name-thisos.md) | The OS is named thisOS | Accepted | 2026-10-16 |
+| [0117](0117-system-library.md) | Programs reach the kernel only through the system library | Accepted | 2026-10-17 |
+| [0118](0118-calls-and-notifications.md) | IPC is synchronous calls through endpoints, with notifications for events | Accepted | 2026-10-17 |
+| [0119](0119-message-eight-words.md) | One IPC message carries up to 8 words | Accepted | 2026-10-17 |
+| [0120](0120-reply-objects.md) | Services reply through reply objects | Accepted | 2026-10-17 |
+| [0121](0121-callers-help-busy-services.md) | A caller that finds its service busy lends it its priority and time | Accepted | 2026-10-17 |
+| [0122](0122-bound-notifications.md) | A notification can be bound to a thread | Accepted | 2026-10-17 |
+| [0123](0123-capabilities-in-messages.md) | A message carries up to four capabilities, each copied or moved | Accepted | 2026-10-17 |
+| [0124](0124-large-calls-split.md) | Kernel calls whose data doesn't fit in registers are split, and the system library joins them | Accepted | 2026-10-17 |
+| [0125](0125-sysret-guard.md) | The kernel never returns with `sysret` to an address outside the program half | Accepted | 2026-10-17 |
+| [0126](0126-capability-space-radix-table.md) | A capability space is a radix table, and capabilities are named by index | Accepted | 2026-10-17 |
+| [0127](0127-capability-space-per-program.md) | Each program has exactly one capability space | Accepted | 2026-10-17 |
+| [0128](0128-rights-and-badges.md) | Capabilities carry a few rights, and endpoint and notification capabilities carry a badge | Accepted | 2026-10-17 |
+| [0129](0129-revoke-any-capability.md) | Revoking any capability destroys every copy made from it | Accepted | 2026-10-17 |
+| [0130](0130-handlers-changeable.md) | A thread's pager and exception handler can be changed through its control right | Accepted | 2026-10-17 |
+| [0131](0131-namespace-path-prefixes.md) | A namespace maps path prefixes to capabilities | Accepted | 2026-10-17 |
+| [0132](0132-events-notify-then-call.md) | An event is a notification, followed by a call for its details | Accepted | 2026-10-17 |
+| [0133](0133-recovery-point-in-register.md) | Accessors keep their recovery point in a register | Accepted | 2026-10-17 |
+| [0134](0134-scheduler-interface.md) | Threads run once the scheduler takes them on, and the kernel reports to it in registers | Accepted | 2026-10-17 |
+| [0135](0135-core-sharing-from-scheduler.md) | The scheduler issues core-sharing capabilities | Accepted | 2026-10-17 |
+| [0136](0136-predictor-flush-flag.md) | A program asks for predictor flushes with a flag on its address space | Accepted | 2026-10-17 |
+| [0137](0137-memory-capability-per-program.md) | Each program has its own capability to the memory service, which names it as payer | Accepted | 2026-10-17 |
+| [0138](0138-pager-keeps-reservations.md) | Pagers keep a program's address-space reservations | Accepted | 2026-10-17 |
+| [0139](0139-results-fill-and-report.md) | A result of unknown size fills what the caller provides, and reports what remains | Accepted | 2026-10-17 |
+| [0140](0140-accounts-capability-pair.md) | An account is a pair of capabilities, one from the scheduler and one from the memory service | Accepted | 2026-10-17 |
+| [0141](0141-identity-capability.md) | The login service gives each session an identity capability | Accepted | 2026-10-17 |
+| [0142](0142-own-idl.md) | Interfaces are defined in our own IDL, modeled on FIDL | Accepted | 2026-10-17 |
+| [0143](0143-add-only-versioning.md) | Interfaces only grow, and a tool checks every change | Accepted | 2026-10-17 |
+| [0144](0144-c-calls-and-what-crosses.md) | The system library uses the C calling convention, and only data, capabilities and regions cross between programs | Accepted | 2026-10-17 |
+| [0145](0145-std-over-native-api.md) | std is a layer over the native API | Accepted | 2026-10-17 |
+| [0146](0146-startup-data-block.md) | Startup data is a versioned block defined in the IDL | Accepted | 2026-10-17 |
+| [0147](0147-elf-declarations-only.md) | A program's ELF sections carry only its declarations | Accepted | 2026-10-17 |
+| [0148](0148-freeze-covers-rules.md) | The freeze covers the interface design, and each interface's version 1 is fixed when it's released | Accepted | 2026-10-17 |

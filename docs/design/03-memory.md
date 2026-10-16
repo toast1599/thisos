@@ -69,5 +69,6 @@ Layout:
 
 None are left in this document. Memory questions that depend on other topics are listed with those topics:
 
-- **Memory requests and notices:** how programs ask for memory and low addresses, how payers are identified, how the notice to give memory back is sent, and how lost memory is reported as an error ([05-interfaces](05-interfaces.md)).
 - **File-backed memory, DMA and swap storage** ([06-system](06-system.md)).
+
+Memory requests and notices were settled with the interfaces ([05-interfaces](05-interfaces.md)): payers [0137](../decisions/0137-memory-capability-per-program.md), reservations and low addresses [0138](../decisions/0138-pager-keeps-reservations.md), notices [0132](../decisions/0132-events-notify-then-call.md), and lost memory as an error [0133](../decisions/0133-recovery-point-in-register.md).

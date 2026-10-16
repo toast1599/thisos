@@ -1,6 +1,6 @@
 # 0108. What a new program receives when it's spawned
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0146](0146-startup-data-block.md)
 - **Date:** 2026-10-16
 
 ## Context

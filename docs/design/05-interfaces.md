@@ -1,7 +1,7 @@
 # 05. System calls, IPC and the stable ABI
 
 - **Day:** 5 (Sat 2026-10-17)
-- **Status:** Not started
+- **Status:** In progress
 
 ## Covers
 
@@ -9,6 +9,7 @@ The binary interface between programs and the kernel and between programs, how i
 
 ## Decided
 
+- [0007](../decisions/0007-abi-calls-and-interfaces.md) ABI: C calling convention, interfaces defined in an IDL, add-only versioning (superseded by [0144](../decisions/0144-c-calls-and-what-crosses.md), never accepted)
 - [0015](../decisions/0015-clean-apis.md) APIs and ABIs are designed for this system: inspired by others, never bound to them
 - [0020](../decisions/0020-capabilities.md) Authority comes from capabilities
 - [0021](../decisions/0021-ipc-simple-upgradable.md) IPC starts simple and modular, and is designed to be upgraded
@@ -22,24 +23,63 @@ The binary interface between programs and the kernel and between programs, how i
 - [0064](../decisions/0064-memory-belongs-to-payer.md) Memory belongs to the program it was granted to; lending, sharing and handover move only access (amended by [0084](../decisions/0084-shares-belong-to-accounts.md))
 - [0065](../decisions/0065-lost-memory-is-an-error.md) Touching memory that was taken back is an error, not a crash
 - [0072](../decisions/0072-registers-only.md) System calls and IPC carry data only in registers; the kernel never reads program data
-- [0085](../decisions/0085-clients-pay-cpu-time.md) Clients pay for the CPU time services spend on them
+- [0085](../decisions/0085-clients-pay-cpu-time.md) Clients pay for the CPU time services spend on them (amended by [0121](../decisions/0121-callers-help-busy-services.md))
 
-One proposal is waiting for approval:
+The kernel boundary and IPC:
 
-- [0007](../decisions/0007-abi-calls-and-interfaces.md) ABI: C calling convention, interfaces defined in an IDL, add-only versioning (**Proposed**)
+- [0117](../decisions/0117-system-library.md) Programs reach the kernel only through the system library
+- [0118](../decisions/0118-calls-and-notifications.md) IPC is synchronous calls through endpoints, with notifications for events
+- [0119](../decisions/0119-message-eight-words.md) One IPC message carries up to 8 words
+- [0120](../decisions/0120-reply-objects.md) Services reply through reply objects
+- [0121](../decisions/0121-callers-help-busy-services.md) A caller that finds its service busy lends it its priority and time
+- [0122](../decisions/0122-bound-notifications.md) A notification can be bound to a thread
+- [0123](../decisions/0123-capabilities-in-messages.md) A message carries up to four capabilities, each copied or moved
+- [0124](../decisions/0124-large-calls-split.md) Kernel calls whose data doesn't fit in registers are split, and the system library joins them
+- [0125](../decisions/0125-sysret-guard.md) The kernel never returns with `sysret` to an address outside the program half
 
-0007 was written for kernel mode. Under [0014](../decisions/0014-microkernel.md), its first point (kernel calls as ordinary function calls) no longer applies. Neither do the pointer-and-length buffers and strings in its first two points: they can't cross address spaces (0014) or pass through the kernel ([0072](../decisions/0072-registers-only.md)). Its other points still apply.
+Capabilities:
+
+- [0126](../decisions/0126-capability-space-radix-table.md) A capability space is a radix table, and capabilities are named by index
+- [0127](../decisions/0127-capability-space-per-program.md) Each program has exactly one capability space
+- [0128](../decisions/0128-rights-and-badges.md) Capabilities carry a few rights, and endpoint and notification capabilities carry a badge
+- [0129](../decisions/0129-revoke-any-capability.md) Revoking any capability destroys every copy made from it
+- [0130](../decisions/0130-handlers-changeable.md) A thread's pager and exception handler can be changed through its control right
+- [0131](../decisions/0131-namespace-path-prefixes.md) A namespace maps path prefixes to capabilities
+
+Events, faults and scheduling:
+
+- [0132](../decisions/0132-events-notify-then-call.md) An event is a notification, followed by a call for its details
+- [0133](../decisions/0133-recovery-point-in-register.md) Accessors keep their recovery point in a register
+- [0134](../decisions/0134-scheduler-interface.md) Threads run once the scheduler takes them on, and the kernel reports to it in registers
+- [0135](../decisions/0135-core-sharing-from-scheduler.md) The scheduler issues core-sharing capabilities
+- [0136](../decisions/0136-predictor-flush-flag.md) A program asks for predictor flushes with a flag on its address space
+
+Memory, accounts and identity:
+
+- [0137](../decisions/0137-memory-capability-per-program.md) Each program has its own capability to the memory service, which names it as payer
+- [0138](../decisions/0138-pager-keeps-reservations.md) Pagers keep a program's address-space reservations
+- [0139](../decisions/0139-results-fill-and-report.md) A result of unknown size fills what the caller provides, and reports what remains
+- [0140](../decisions/0140-accounts-capability-pair.md) An account is a pair of capabilities, one from the scheduler and one from the memory service
+- [0141](../decisions/0141-identity-capability.md) The login service gives each session an identity capability
+
+Interface definitions:
+
+- [0142](../decisions/0142-own-idl.md) Interfaces are defined in our own IDL, modeled on FIDL
+- [0143](../decisions/0143-add-only-versioning.md) Interfaces only grow, and a tool checks every change
+- [0144](../decisions/0144-c-calls-and-what-crosses.md) The system library uses the C calling convention, and only data, capabilities and regions cross between programs
+- [0145](../decisions/0145-std-over-native-api.md) std is a layer over the native API
+- [0146](../decisions/0146-startup-data-block.md) Startup data is a versioned block defined in the IDL
+- [0147](../decisions/0147-elf-declarations-only.md) A program's ELF sections carry only its declarations
+- [0148](../decisions/0148-freeze-covers-rules.md) The freeze covers the interface design, and each interface's version 1 is fixed when it's released
 
 ## Open questions
 
-- **IDL:** our own, modeled on FIDL, or WIT ([0007](../decisions/0007-abi-calls-and-interfaces.md)). It has to express memory a client lends a service [0050](../decisions/0050-clients-pay.md), handover [0058](../decisions/0058-shared-and-handed-over.md), and caller-provided memory for results of unknown size, including how the caller learns how much to provide [0059](../decisions/0059-caller-allocates.md). Its bindings include the accessors that turn memory taken back into errors [0065](../decisions/0065-lost-memory-is-an-error.md).
-- **Capability design** ([0020](../decisions/0020-capabilities.md)). What rights does a capability carry, and how is it passed and revoked? Rights include execute on memory [0054](../decisions/0054-kernel-enforces-execute.md), and revoking follows the kernel's records of what was made from what [0053](../decisions/0053-revoke-destroys-derived.md). Also whether a thread's pager and exception handler can be changed after it's created, and by whom [0081](../decisions/0081-pager-per-thread.md), [0102](../decisions/0102-exception-handler.md). Also the namespace's format, and whether a program can pass parts of it on [0028](../decisions/0028-namespace-at-spawn.md).
-- **The role of std.** Either std is the native API, or it's a thin, documented layer over the native API. The choice is narrowed to these two. With capabilities ([0020](../decisions/0020-capabilities.md)), it leans towards a layer over the native API.
-- **System calls.** Under [0014](../decisions/0014-microkernel.md), programs enter the kernel with the architecture's system-call instruction: `syscall` on x86_64, `svc` on AArch64. Which registers carry the call number, the arguments and the results on each architecture ([0008](../decisions/0008-architecture-neutral-design.md))? All data travels in registers [0072](../decisions/0072-registers-only.md). On x86_64, returning to a program with `sysret` at an address outside the canonical range is a known hazard on Intel CPUs. How the kernel avoids it, as Linux does, is decided here.
-- **The first IPC design** ([0021](../decisions/0021-ipc-simple-upgradable.md)). Which simple starting point: synchronous calls between two programs (the L4 and seL4 model), asynchronous channels (Zircon), or shared memory? And how do programs reach IPC so the mechanism underneath can change? IPC cost largely decides performance in a microkernel. Estimated from Day 2's measurements, a round trip costs at least about 530 cycles on the development machine ([02-verification](02-verification.md)). Messages have a small fixed maximum [0036](../decisions/0036-ipc-message-max.md), and its exact size is set here. Data travels only in registers [0072](../decisions/0072-registers-only.md), so the maximum is what fits in registers on every architecture, around 8 to 10 words on x86_64.
-- **Identity without user IDs.** Under [0029](../decisions/0029-users-as-capabilities.md), services see capabilities, not users. How do audit logs, file ownership and similar needs record who acted?
-- **Asking for predictor flushes.** How a program asks to have the branch predictors flushed when the kernel switches to it or away from it [0080](../decisions/0080-predictor-flush-both-ways.md).
-- **Calls that don't fit in registers** ([0072](../decisions/0072-registers-only.md)). How calls whose data is larger than the registers, such as reading all of another thread's registers, are shaped.
-- **Delivering memory loss as an error** ([0065](../decisions/0065-lost-memory-is-an-error.md)). The fault reaches the thread's exception handler [0106](../decisions/0106-pager-passes-on-faults.md). How the handler resumes the code that touched the memory, and where it finds the recovery point, is open.
-- **Memory requests** ([0064](../decisions/0064-memory-belongs-to-payer.md), [0071](../decisions/0071-three-memory-programs.md)). How a program asks the memory service for memory, how its payer account is identified, and how the loader and pagers draw on a program's memory to back pages and make page tables [0052](../decisions/0052-user-mode-page-tables.md). Reserving address space includes asking for low addresses [0078](../decisions/0078-low-addresses-on-request.md).
-- **Memory notices** ([0076](../decisions/0076-memory-notice-deadline.md)). How the memory service's notice to give memory back reaches a program.
+None are left in this document. Questions that depend on other topics are listed with those topics:
+
+- **Boot path** ([06-system](06-system.md)): how the kernel maps the system library into the root task [0117](../decisions/0117-system-library.md), and how the scheduling-control capability [0134](../decisions/0134-scheduler-interface.md) and the rights to make accounts [0140](../decisions/0140-accounts-capability-pair.md) reach the scheduler and the login service.
+- **Driver model** ([06-system](06-system.md)): whether interrupts reach drivers as notifications [0118](../decisions/0118-calls-and-notifications.md).
+- **std mapping** ([06-system](06-system.md)): how std, as a layer over the native API [0145](../decisions/0145-std-over-native-api.md), maps paths onto namespace prefixes [0131](../decisions/0131-namespace-path-prefixes.md) and reads the startup data [0146](../decisions/0146-startup-data-block.md).
+- **Stored access information** ([06-system](06-system.md)): what the filesystem stores about owners [0141](../decisions/0141-identity-capability.md).
+- **Packages** ([02-verification](02-verification.md)): the package layout, which carries the signature and package metadata [0147](../decisions/0147-elf-declarations-only.md).
+- **The compatibility checker in the build** ([07-engineering](07-engineering.md)) [0143](../decisions/0143-add-only-versioning.md).
+- **Roadmap** ([08-roadmap](08-roadmap.md)): when the system library, the IDL compiler and the compatibility checker are built, and when each interface's version 1 is released ([0117](../decisions/0117-system-library.md), [0142](../decisions/0142-own-idl.md), [0148](../decisions/0148-freeze-covers-rules.md)).
