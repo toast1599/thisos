@@ -1,6 +1,6 @@
 # 05. System calls, IPC and the stable ABI
 
-- **Day:** 5 (Sun 2026-10-18)
+- **Day:** 5 (Sat 2026-10-17)
 - **Status:** Not started
 
 ## Covers

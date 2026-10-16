@@ -1,6 +1,6 @@
 # 03. Memory model
 
-- **Day:** 3 (Fri 2026-10-16)
+- **Day:** 3 (Thu 2026-10-15)
 - **Status:** In progress
 
 ## Covers

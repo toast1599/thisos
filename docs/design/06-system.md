@@ -1,6 +1,6 @@
 # 06. Boot, user-mode drivers, std mapping, non-Rust software
 
-- **Day:** 6 (Mon 2026-10-19)
+- **Day:** 6 (Sun 2026-10-18)
 - **Status:** Not started
 
 ## Covers
@@ -25,7 +25,7 @@ How the system starts, how it talks to hardware, and how the Rust standard libra
   - protecting against DMA from devices (IOMMU)
   - DMA and revoke: how memory a device can reach is mapped for it through the IOMMU, and how revoking [0053](../decisions/0053-revoke-destroys-derived.md) and clearing [0051](../decisions/0051-kernel-clears-memory.md) cover those mappings
 - **std mapping:**
-  - the target name and its `target_family` value
+  - the target name, which takes its OS name from [0116](../decisions/0116-name-thisos.md), and its `target_family` value
   - which std features are supported
   - how paths, environment variables, arguments and sockets map onto the native model. Under [0015](../decisions/0015-clean-apis.md), std's platform layer does the translating; the native model isn't shaped to fit std's Unix-derived parts. Under [0020](../decisions/0020-capabilities.md), paths have to resolve through capabilities the program holds.
 - **Stored access information.** Under [0030](../decisions/0030-filesystem-decides-access.md), the filesystem service decides who may open stored data. What access information does stored data carry for that policy?

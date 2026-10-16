@@ -23,6 +23,7 @@ The purpose of the OS, its scope, the threat model, and what the system trusts.
 - [0019](../decisions/0019-kernel-minimality.md) Kernel minimality: anything that can reasonably run in user mode does
 - [0045](../decisions/0045-aarch64-with-first-user-program.md) AArch64 is brought up together with the first user-mode program
 - [0046](../decisions/0046-scope-of-0008.md) Scope of 0008: the OS's own code, including platform-specific code
+- [0116](../decisions/0116-name-thisos.md) The OS is named thisOS
 
 ## Open questions
 
@@ -30,4 +31,3 @@ The purpose of the OS, its scope, the threat model, and what the system trusts.
   - The starting point is seL4's set: address spaces, threads and scheduling, IPC, interrupt delivery and capabilities.
   - Already moved out: physical memory management [0025](../decisions/0025-user-mode-memory.md), page-fault handling [0027](../decisions/0027-user-mode-pagers.md), building page tables [0052](../decisions/0052-user-mode-page-tables.md), program loading [0031](../decisions/0031-user-mode-loader.md), most hardware discovery [0032](../decisions/0032-minimal-hardware-discovery.md) and scheduling policy [0088](../decisions/0088-user-mode-scheduler.md).
   - Settled for the kernel itself: it has no heap [0068](../decisions/0068-no-kernel-heap.md), it has one stack per core [0060](../decisions/0060-kernel-stack-per-core.md), it never reads program data [0072](../decisions/0072-registers-only.md), it runs with interrupts off between interruption points [0089](../decisions/0089-interrupts-off-in-kernel.md), and its guards against touching or running program memory are always on [0075](../decisions/0075-user-guards-always-on.md).
-- **Project name.** Deferred: it isn't needed until the first crates are created. It also becomes the OS name in the Rust target.

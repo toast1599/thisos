@@ -132,3 +132,4 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0113](0113-counter-capability.md) | Only programs holding a capability may read the CPU's time counter | Accepted | 2026-10-16 |
 | [0114](0114-scheduler-priority.md) | Each core's scheduler thread runs above every priority it schedules | Accepted | 2026-10-16 |
 | [0115](0115-root-task-fault-boot-setting.md) | A fault in the root task is handled like a kernel panic | Accepted | 2026-10-16 |
+| [0116](0116-name-thisos.md) | The OS is named thisOS | Accepted | 2026-10-16 |

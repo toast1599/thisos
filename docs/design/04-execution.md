@@ -1,6 +1,6 @@
 # 04. Programs, isolation and scheduling
 
-- **Day:** 4 (Sat 2026-10-17)
+- **Day:** 4 (Fri 2026-10-16)
 - **Status:** In progress
 
 ## Covers

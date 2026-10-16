@@ -1,12 +1,11 @@
-# Untitled OS
+# thisOS
 
-> Working title. The project name hasn't been decided yet. It will also be the OS name in the Rust target (`<arch>-unknown-<name>`).
+thisOS is a general-purpose microkernel operating system. A very small kernel runs in kernel mode, and it is heavily audited and tested. Everything else runs in user mode on top of it, including drivers, filesystems and system services, and the hardware isolates programs from each other. Its APIs and ABIs are designed for this system: inspired by existing systems, but never bound to one for compatibility. Rust is the system language, and programs target the Rust standard library. There is no libc.
 
-A general-purpose microkernel operating system. A very small kernel runs in kernel mode, and it is heavily audited and tested. Everything else runs in user mode on top of it, including drivers, filesystems and system services, and the hardware isolates programs from each other. Its APIs and ABIs are designed for this system: inspired by existing systems, but never bound to one for compatibility. Rust is the system language, and programs target the Rust standard library. There is no libc.
-
+It's called thisOS because this OS differs from the traditional ones: its system language is Rust, where OSes such as Linux distributions, Windows and macOS use C.
 ## Status
 
-**Week 1 (2026-10-14 → 2026-10-20) is for design only. No code is written.** Everything stays open to change during this week. At the end of the week the design is frozen.
+**Week 1 (2026-10-14 → 2026-10-20) is for design only. No code is written.** Everything stays open to change during this week. At the end of the week, after Day 8, the design and the roadmap are frozen together.
 
 Every decision is written down in the [decision log](docs/decisions/README.md). Only decisions marked **Accepted** are binding.
 
@@ -16,15 +15,16 @@ Every decision is written down in the [decision log](docs/decisions/README.md). 
 |---|---|---|---|
 | 1 | Wed 14 Oct | Objective, scope, threat model, trust model | [01-objective](docs/design/01-objective.md) |
 | 2 | Thu 15 Oct | Trusted base, toolchain trust, unsafe policy | [02-verification](docs/design/02-verification.md) |
-| 3 | Fri 16 Oct | Memory model | [03-memory](docs/design/03-memory.md) |
-| 4 | Sat 17 Oct | Programs, isolation, scheduling, fault handling | [04-execution](docs/design/04-execution.md) |
-| 5 | Sun 18 Oct | System calls, IPC and the stable ABI | [05-interfaces](docs/design/05-interfaces.md) |
-| 6 | Mon 19 Oct | Boot, user-mode drivers, std mapping, non-Rust software | [06-system](docs/design/06-system.md) |
-| 7 | Tue 20 Oct | Engineering, final review, freeze | [07-engineering](docs/design/07-engineering.md) |
+| 3 | Thu 15 Oct | Memory model | [03-memory](docs/design/03-memory.md) |
+| 4 | Fri 16 Oct | Programs, isolation, scheduling, fault handling | [04-execution](docs/design/04-execution.md) |
+| 5 | Sat 17 Oct | System calls, IPC and the stable ABI | [05-interfaces](docs/design/05-interfaces.md) |
+| 6 | Sun 18 Oct | Boot, user-mode drivers, std mapping, non-Rust software | [06-system](docs/design/06-system.md) |
+| 7 | Mon 19 Oct | Toolchain, build system, license, final review | [07-engineering](docs/design/07-engineering.md) |
+| 8 | Tue 20 Oct | Implementation roadmap: the exact plan for building every part; engineering practices such as modularity and testing; freeze | [08-roadmap](docs/design/08-roadmap.md) |
 
 ## Roadmap after the freeze
 
-These are rough estimates. They will be revisited at the freeze.
+These are rough estimates. Day 8 replaces them with the exact roadmap ([08-roadmap](docs/design/08-roadmap.md)).
 
 | When | Kernel | Rust standard library |
 |---|---|---|
