@@ -13,7 +13,7 @@ How the system starts, how it talks to hardware, and how the Rust standard libra
 - [0006](../decisions/0006-non-rust-software.md) Non-Rust software is supported later; route still open (amended by [0082](../decisions/0082-corrections.md))
 - [0015](../decisions/0015-clean-apis.md) APIs and ABIs are designed for this system: inspired by others, never bound to them
 - [0024](../decisions/0024-root-task.md) At boot, one root task receives every initial capability
-- [0032](../decisions/0032-minimal-hardware-discovery.md) The kernel reads only the hardware information it needs to start (amended by [0152](../decisions/0152-kernel-log-and-reset.md))
+- [0032](../decisions/0032-minimal-hardware-discovery.md) The kernel reads only the hardware information it needs to start (amended by [0152](../decisions/0152-kernel-log-and-reset.md) and [0213](../decisions/0213-power-capability.md))
 - [0071](../decisions/0071-three-memory-programs.md) The root task, the memory service and the default pager are three separate programs
 - [0097](../decisions/0097-user-mode-starts-cores.md) User mode finds the CPUs, and the root task asks the kernel to start each one
 - [0131](../decisions/0131-namespace-path-prefixes.md) A namespace maps path prefixes to capabilities
@@ -26,16 +26,19 @@ The boot path:
 - [0150](../decisions/0150-bootloader-aarch64.md) AArch64 support is added to the `bootloader` crate
 - [0151](../decisions/0151-boot-info-from-crate.md) The kernel starts from the crate's boot information
 - [0152](../decisions/0152-kernel-log-and-reset.md) The kernel writes its log to memory and a serial port, and resets the machine itself
-- [0153](../decisions/0153-build-unpacks-ramdisk.md) The build unpacks the root task and the system library into the ramdisk
+- [0153](../decisions/0153-build-unpacks-ramdisk.md) The build unpacks the root task and the system library into the ramdisk (amended by [0221](../decisions/0221-corrections.md))
 - [0154](../decisions/0154-library-entry-table.md) Programs call the system library through a table of entry points
 - [0155](../decisions/0155-ramdisk-reaches-storage.md) The ramdisk holds the programs needed to reach storage
 - [0156](../decisions/0156-boot-loader-checks-image.md) The boot loader checks the kernel and the ramdisk against the system image's signature
 - [0157](../decisions/0157-boot-settings-in-ramdisk.md) Boot settings live in the ramdisk's header
 - [0158](../decisions/0158-image-try-count.md) A new system image is tried a limited number of times, then the boot loader falls back
+- [0205](../decisions/0205-root-and-working-keys.md) An offline root key names the working keys, and the boot loader carries only the root
+- [0208](../decisions/0208-boot-loader-beside-old.md) A new boot loader is installed beside the previous one, which the firmware falls back to
+- [0209](../decisions/0209-no-rollback-protection.md) Older signed images still boot, and rollback protection is later work
 
 Starting the system:
 
-- [0159](../decisions/0159-root-task-boot-information.md) The root task receives the usual startup data, with a block of boot information
+- [0159](../decisions/0159-root-task-boot-information.md) The root task receives the usual startup data, with a block of boot information (amended by [0213](../decisions/0213-power-capability.md))
 - [0160](../decisions/0160-root-task-starts-four.md) The root task starts four programs itself, and the rest from a boot manifest
 - [0161](../decisions/0161-root-task-before-scheduler.md) The root task runs alone until it starts the scheduler
 - [0162](../decisions/0162-scheduler-above-priorities.md) A core's scheduler thread runs above every priority, by a rule in the kernel
@@ -43,15 +46,19 @@ Starting the system:
 - [0164](../decisions/0164-root-task-memory-pool.md) The root task keeps back a pool of memory for the programs it pages
 - [0165](../decisions/0165-core-objects.md) Each core is a kernel object, named by its capability
 - [0166](../decisions/0166-core-revoke-offline.md) Revoking a running core's memory takes the core offline
+- [0213](../decisions/0213-power-capability.md) A power capability lets its holder reboot, power off or fail the machine
+- [0216](../decisions/0216-essential-service-failure.md) A failure of an essential service is handled like a fault in the root task
 
 Drivers and devices:
 
-- [0167](../decisions/0167-interrupts-as-notifications.md) Interrupts reach drivers as notifications
+- [0167](../decisions/0167-interrupts-as-notifications.md) Interrupts reach drivers as notifications (amended by [0214](../decisions/0214-interrupt-remapping.md))
 - [0168](../decisions/0168-device-memory-and-ports.md) Device memory and I/O ports are capabilities of their own
 - [0169](../decisions/0169-iommu-service.md) A user-mode IOMMU service keeps the devices' I/O page tables
 - [0170](../decisions/0170-dma-quarantine.md) Memory mapped for a device is held back after a revoke, until the IOMMU service releases it
-- [0171](../decisions/0171-no-iommu-trusted-drivers.md) Without an IOMMU, the drivers of DMA-capable devices are trusted
+- [0171](../decisions/0171-no-iommu-trusted-drivers.md) Without an IOMMU, the drivers of DMA-capable devices are trusted (amended by [0214](../decisions/0214-interrupt-remapping.md))
 - [0172](../decisions/0172-device-manager.md) A device manager starts each driver with exactly its device's capabilities
+- [0214](../decisions/0214-interrupt-remapping.md) Devices raise only the interrupts they were given, through interrupt remapping
+- [0215](../decisions/0215-pci-bus-driver-config.md) The PCI bus driver keeps configuration space, and mediates drivers' access to it
 - [0173](../decisions/0173-time-service-entry.md) Programs reach the time service through the namespace entry `svc/time`
 - [0174](../decisions/0174-random-service-and-seed.md) Random numbers come from a random service, and every program starts with a seed
 
@@ -65,6 +72,7 @@ The std mapping:
 - [0180](../decisions/0180-streams-and-exit-status.md) Standard streams use a byte-stream protocol, and a program ends with a code or an abnormal end
 - [0181](../decisions/0181-network-service.md) `std::net` uses a network service through the namespace
 - [0182](../decisions/0182-all-of-std.md) All of std is supported, in stages, and allocation failure aborts
+- [0187](../decisions/0187-pinned-stable-toolchain.md) The toolchain is a pinned stable Rust release, and std's platform layer is a patch over its library
 
 Storage and non-Rust software:
 
@@ -77,7 +85,6 @@ Storage and non-Rust software:
 
 None are left in this document. Questions that depend on other topics are listed with those topics:
 
-- **Signing** ([02-verification](02-verification.md)): who signs the system image and the boot loader, and how the boot loader stores the key it checks against [0156](../decisions/0156-boot-loader-checks-image.md). Also how the boot loader itself is updated [0158](../decisions/0158-image-try-count.md).
-- **Packages** ([02-verification](02-verification.md)): the list in the ramdisk that names the system image's other packages by hash ([0155](../decisions/0155-ramdisk-reaches-storage.md), [0156](../decisions/0156-boot-loader-checks-image.md)).
-- **Build system** ([07-engineering](07-engineering.md)): the image builder, which unpacks programs into the ramdisk and writes its header ([0153](../decisions/0153-build-unpacks-ramdisk.md), [0157](../decisions/0157-boot-settings-in-ramdisk.md), [0160](../decisions/0160-root-task-starts-four.md)), and the pinned `bootloader` crate and our fork of it ([0149](../decisions/0149-bootloader-crate-uefi.md), [0150](../decisions/0150-bootloader-aarch64.md)).
 - **Roadmap** ([08-roadmap](08-roadmap.md)): when the crate's AArch64 support, signature check and image selection are built ([0150](../decisions/0150-bootloader-aarch64.md), [0156](../decisions/0156-boot-loader-checks-image.md), [0158](../decisions/0158-image-try-count.md)), and when the device manager, the IOMMU service, the time, random and network services, the std stages and the WebAssembly runtime are built.
+
+The questions that depended on signing, packages and the build were settled on Day 7 ([07-engineering](07-engineering.md)): who signs the system image and the boot loader, and how the boot loader knows the image's key [0205](../decisions/0205-root-and-working-keys.md); how the boot loader itself is updated [0208](../decisions/0208-boot-loader-beside-old.md); the packages that the ramdisk's list names [0203](../decisions/0203-package-format.md); and the image builder and the boot loader's build [0190](../decisions/0190-cargo-and-build-tool.md).

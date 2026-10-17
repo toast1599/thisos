@@ -1,6 +1,6 @@
 # 0089. The kernel runs with interrupts off between its interruption points
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0218](0218-lock-yield.md)
 - **Date:** 2026-10-16
 
 ## Context

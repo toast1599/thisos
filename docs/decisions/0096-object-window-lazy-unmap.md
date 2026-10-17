@@ -1,6 +1,6 @@
 # 0096. The object window keeps memory mapped until it becomes a program's pages
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0217](0217-window-flush-batched.md)
 - **Date:** 2026-10-16
 
 ## Context

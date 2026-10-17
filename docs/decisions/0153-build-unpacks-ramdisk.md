@@ -1,6 +1,6 @@
 # 0153. The build unpacks the root task and the system library into the ramdisk
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0221](0221-corrections.md)
 - **Date:** 2026-10-17
 
 ## Context

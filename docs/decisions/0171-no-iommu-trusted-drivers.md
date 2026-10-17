@@ -1,6 +1,6 @@
 # 0171. Without an IOMMU, the drivers of DMA-capable devices are trusted
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0214](0214-interrupt-remapping.md)
 - **Date:** 2026-10-17
 
 ## Context

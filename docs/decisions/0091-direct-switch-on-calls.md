@@ -1,6 +1,6 @@
 # 0091. Calls and replies switch directly between client and service
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0219](0219-wakeup-preemption.md)
 - **Date:** 2026-10-16
 
 ## Context

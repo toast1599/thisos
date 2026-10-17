@@ -36,6 +36,7 @@ The kernel boundary and IPC:
 - [0123](../decisions/0123-capabilities-in-messages.md) A message carries up to four capabilities, each copied or moved
 - [0124](../decisions/0124-large-calls-split.md) Kernel calls whose data doesn't fit in registers are split, and the system library joins them
 - [0125](../decisions/0125-sysret-guard.md) The kernel never returns with `sysret` to an address outside the program half
+- [0220](../decisions/0220-endpoint-priority-order.md) Callers waiting on an endpoint are served by priority, then arrival
 
 Capabilities:
 
@@ -53,6 +54,7 @@ Events, faults and scheduling:
 - [0134](../decisions/0134-scheduler-interface.md) Threads run once the scheduler takes them on, and the kernel reports to it in registers (amended by [0161](../decisions/0161-root-task-before-scheduler.md))
 - [0135](../decisions/0135-core-sharing-from-scheduler.md) The scheduler issues core-sharing capabilities
 - [0136](../decisions/0136-predictor-flush-flag.md) A program asks for predictor flushes with a flag on its address space
+- [0219](../decisions/0219-wakeup-preemption.md) A wakeup enters the scheduler only if the woken thread may run before the running one
 
 Memory, accounts and identity:
 
@@ -69,15 +71,19 @@ Interface definitions:
 - [0144](../decisions/0144-c-calls-and-what-crosses.md) The system library uses the C calling convention, and only data, capabilities and regions cross between programs
 - [0145](../decisions/0145-std-over-native-api.md) std is a layer over the native API
 - [0146](../decisions/0146-startup-data-block.md) Startup data is a versioned block defined in the IDL
-- [0147](../decisions/0147-elf-declarations-only.md) A program's ELF sections carry only its declarations
+- [0147](../decisions/0147-elf-declarations-only.md) A program's ELF sections carry only its declarations (amended by [0210](../decisions/0210-std-version-declared.md) and [0212](../decisions/0212-low-image-declaration.md))
 - [0148](../decisions/0148-freeze-covers-rules.md) The freeze covers the interface design, and each interface's version 1 is fixed when it's released
+- [0195](../decisions/0195-bindings-safe-output.md) The build tool generates the bindings, and the generated code contains no unsafe code
+- [0196](../decisions/0196-released-interface-copies.md) Released interface versions are kept in the repository, and every change is checked against them
+- [0210](../decisions/0210-std-version-declared.md) Programs declare the std they were built with, and the owner can refuse flawed ones
+- [0212](../decisions/0212-low-image-declaration.md) A program can declare the highest address for its image
 
 ## Open questions
 
 None are left in this document. Questions that depend on other topics are listed with those topics:
 
-- **Packages** ([02-verification](02-verification.md)): the package layout, which carries the signature and package metadata [0147](../decisions/0147-elf-declarations-only.md).
-- **The compatibility checker in the build** ([07-engineering](07-engineering.md)) [0143](../decisions/0143-add-only-versioning.md).
 - **Roadmap** ([08-roadmap](08-roadmap.md)): when the system library, the IDL compiler and the compatibility checker are built, and when each interface's version 1 is released ([0117](../decisions/0117-system-library.md), [0142](../decisions/0142-own-idl.md), [0148](../decisions/0148-freeze-covers-rules.md)).
 
 Questions that depended on the system design were settled with it ([06-system](06-system.md)): how the system library reaches the root task and the first programs ([0153](../decisions/0153-build-unpacks-ramdisk.md), [0154](../decisions/0154-library-entry-table.md), [0160](../decisions/0160-root-task-starts-four.md)), how the scheduling-control capability reaches the scheduler [0161](../decisions/0161-root-task-before-scheduler.md), how the rights to make accounts reach the login service [0163](../decisions/0163-services-hand-first-capabilities.md), interrupts as notifications [0167](../decisions/0167-interrupts-as-notifications.md), the std mapping ([0176](../decisions/0176-paths-and-current-directory.md) to [0182](../decisions/0182-all-of-std.md)), and stored access information [0183](../decisions/0183-access-on-directories.md).
+
+The rest were settled on Day 7 ([07-engineering](07-engineering.md)): the package layout, which carries the signature and the package metadata [0203](../decisions/0203-package-format.md), the bindings [0195](../decisions/0195-bindings-safe-output.md), and the compatibility checker in the build [0196](../decisions/0196-released-interface-copies.md).

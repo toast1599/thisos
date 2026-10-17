@@ -20,15 +20,16 @@ What a program is, how programs run and are scheduled, and what happens when one
 - [0062](../decisions/0062-memory-priority-capability.md) Memory priority is a capability of its own
 - [0080](../decisions/0080-predictor-flush-both-ways.md) Branch predictors are flushed when switching to or away from a program that asks
 - [0081](../decisions/0081-pager-per-thread.md) Page faults go to the faulting thread's pager
+- [0082](../decisions/0082-corrections.md) Corrections to 0003, 0006, 0008, 0014 and 0077
 - [0083](../decisions/0083-program-is-address-space.md) To the kernel, a program is an address space and the threads bound to it
 - [0084](../decisions/0084-shares-belong-to-accounts.md) Fair shares of CPU time and memory belong to accounts (amended by [0092](../decisions/0092-scheduler-keeps-time.md))
 - [0085](../decisions/0085-clients-pay-cpu-time.md) Clients pay for the CPU time services spend on them (amended by [0121](../decisions/0121-callers-help-busy-services.md))
 - [0086](../decisions/0086-priorities-per-program-shares-per-account.md) Priorities stay per program, and each priority is shared by account
 - [0087](../decisions/0087-thread-priorities.md) A thread runs at any CPU priority up to its program's
 - [0088](../decisions/0088-user-mode-scheduler.md) Scheduling policy runs in user mode (amended by [0090](../decisions/0090-priorities-in-kernel.md))
-- [0089](../decisions/0089-interrupts-off-in-kernel.md) The kernel runs with interrupts off between its interruption points
+- [0089](../decisions/0089-interrupts-off-in-kernel.md) The kernel runs with interrupts off between its interruption points (amended by [0218](../decisions/0218-lock-yield.md))
 - [0090](../decisions/0090-priorities-in-kernel.md) Strict priorities stay in the kernel, and the scheduler orders threads within each priority
-- [0091](../decisions/0091-direct-switch-on-calls.md) Calls and replies switch directly between client and service
+- [0091](../decisions/0091-direct-switch-on-calls.md) Calls and replies switch directly between client and service (amended by [0219](../decisions/0219-wakeup-preemption.md))
 - [0092](../decisions/0092-scheduler-keeps-time.md) The scheduler keeps the CPU time books, from the kernel's reports
 - [0093](../decisions/0093-scheduler-per-core.md) The scheduler has a thread on each core, which decides for that core
 - [0094](../decisions/0094-one-deadline-per-core.md) Each core has one timer deadline, set by its scheduler thread
@@ -52,6 +53,14 @@ What a program is, how programs run and are scheduled, and what happens when one
 - [0113](../decisions/0113-counter-capability.md) Only programs holding a capability may read the CPU's time counter
 - [0114](../decisions/0114-scheduler-priority.md) Each core's scheduler thread runs above every priority it schedules
 - [0115](../decisions/0115-root-task-fault-boot-setting.md) A fault in the root task is handled like a kernel panic
+
+From the final review ([07-engineering](07-engineering.md)):
+
+- [0213](../decisions/0213-power-capability.md) A power capability lets its holder reboot, power off or fail the machine
+- [0216](../decisions/0216-essential-service-failure.md) A failure of an essential service is handled like a fault in the root task
+- [0218](../decisions/0218-lock-yield.md) Long kernel operations also yield the kernel lock at their interruption points
+- [0219](../decisions/0219-wakeup-preemption.md) A wakeup enters the scheduler only if the woken thread may run before the running one
+- [0220](../decisions/0220-endpoint-priority-order.md) Callers waiting on an endpoint are served by priority, then arrival
 
 ## Open questions
 

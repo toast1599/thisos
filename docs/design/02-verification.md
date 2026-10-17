@@ -11,6 +11,7 @@ What the system has to trust, how programs are built and checked before they run
 
 - [0005](../decisions/0005-unsafe-code-policy.md) Unsafe code exists only in one closed, audited trusted set (superseded by [0017](../decisions/0017-unsafe-code-kernel-and-services.md))
 - [0012](../decisions/0012-no-memory-cap.md) No fixed limit on program memory
+- [0013](../decisions/0013-isolation-domains.md) Isolation domains: one shared system domain, one checked address space per program (superseded by [0014](../decisions/0014-microkernel.md), never accepted)
 - [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode (amended by [0082](../decisions/0082-corrections.md) and [0169](../decisions/0169-iommu-service.md))
 - [0017](../decisions/0017-unsafe-code-kernel-and-services.md) Unsafe code: one closed, audited set for the kernel and the OS's own services
 - [0037](../decisions/0037-kernel-toolchain.md) The kernel is built with one pinned, audited toolchain
@@ -21,6 +22,29 @@ What the system has to trust, how programs are built and checked before they run
 - [0042](../decisions/0042-updates.md) The system updates atomically as one image; third-party programs update package by package
 - [0043](../decisions/0043-executable-memory-capability.md) Making memory executable at run time needs a capability
 - [0044](../decisions/0044-system-image-is-os-shipped.md) Everything in the system image counts as shipped by the OS
+
+The toolchain and the build ([07-engineering](07-engineering.md)):
+
+- [0187](../decisions/0187-pinned-stable-toolchain.md) The toolchain is a pinned stable Rust release, and std's platform layer is a patch over its library
+- [0188](../decisions/0188-upgrade-every-second-release.md) The toolchain is upgraded every second stable release
+- [0191](../decisions/0191-audited-list-and-wrapper.md) A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set
+- [0192](../decisions/0192-build-scripts-reviewed.md) Build scripts and procedural macros run only in reviewed crates, and never link native code
+- [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed
+- [0194](../decisions/0194-reproducible-builds.md) The system image and the boot loader build reproducibly
+
+Signing and packages, settled in the final review:
+
+- [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope
+- [0203](../decisions/0203-package-format.md) A package is a signed manifest and files named by SHA-256 Merkle roots
+- [0204](../decisions/0204-hybrid-signatures.md) Signatures pair Ed25519 with ML-DSA-65
+- [0205](../decisions/0205-root-and-working-keys.md) An offline root key names the working keys, and the boot loader carries only the root
+- [0206](../decisions/0206-owner-approves-signers.md) A program runs if the system image's signer or a signer the owner approved signed it
+- [0207](../decisions/0207-install-and-start-checks.md) The package store checks packages at install and after each boot, and the loader checks the policy at each start
+- [0208](../decisions/0208-boot-loader-beside-old.md) A new boot loader is installed beside the previous one, which the firmware falls back to
+- [0209](../decisions/0209-no-rollback-protection.md) Older signed images still boot, and rollback protection is later work
+- [0210](../decisions/0210-std-version-declared.md) Programs declare the std they were built with, and the owner can refuse flawed ones
+- [0211](../decisions/0211-relative-relocations.md) Programs carry only relative relocations
+- [0212](../decisions/0212-low-image-declaration.md) A program can declare the highest address for its image
 
 ## Key finding: the Rust compiler is not itself a soundness proof
 
@@ -119,9 +143,11 @@ Neither A nor B stops speculative reads inside one shared address space. Once ad
 
 ## Open questions
 
-- **Signing** ([0040](../decisions/0040-signed-programs-owner-policy.md)): the default owner policy, how signing keys are managed, and who signs the system image and the boot loader. At boot, the boot loader checks the kernel and the ramdisk, and the package store checks the rest of the image [0156](../decisions/0156-boot-loader-checks-image.md). Whether the loader or a separate service checks programs installed later is open.
-- **Program sections** ([0038](../decisions/0038-elf-container.md)): the ELF sections carry only the program's declarations [0147](../decisions/0147-elf-declarations-only.md). Programs are built position-independent [0070](../decisions/0070-position-independent-programs.md). Which relocations they may carry is open, and so is whether a program can ask for its own image to be placed at low addresses [0078](../decisions/0078-low-addresses-on-request.md).
-- **Packages** ([0041](../decisions/0041-immutable-packages.md)): the hash function, the package layout and the service that stores packages. The package around the image carries the signature and the package metadata [0147](../decisions/0147-elf-declarations-only.md). A list in the ramdisk names the system image's other packages by hash, and the boot loader's check covers it ([0155](../decisions/0155-ramdisk-reaches-storage.md), [0156](../decisions/0156-boot-loader-checks-image.md)).
-- **Updating the boot loader** ([0158](../decisions/0158-image-try-count.md)). The boot loader sits outside the system images it chooses between, so their rollback doesn't cover it. How is it updated?
-- **Outdated std in third-party programs** ([0042](../decisions/0042-updates.md)). A std fix reaches a third-party program only when its publisher rebuilds it. What does the OS do about programs built with a flawed std?
-- **The audited set** ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)). List the kernel's unsafe code, the boot loader's [0149](../decisions/0149-bootloader-crate-uefi.md), and the shared wrappers the OS's own services use, with an audit record for each part.
+None are left in this document. The final review ([07-engineering](07-engineering.md)) settled them:
+
+- **Signing** ([0040](../decisions/0040-signed-programs-owner-policy.md)): signatures pair Ed25519 with ML-DSA-65 ([0204](../decisions/0204-hybrid-signatures.md)). An offline root key names the working keys, and the boot loader carries only the root's public key ([0205](../decisions/0205-root-and-working-keys.md)). A program runs if the system image's signer, or a signer the owner approved, signed it ([0206](../decisions/0206-owner-approves-signers.md)). The package store checks packages at install and after each boot, and the loader checks the owner's policy at each start ([0207](../decisions/0207-install-and-start-checks.md)).
+- **Program sections** ([0038](../decisions/0038-elf-container.md)): programs carry only relative relocations ([0211](../decisions/0211-relative-relocations.md)), and a program can declare the highest address for its image ([0212](../decisions/0212-low-image-declaration.md)).
+- **Packages** ([0041](../decisions/0041-immutable-packages.md)): a package is a signed manifest and files named by SHA-256 Merkle roots ([0203](../decisions/0203-package-format.md)). The package store is a service of its own, in the ramdisk ([0155](../decisions/0155-ramdisk-reaches-storage.md)).
+- **Updating the boot loader** ([0158](../decisions/0158-image-try-count.md)): a new boot loader is installed beside the previous one, which the firmware falls back to ([0208](../decisions/0208-boot-loader-beside-old.md)). Older signed images and boot loaders still boot, and rollback protection is later work ([0209](../decisions/0209-no-rollback-protection.md)).
+- **Outdated std in third-party programs** ([0042](../decisions/0042-updates.md)): programs declare the std they were built with, and the owner can refuse flawed ones ([0210](../decisions/0210-std-version-declared.md)).
+- **The audited set** ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)): a list in the repository names the crates that may contain unsafe code, each with its audit record, and a compiler wrapper enforces it ([0191](../decisions/0191-audited-list-and-wrapper.md)). The list is filled in as the parts are written.

@@ -41,7 +41,10 @@ Kernel mechanisms:
 - [0068](../decisions/0068-no-kernel-heap.md) The kernel has no heap (amended by [0097](../decisions/0097-user-mode-starts-cores.md))
 - [0072](../decisions/0072-registers-only.md) System calls and IPC carry data only in registers; the kernel never reads program data
 - [0075](../decisions/0075-user-guards-always-on.md) The kernel's guards against touching or running program memory are always on
-- [0096](../decisions/0096-object-window-lazy-unmap.md) The object window keeps memory mapped until it becomes a program's pages
+- [0096](../decisions/0096-object-window-lazy-unmap.md) The object window keeps memory mapped until it becomes a program's pages (amended by [0217](../decisions/0217-window-flush-batched.md))
+- [0198](../decisions/0198-stack-depth-checker.md) A checker on the linked kernel bounds its stack depth and rejects recursion
+- [0217](../decisions/0217-window-flush-batched.md) Object-window flushes are batched, at most at a set rate
+- [0218](../decisions/0218-lock-yield.md) Long kernel operations also yield the kernel lock at their interruption points
 
 Pagers and sharing:
 
@@ -64,6 +67,8 @@ Layout:
 - [0074](../decisions/0074-low-64k-unmapped.md) The lowest 64 KiB of every program's half stays unmapped
 - [0078](../decisions/0078-low-addresses-on-request.md) Programs that need low addresses ask for them
 - [0079](../decisions/0079-pointer-tagging-off.md) Hardware pointer tagging stays off for now
+- [0211](../decisions/0211-relative-relocations.md) Programs carry only relative relocations
+- [0212](../decisions/0212-low-image-declaration.md) A program can declare the highest address for its image
 
 ## Open questions
 
@@ -72,3 +77,5 @@ None are left in this document.
 File-backed memory, DMA and swap storage were settled with the system design ([06-system](06-system.md)): shared file pages [0184](../decisions/0184-shared-file-pages.md), the IOMMU service and revoke ([0169](../decisions/0169-iommu-service.md), [0170](../decisions/0170-dma-quarantine.md)), and the swap partition [0185](../decisions/0185-swap-partition.md).
 
 Memory requests and notices were settled with the interfaces ([05-interfaces](05-interfaces.md)): payers [0137](../decisions/0137-memory-capability-per-program.md), reservations and low addresses [0138](../decisions/0138-pager-keeps-reservations.md), notices [0132](../decisions/0132-events-notify-then-call.md), and lost memory as an error [0133](../decisions/0133-recovery-point-in-register.md).
+
+The final review ([07-engineering](07-engineering.md)) added the stack checker [0198](../decisions/0198-stack-depth-checker.md), batched flushes of the object window [0217](../decisions/0217-window-flush-batched.md) and yielding the kernel lock [0218](../decisions/0218-lock-yield.md), and settled two questions on the program format that 02 had left open: relocations [0211](../decisions/0211-relative-relocations.md) and low addresses for a program's image [0212](../decisions/0212-low-image-declaration.md).

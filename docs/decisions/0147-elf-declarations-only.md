@@ -1,6 +1,6 @@
 # 0147. A program's ELF sections carry only its declarations
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0210](0210-std-version-declared.md) and [0212](0212-low-image-declaration.md)
 - **Date:** 2026-10-17
 
 ## Context

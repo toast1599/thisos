@@ -1,6 +1,6 @@
 # 0159. The root task receives the usual startup data, with a block of boot information
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0213](0213-power-capability.md)
 - **Date:** 2026-10-17
 
 ## Context

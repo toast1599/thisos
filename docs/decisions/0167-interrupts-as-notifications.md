@@ -1,6 +1,6 @@
 # 0167. Interrupts reach drivers as notifications
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0214](0214-interrupt-remapping.md)
 - **Date:** 2026-10-17
 
 ## Context

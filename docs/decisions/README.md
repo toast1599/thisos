@@ -11,6 +11,8 @@ Each decision gets one record, numbered in order. A record covers the context, t
 
 Until the freeze on 2026-10-20, an Accepted decision can still be changed. Changing one means writing a new record that supersedes it, or one that amends some of its lines. Records are never edited after the fact; only their status changes.
 
+After the freeze, a frozen decision changes only through a new record that cites what building found, such as a failing test, a measurement or a bug, and names the roadmap step it affects ([0201](0201-changes-after-freeze.md)). Records written after the freeze are listed in a section of their own.
+
 Open questions are listed in the [design documents](../design/), grouped by topic.
 
 ## Records
@@ -19,7 +21,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 |---|---|---|---|
 | [0001](0001-general-purpose-os.md) | General-purpose production OS | Accepted | 2026-10-14 |
 | [0002](0002-kernel-mode-verified-execution.md) | All code runs in kernel mode, isolated by verification | Superseded by [0014](0014-microkernel.md) | 2026-10-14 |
-| [0003](0003-rust-std-no-libc.md) | Rust is the system language; the Rust standard library replaces libc | Accepted, amended by [0082](0082-corrections.md) | 2026-10-14 |
+| [0003](0003-rust-std-no-libc.md) | Rust is the system language; the Rust standard library replaces libc | Accepted, amended by [0082](0082-corrections.md) and [0221](0221-corrections.md) | 2026-10-14 |
 | [0004](0004-not-unix.md) | Not Unix-like: `target_family` is not `unix` | Accepted | 2026-10-14 |
 | [0005](0005-unsafe-code-policy.md) | Unsafe code exists only in one closed, audited trusted set | Superseded by [0017](0017-unsafe-code-kernel-and-services.md) | 2026-10-14 |
 | [0006](0006-non-rust-software.md) | Non-Rust software is supported later; route still open | Accepted, amended by [0082](0082-corrections.md) | 2026-10-14 |
@@ -32,7 +34,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0013](0013-isolation-domains.md) | Isolation domains: one shared system domain, one checked address space per program | Superseded by [0014](0014-microkernel.md) (never accepted) | 2026-10-15 |
 | [0014](0014-microkernel.md) | Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode | Accepted, amended by [0082](0082-corrections.md) and [0169](0169-iommu-service.md) | 2026-10-15 |
 | [0015](0015-clean-apis.md) | APIs and ABIs are designed for this system: inspired by others, never bound to them | Accepted | 2026-10-15 |
-| [0016](0016-threat-model-scope.md) | Threat model: speculative leaks between programs and denial of service are in scope | Accepted | 2026-10-15 |
+| [0016](0016-threat-model-scope.md) | Threat model: speculative leaks between programs and denial of service are in scope | Accepted, amended by [0202](0202-offline-attackers.md) | 2026-10-15 |
 | [0017](0017-unsafe-code-kernel-and-services.md) | Unsafe code: one closed, audited set for the kernel and the OS's own services | Accepted | 2026-10-15 |
 | [0018](0018-kernel-assurance.md) | Kernel assurance: review, tests and fuzzing from the start; formal proofs later | Accepted | 2026-10-15 |
 | [0019](0019-kernel-minimality.md) | Kernel minimality: anything that can reasonably run in user mode does | Accepted | 2026-10-15 |
@@ -48,7 +50,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0029](0029-users-as-capabilities.md) | A user is the set of capabilities a login service grants | Accepted | 2026-10-15 |
 | [0030](0030-filesystem-decides-access.md) | The filesystem service decides who may open stored data | Accepted | 2026-10-15 |
 | [0031](0031-user-mode-loader.md) | The program loader runs in user mode, and starting programs needs a capability | Accepted | 2026-10-15 |
-| [0032](0032-minimal-hardware-discovery.md) | The kernel reads only the hardware information it needs to start | Accepted, amended by [0152](0152-kernel-log-and-reset.md) | 2026-10-15 |
+| [0032](0032-minimal-hardware-discovery.md) | The kernel reads only the hardware information it needs to start | Accepted, amended by [0152](0152-kernel-log-and-reset.md) and [0213](0213-power-capability.md) | 2026-10-15 |
 | [0033](0033-cpu-fairness.md) | CPU fairness: fair sharing within each priority, and priorities as capabilities | Accepted, amended by [0084](0084-shares-belong-to-accounts.md) | 2026-10-15 |
 | [0034](0034-smt-trusted-pairs.md) | Only programs that trust each other share a CPU core | Accepted | 2026-10-15 |
 | [0035](0035-predictor-flush-on-request.md) | Branch predictors are flushed only on request | Superseded by [0080](0080-predictor-flush-both-ways.md) | 2026-10-15 |
@@ -62,7 +64,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0043](0043-executable-memory-capability.md) | Making memory executable at run time needs a capability | Accepted | 2026-10-15 |
 | [0044](0044-system-image-is-os-shipped.md) | Everything in the system image counts as shipped by the OS | Accepted | 2026-10-15 |
 | [0045](0045-aarch64-with-first-user-program.md) | AArch64 is brought up together with the first user-mode program | Accepted | 2026-10-15 |
-| [0046](0046-scope-of-0008.md) | Scope of 0008: the OS's own code, including platform-specific code | Accepted, amended by [0152](0152-kernel-log-and-reset.md) | 2026-10-15 |
+| [0046](0046-scope-of-0008.md) | Scope of 0008: the OS's own code, including platform-specific code | Accepted, amended by [0152](0152-kernel-log-and-reset.md) and [0213](0213-power-capability.md) | 2026-10-15 |
 | [0047](0047-kernel-mapping.md) | The kernel stays mapped in every address space unless the CPU requires otherwise | Accepted | 2026-10-15 |
 | [0048](0048-reserve-on-grant.md) | Memory is reserved when it's granted; the system never promises more than it has | Accepted | 2026-10-15 |
 | [0049](0049-memory-fair-share.md) | When memory runs short, it's shared fairly within each memory priority | Accepted, amended by [0084](0084-shares-belong-to-accounts.md) | 2026-10-15 |
@@ -105,14 +107,14 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0086](0086-priorities-per-program-shares-per-account.md) | Priorities stay per program, and each priority is shared by account | Accepted | 2026-10-16 |
 | [0087](0087-thread-priorities.md) | A thread runs at any CPU priority up to its program's | Accepted | 2026-10-16 |
 | [0088](0088-user-mode-scheduler.md) | Scheduling policy runs in user mode | Accepted, amended by [0090](0090-priorities-in-kernel.md) | 2026-10-16 |
-| [0089](0089-interrupts-off-in-kernel.md) | The kernel runs with interrupts off between its interruption points | Accepted | 2026-10-16 |
+| [0089](0089-interrupts-off-in-kernel.md) | The kernel runs with interrupts off between its interruption points | Accepted, amended by [0218](0218-lock-yield.md) | 2026-10-16 |
 | [0090](0090-priorities-in-kernel.md) | Strict priorities stay in the kernel, and the scheduler orders threads within each priority | Accepted | 2026-10-16 |
-| [0091](0091-direct-switch-on-calls.md) | Calls and replies switch directly between client and service | Accepted | 2026-10-16 |
+| [0091](0091-direct-switch-on-calls.md) | Calls and replies switch directly between client and service | Accepted, amended by [0219](0219-wakeup-preemption.md) | 2026-10-16 |
 | [0092](0092-scheduler-keeps-time.md) | The scheduler keeps the CPU time books, from the kernel's reports | Accepted | 2026-10-16 |
 | [0093](0093-scheduler-per-core.md) | The scheduler has a thread on each core, which decides for that core | Accepted | 2026-10-16 |
 | [0094](0094-one-deadline-per-core.md) | Each core has one timer deadline, set by its scheduler thread | Accepted | 2026-10-16 |
 | [0095](0095-one-kernel-lock.md) | One lock guards the kernel on multicore | Accepted | 2026-10-16 |
-| [0096](0096-object-window-lazy-unmap.md) | The object window keeps memory mapped until it becomes a program's pages | Accepted | 2026-10-16 |
+| [0096](0096-object-window-lazy-unmap.md) | The object window keeps memory mapped until it becomes a program's pages | Accepted, amended by [0217](0217-window-flush-batched.md) | 2026-10-16 |
 | [0097](0097-user-mode-starts-cores.md) | User mode finds the CPUs, and the root task asks the kernel to start each one | Accepted | 2026-10-16 |
 | [0098](0098-core-sharing-capability.md) | Programs share a core only if both hold the same core-sharing capability | Accepted | 2026-10-16 |
 | [0099](0099-kernel-beside-sibling.md) | The kernel doesn't pause a sibling hardware thread when it runs | Accepted | 2026-10-16 |
@@ -163,19 +165,19 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0144](0144-c-calls-and-what-crosses.md) | The system library uses the C calling convention, and only data, capabilities and regions cross between programs | Accepted | 2026-10-17 |
 | [0145](0145-std-over-native-api.md) | std is a layer over the native API | Accepted | 2026-10-17 |
 | [0146](0146-startup-data-block.md) | Startup data is a versioned block defined in the IDL | Accepted | 2026-10-17 |
-| [0147](0147-elf-declarations-only.md) | A program's ELF sections carry only its declarations | Accepted | 2026-10-17 |
+| [0147](0147-elf-declarations-only.md) | A program's ELF sections carry only its declarations | Accepted, amended by [0210](0210-std-version-declared.md) and [0212](0212-low-image-declaration.md) | 2026-10-17 |
 | [0148](0148-freeze-covers-rules.md) | The freeze covers the interface design, and each interface's version 1 is fixed when it's released | Accepted | 2026-10-17 |
 | [0149](0149-bootloader-crate-uefi.md) | The kernel is booted by the `bootloader` crate, through UEFI only | Accepted | 2026-10-17 |
 | [0150](0150-bootloader-aarch64.md) | AArch64 support is added to the `bootloader` crate | Accepted | 2026-10-17 |
 | [0151](0151-boot-info-from-crate.md) | The kernel starts from the crate's boot information | Accepted | 2026-10-17 |
 | [0152](0152-kernel-log-and-reset.md) | The kernel writes its log to memory and a serial port, and resets the machine itself | Accepted | 2026-10-17 |
-| [0153](0153-build-unpacks-ramdisk.md) | The build unpacks the root task and the system library into the ramdisk | Accepted | 2026-10-17 |
+| [0153](0153-build-unpacks-ramdisk.md) | The build unpacks the root task and the system library into the ramdisk | Accepted, amended by [0221](0221-corrections.md) | 2026-10-17 |
 | [0154](0154-library-entry-table.md) | Programs call the system library through a table of entry points | Accepted | 2026-10-17 |
 | [0155](0155-ramdisk-reaches-storage.md) | The ramdisk holds the programs needed to reach storage | Accepted | 2026-10-17 |
 | [0156](0156-boot-loader-checks-image.md) | The boot loader checks the kernel and the ramdisk against the system image's signature | Accepted | 2026-10-17 |
 | [0157](0157-boot-settings-in-ramdisk.md) | Boot settings live in the ramdisk's header | Accepted | 2026-10-17 |
 | [0158](0158-image-try-count.md) | A new system image is tried a limited number of times, then the boot loader falls back | Accepted | 2026-10-17 |
-| [0159](0159-root-task-boot-information.md) | The root task receives the usual startup data, with a block of boot information | Accepted | 2026-10-17 |
+| [0159](0159-root-task-boot-information.md) | The root task receives the usual startup data, with a block of boot information | Accepted, amended by [0213](0213-power-capability.md) | 2026-10-17 |
 | [0160](0160-root-task-starts-four.md) | The root task starts four programs itself, and the rest from a boot manifest | Accepted | 2026-10-17 |
 | [0161](0161-root-task-before-scheduler.md) | The root task runs alone until it starts the scheduler | Accepted | 2026-10-17 |
 | [0162](0162-scheduler-above-priorities.md) | A core's scheduler thread runs above every priority, by a rule in the kernel | Accepted | 2026-10-17 |
@@ -183,11 +185,11 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0164](0164-root-task-memory-pool.md) | The root task keeps back a pool of memory for the programs it pages | Accepted | 2026-10-17 |
 | [0165](0165-core-objects.md) | Each core is a kernel object, named by its capability | Accepted | 2026-10-17 |
 | [0166](0166-core-revoke-offline.md) | Revoking a running core's memory takes the core offline | Accepted | 2026-10-17 |
-| [0167](0167-interrupts-as-notifications.md) | Interrupts reach drivers as notifications | Accepted | 2026-10-17 |
+| [0167](0167-interrupts-as-notifications.md) | Interrupts reach drivers as notifications | Accepted, amended by [0214](0214-interrupt-remapping.md) | 2026-10-17 |
 | [0168](0168-device-memory-and-ports.md) | Device memory and I/O ports are capabilities of their own | Accepted | 2026-10-17 |
 | [0169](0169-iommu-service.md) | A user-mode IOMMU service keeps the devices' I/O page tables | Accepted | 2026-10-17 |
 | [0170](0170-dma-quarantine.md) | Memory mapped for a device is held back after a revoke, until the IOMMU service releases it | Accepted | 2026-10-17 |
-| [0171](0171-no-iommu-trusted-drivers.md) | Without an IOMMU, the drivers of DMA-capable devices are trusted | Accepted | 2026-10-17 |
+| [0171](0171-no-iommu-trusted-drivers.md) | Without an IOMMU, the drivers of DMA-capable devices are trusted | Accepted, amended by [0214](0214-interrupt-remapping.md) | 2026-10-17 |
 | [0172](0172-device-manager.md) | A device manager starts each driver with exactly its device's capabilities | Accepted | 2026-10-17 |
 | [0173](0173-time-service-entry.md) | Programs reach the time service through the namespace entry `svc/time` | Accepted | 2026-10-17 |
 | [0174](0174-random-service-and-seed.md) | Random numbers come from a random service, and every program starts with a seed | Accepted | 2026-10-17 |
@@ -203,3 +205,38 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0184](0184-shared-file-pages.md) | Read-only file pages are shared from the service's cache, which pays for them | Accepted | 2026-10-17 |
 | [0185](0185-swap-partition.md) | Swap goes to a partition, through the block-storage service | Accepted | 2026-10-17 |
 | [0186](0186-non-rust-route.md) | Non-Rust software runs on WebAssembly first, then natively on the native API | Accepted | 2026-10-17 |
+| [0187](0187-pinned-stable-toolchain.md) | The toolchain is a pinned stable Rust release, and std's platform layer is a patch over its library | Accepted | 2026-10-18 |
+| [0188](0188-upgrade-every-second-release.md) | The toolchain is upgraded every second stable release | Accepted | 2026-10-18 |
+| [0189](0189-kernel-none-targets.md) | The kernel builds for the built-in `-none` targets | Accepted | 2026-10-18 |
+| [0190](0190-cargo-and-build-tool.md) | Cargo builds thisOS, driven by a build tool written in Rust | Accepted | 2026-10-18 |
+| [0191](0191-audited-list-and-wrapper.md) | A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set | Accepted | 2026-10-18 |
+| [0192](0192-build-scripts-reviewed.md) | Build scripts and procedural macros run only in reviewed crates, and never link native code | Accepted | 2026-10-18 |
+| [0193](0193-vendored-reviewed-crates.md) | Third-party crates in the OS's own code are vendored and reviewed | Accepted | 2026-10-18 |
+| [0194](0194-reproducible-builds.md) | The system image and the boot loader build reproducibly | Accepted | 2026-10-18 |
+| [0195](0195-bindings-safe-output.md) | The build tool generates the bindings, and the generated code contains no unsafe code | Accepted | 2026-10-18 |
+| [0196](0196-released-interface-copies.md) | Released interface versions are kept in the repository, and every change is checked against them | Accepted | 2026-10-18 |
+| [0197](0197-architecture-check.md) | Crates are marked by architecture, and the build rejects architecture-specific code in generic crates | Accepted | 2026-10-18 |
+| [0198](0198-stack-depth-checker.md) | A checker on the linked kernel bounds its stack depth and rejects recursion | Accepted | 2026-10-18 |
+| [0199](0199-license.md) | thisOS is licensed under MIT OR Apache-2.0 | Accepted | 2026-10-18 |
+| [0200](0200-contributions.md) | Contributions come in under the project's license, with no sign-off | Accepted | 2026-10-18 |
+| [0201](0201-changes-after-freeze.md) | After the freeze, a decision changes only through a new record that cites what building found | Accepted | 2026-10-18 |
+| [0202](0202-offline-attackers.md) | Attackers who get the machine while it's off are in scope | Accepted | 2026-10-18 |
+| [0203](0203-package-format.md) | A package is a signed manifest and files named by SHA-256 Merkle roots | Accepted | 2026-10-18 |
+| [0204](0204-hybrid-signatures.md) | Signatures pair Ed25519 with ML-DSA-65 | Accepted | 2026-10-18 |
+| [0205](0205-root-and-working-keys.md) | An offline root key names the working keys, and the boot loader carries only the root | Accepted | 2026-10-18 |
+| [0206](0206-owner-approves-signers.md) | A program runs if the system image's signer or a signer the owner approved signed it | Accepted | 2026-10-18 |
+| [0207](0207-install-and-start-checks.md) | The package store checks packages at install and after each boot, and the loader checks the policy at each start | Accepted | 2026-10-18 |
+| [0208](0208-boot-loader-beside-old.md) | A new boot loader is installed beside the previous one, which the firmware falls back to | Accepted | 2026-10-18 |
+| [0209](0209-no-rollback-protection.md) | Older signed images still boot, and rollback protection is later work | Accepted | 2026-10-18 |
+| [0210](0210-std-version-declared.md) | Programs declare the std they were built with, and the owner can refuse flawed ones | Accepted | 2026-10-18 |
+| [0211](0211-relative-relocations.md) | Programs carry only relative relocations | Accepted | 2026-10-18 |
+| [0212](0212-low-image-declaration.md) | A program can declare the highest address for its image | Accepted | 2026-10-18 |
+| [0213](0213-power-capability.md) | A power capability lets its holder reboot, power off or fail the machine | Accepted | 2026-10-18 |
+| [0214](0214-interrupt-remapping.md) | Devices raise only the interrupts they were given, through interrupt remapping | Accepted | 2026-10-18 |
+| [0215](0215-pci-bus-driver-config.md) | The PCI bus driver keeps configuration space, and mediates drivers' access to it | Accepted | 2026-10-18 |
+| [0216](0216-essential-service-failure.md) | A failure of an essential service is handled like a fault in the root task | Accepted | 2026-10-18 |
+| [0217](0217-window-flush-batched.md) | Object-window flushes are batched, at most at a set rate | Accepted | 2026-10-18 |
+| [0218](0218-lock-yield.md) | Long kernel operations also yield the kernel lock at their interruption points | Accepted | 2026-10-18 |
+| [0219](0219-wakeup-preemption.md) | A wakeup enters the scheduler only if the woken thread may run before the running one | Accepted | 2026-10-18 |
+| [0220](0220-endpoint-priority-order.md) | Callers waiting on an endpoint are served by priority, then arrival | Accepted | 2026-10-18 |
+| [0221](0221-corrections.md) | Corrections to 0003 and 0153 | Accepted | 2026-10-18 |
