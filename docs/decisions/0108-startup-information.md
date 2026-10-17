@@ -1,6 +1,6 @@
 # 0108. What a new program receives when it's spawned
 
-- **Status:** Accepted, amended by [0146](0146-startup-data-block.md)
+- **Status:** Accepted, amended by [0146](0146-startup-data-block.md), [0174](0174-random-service-and-seed.md), [0176](0176-paths-and-current-directory.md) and [0179](0179-command-copies-namespace.md)
 - **Date:** 2026-10-16
 
 ## Context

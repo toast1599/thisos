@@ -1,6 +1,6 @@
 # 0053. Revoking memory destroys everything made from it
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0170](0170-dma-quarantine.md)
 - **Date:** 2026-10-15
 
 ## Context

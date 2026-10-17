@@ -1,6 +1,6 @@
 # 0137. Each program has its own capability to the memory service, which names it as payer
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0164](0164-root-task-memory-pool.md)
 - **Date:** 2026-10-17
 
 ## Context

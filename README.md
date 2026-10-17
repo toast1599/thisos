@@ -18,7 +18,7 @@ Every decision is written down in the [decision log](docs/decisions/README.md). 
 | 3 | Thu 15 Oct | Memory model | [03-memory](docs/design/03-memory.md) |
 | 4 | Fri 16 Oct | Programs, isolation, scheduling, fault handling | [04-execution](docs/design/04-execution.md) |
 | 5 | Sat 17 Oct | System calls, IPC and the stable ABI | [05-interfaces](docs/design/05-interfaces.md) |
-| 6 | Sun 18 Oct | Boot, user-mode drivers, std mapping, non-Rust software | [06-system](docs/design/06-system.md) |
+| 6 | Sat 17 Oct | Boot, user-mode drivers, std mapping, non-Rust software | [06-system](docs/design/06-system.md) |
 | 7 | Mon 19 Oct | Toolchain, build system, license, final review | [07-engineering](docs/design/07-engineering.md) |
 | 8 | Tue 20 Oct | Implementation roadmap: the exact plan for building every part; engineering practices such as modularity and testing; freeze | [08-roadmap](docs/design/08-roadmap.md) |
 

@@ -1,6 +1,6 @@
 # 0134. Threads run once the scheduler takes them on, and the kernel reports to it in registers
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0161](0161-root-task-before-scheduler.md)
 - **Date:** 2026-10-17
 
 ## Context

@@ -27,7 +27,7 @@ The binary interface between programs and the kernel and between programs, how i
 
 The kernel boundary and IPC:
 
-- [0117](../decisions/0117-system-library.md) Programs reach the kernel only through the system library
+- [0117](../decisions/0117-system-library.md) Programs reach the kernel only through the system library (amended by [0160](../decisions/0160-root-task-starts-four.md))
 - [0118](../decisions/0118-calls-and-notifications.md) IPC is synchronous calls through endpoints, with notifications for events
 - [0119](../decisions/0119-message-eight-words.md) One IPC message carries up to 8 words
 - [0120](../decisions/0120-reply-objects.md) Services reply through reply objects
@@ -50,13 +50,13 @@ Events, faults and scheduling:
 
 - [0132](../decisions/0132-events-notify-then-call.md) An event is a notification, followed by a call for its details
 - [0133](../decisions/0133-recovery-point-in-register.md) Accessors keep their recovery point in a register
-- [0134](../decisions/0134-scheduler-interface.md) Threads run once the scheduler takes them on, and the kernel reports to it in registers
+- [0134](../decisions/0134-scheduler-interface.md) Threads run once the scheduler takes them on, and the kernel reports to it in registers (amended by [0161](../decisions/0161-root-task-before-scheduler.md))
 - [0135](../decisions/0135-core-sharing-from-scheduler.md) The scheduler issues core-sharing capabilities
 - [0136](../decisions/0136-predictor-flush-flag.md) A program asks for predictor flushes with a flag on its address space
 
 Memory, accounts and identity:
 
-- [0137](../decisions/0137-memory-capability-per-program.md) Each program has its own capability to the memory service, which names it as payer
+- [0137](../decisions/0137-memory-capability-per-program.md) Each program has its own capability to the memory service, which names it as payer (amended by [0164](../decisions/0164-root-task-memory-pool.md))
 - [0138](../decisions/0138-pager-keeps-reservations.md) Pagers keep a program's address-space reservations
 - [0139](../decisions/0139-results-fill-and-report.md) A result of unknown size fills what the caller provides, and reports what remains
 - [0140](../decisions/0140-accounts-capability-pair.md) An account is a pair of capabilities, one from the scheduler and one from the memory service
@@ -76,10 +76,8 @@ Interface definitions:
 
 None are left in this document. Questions that depend on other topics are listed with those topics:
 
-- **Boot path** ([06-system](06-system.md)): how the kernel maps the system library into the root task [0117](../decisions/0117-system-library.md), and how the scheduling-control capability [0134](../decisions/0134-scheduler-interface.md) and the rights to make accounts [0140](../decisions/0140-accounts-capability-pair.md) reach the scheduler and the login service.
-- **Driver model** ([06-system](06-system.md)): whether interrupts reach drivers as notifications [0118](../decisions/0118-calls-and-notifications.md).
-- **std mapping** ([06-system](06-system.md)): how std, as a layer over the native API [0145](../decisions/0145-std-over-native-api.md), maps paths onto namespace prefixes [0131](../decisions/0131-namespace-path-prefixes.md) and reads the startup data [0146](../decisions/0146-startup-data-block.md).
-- **Stored access information** ([06-system](06-system.md)): what the filesystem stores about owners [0141](../decisions/0141-identity-capability.md).
 - **Packages** ([02-verification](02-verification.md)): the package layout, which carries the signature and package metadata [0147](../decisions/0147-elf-declarations-only.md).
 - **The compatibility checker in the build** ([07-engineering](07-engineering.md)) [0143](../decisions/0143-add-only-versioning.md).
 - **Roadmap** ([08-roadmap](08-roadmap.md)): when the system library, the IDL compiler and the compatibility checker are built, and when each interface's version 1 is released ([0117](../decisions/0117-system-library.md), [0142](../decisions/0142-own-idl.md), [0148](../decisions/0148-freeze-covers-rules.md)).
+
+Questions that depended on the system design were settled with it ([06-system](06-system.md)): how the system library reaches the root task and the first programs ([0153](../decisions/0153-build-unpacks-ramdisk.md), [0154](../decisions/0154-library-entry-table.md), [0160](../decisions/0160-root-task-starts-four.md)), how the scheduling-control capability reaches the scheduler [0161](../decisions/0161-root-task-before-scheduler.md), how the rights to make accounts reach the login service [0163](../decisions/0163-services-hand-first-capabilities.md), interrupts as notifications [0167](../decisions/0167-interrupts-as-notifications.md), the std mapping ([0176](../decisions/0176-paths-and-current-directory.md) to [0182](../decisions/0182-all-of-std.md)), and stored access information [0183](../decisions/0183-access-on-directories.md).

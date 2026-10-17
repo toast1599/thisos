@@ -1,6 +1,6 @@
 # 0107. The loader writes a new program's startup information into its memory
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0160](0160-root-task-starts-four.md)
 - **Date:** 2026-10-16
 
 ## Context

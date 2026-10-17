@@ -30,7 +30,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0011](0011-aarch64-second.md) | AArch64 is the second architecture | Accepted | 2026-10-15 |
 | [0012](0012-no-memory-cap.md) | No fixed limit on program memory | Accepted | 2026-10-15 |
 | [0013](0013-isolation-domains.md) | Isolation domains: one shared system domain, one checked address space per program | Superseded by [0014](0014-microkernel.md) (never accepted) | 2026-10-15 |
-| [0014](0014-microkernel.md) | Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode | Accepted, amended by [0082](0082-corrections.md) | 2026-10-15 |
+| [0014](0014-microkernel.md) | Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode | Accepted, amended by [0082](0082-corrections.md) and [0169](0169-iommu-service.md) | 2026-10-15 |
 | [0015](0015-clean-apis.md) | APIs and ABIs are designed for this system: inspired by others, never bound to them | Accepted | 2026-10-15 |
 | [0016](0016-threat-model-scope.md) | Threat model: speculative leaks between programs and denial of service are in scope | Accepted | 2026-10-15 |
 | [0017](0017-unsafe-code-kernel-and-services.md) | Unsafe code: one closed, audited set for the kernel and the OS's own services | Accepted | 2026-10-15 |
@@ -48,7 +48,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0029](0029-users-as-capabilities.md) | A user is the set of capabilities a login service grants | Accepted | 2026-10-15 |
 | [0030](0030-filesystem-decides-access.md) | The filesystem service decides who may open stored data | Accepted | 2026-10-15 |
 | [0031](0031-user-mode-loader.md) | The program loader runs in user mode, and starting programs needs a capability | Accepted | 2026-10-15 |
-| [0032](0032-minimal-hardware-discovery.md) | The kernel reads only the hardware information it needs to start | Accepted | 2026-10-15 |
+| [0032](0032-minimal-hardware-discovery.md) | The kernel reads only the hardware information it needs to start | Accepted, amended by [0152](0152-kernel-log-and-reset.md) | 2026-10-15 |
 | [0033](0033-cpu-fairness.md) | CPU fairness: fair sharing within each priority, and priorities as capabilities | Accepted, amended by [0084](0084-shares-belong-to-accounts.md) | 2026-10-15 |
 | [0034](0034-smt-trusted-pairs.md) | Only programs that trust each other share a CPU core | Accepted | 2026-10-15 |
 | [0035](0035-predictor-flush-on-request.md) | Branch predictors are flushed only on request | Superseded by [0080](0080-predictor-flush-both-ways.md) | 2026-10-15 |
@@ -62,14 +62,14 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0043](0043-executable-memory-capability.md) | Making memory executable at run time needs a capability | Accepted | 2026-10-15 |
 | [0044](0044-system-image-is-os-shipped.md) | Everything in the system image counts as shipped by the OS | Accepted | 2026-10-15 |
 | [0045](0045-aarch64-with-first-user-program.md) | AArch64 is brought up together with the first user-mode program | Accepted | 2026-10-15 |
-| [0046](0046-scope-of-0008.md) | Scope of 0008: the OS's own code, including platform-specific code | Accepted | 2026-10-15 |
+| [0046](0046-scope-of-0008.md) | Scope of 0008: the OS's own code, including platform-specific code | Accepted, amended by [0152](0152-kernel-log-and-reset.md) | 2026-10-15 |
 | [0047](0047-kernel-mapping.md) | The kernel stays mapped in every address space unless the CPU requires otherwise | Accepted | 2026-10-15 |
 | [0048](0048-reserve-on-grant.md) | Memory is reserved when it's granted; the system never promises more than it has | Accepted | 2026-10-15 |
 | [0049](0049-memory-fair-share.md) | When memory runs short, it's shared fairly within each memory priority | Accepted, amended by [0084](0084-shares-belong-to-accounts.md) | 2026-10-15 |
 | [0050](0050-clients-pay.md) | Clients pay for the state services keep for them | Accepted | 2026-10-15 |
 | [0051](0051-kernel-clears-memory.md) | The kernel clears memory before it's made into anything new | Accepted | 2026-10-15 |
 | [0052](0052-user-mode-page-tables.md) | Page tables are kernel objects that user mode builds | Accepted | 2026-10-15 |
-| [0053](0053-revoke-destroys-derived.md) | Revoking memory destroys everything made from it | Accepted | 2026-10-15 |
+| [0053](0053-revoke-destroys-derived.md) | Revoking memory destroys everything made from it | Accepted, amended by [0170](0170-dma-quarantine.md) | 2026-10-15 |
 | [0054](0054-kernel-enforces-execute.md) | The kernel enforces the right to make memory executable | Accepted | 2026-10-15 |
 | [0055](0055-kernel-maps-only-objects.md) | The kernel maps its own memory and kernel objects, not all of physical memory | Accepted, amended by [0096](0096-object-window-lazy-unmap.md) | 2026-10-15 |
 | [0056](0056-pager-chosen-at-spawn.md) | A program's pager is chosen when it's spawned | Accepted, amended by [0081](0081-pager-per-thread.md) | 2026-10-15 |
@@ -123,8 +123,8 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0104](0104-supervisor.md) | Every program has a supervisor, named at spawn, that learns how it ended | Accepted | 2026-10-16 |
 | [0105](0105-supervisor-reclaims.md) | A failed program's supervisor has its memory taken back, and decides on a restart | Accepted | 2026-10-16 |
 | [0106](0106-pager-passes-on-faults.md) | A pager passes faults it won't resolve to the thread's exception handler | Accepted | 2026-10-16 |
-| [0107](0107-loader-writes-startup-data.md) | The loader writes a new program's startup information into its memory | Accepted | 2026-10-16 |
-| [0108](0108-startup-information.md) | What a new program receives when it's spawned | Accepted, amended by [0146](0146-startup-data-block.md) | 2026-10-16 |
+| [0107](0107-loader-writes-startup-data.md) | The loader writes a new program's startup information into its memory | Accepted, amended by [0160](0160-root-task-starts-four.md) | 2026-10-16 |
+| [0108](0108-startup-information.md) | What a new program receives when it's spawned | Accepted, amended by [0146](0146-startup-data-block.md), [0174](0174-random-service-and-seed.md), [0176](0176-paths-and-current-directory.md) and [0179](0179-command-copies-namespace.md) | 2026-10-16 |
 | [0109](0109-panic-strategy.md) | Third-party programs unwind on panic by default, and the OS's own services abort | Accepted | 2026-10-16 |
 | [0110](0110-kernel-panic.md) | A kernel panic is logged, then the machine halts or reboots by a boot setting | Accepted | 2026-10-16 |
 | [0111](0111-resource-accounting.md) | Each service reports the resource use it already tracks | Accepted | 2026-10-16 |
@@ -133,7 +133,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0114](0114-scheduler-priority.md) | Each core's scheduler thread runs above every priority it schedules | Accepted | 2026-10-16 |
 | [0115](0115-root-task-fault-boot-setting.md) | A fault in the root task is handled like a kernel panic | Accepted | 2026-10-16 |
 | [0116](0116-name-thisos.md) | The OS is named thisOS | Accepted | 2026-10-16 |
-| [0117](0117-system-library.md) | Programs reach the kernel only through the system library | Accepted | 2026-10-17 |
+| [0117](0117-system-library.md) | Programs reach the kernel only through the system library | Accepted, amended by [0160](0160-root-task-starts-four.md) | 2026-10-17 |
 | [0118](0118-calls-and-notifications.md) | IPC is synchronous calls through endpoints, with notifications for events | Accepted | 2026-10-17 |
 | [0119](0119-message-eight-words.md) | One IPC message carries up to 8 words | Accepted | 2026-10-17 |
 | [0120](0120-reply-objects.md) | Services reply through reply objects | Accepted | 2026-10-17 |
@@ -150,10 +150,10 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0131](0131-namespace-path-prefixes.md) | A namespace maps path prefixes to capabilities | Accepted | 2026-10-17 |
 | [0132](0132-events-notify-then-call.md) | An event is a notification, followed by a call for its details | Accepted | 2026-10-17 |
 | [0133](0133-recovery-point-in-register.md) | Accessors keep their recovery point in a register | Accepted | 2026-10-17 |
-| [0134](0134-scheduler-interface.md) | Threads run once the scheduler takes them on, and the kernel reports to it in registers | Accepted | 2026-10-17 |
+| [0134](0134-scheduler-interface.md) | Threads run once the scheduler takes them on, and the kernel reports to it in registers | Accepted, amended by [0161](0161-root-task-before-scheduler.md) | 2026-10-17 |
 | [0135](0135-core-sharing-from-scheduler.md) | The scheduler issues core-sharing capabilities | Accepted | 2026-10-17 |
 | [0136](0136-predictor-flush-flag.md) | A program asks for predictor flushes with a flag on its address space | Accepted | 2026-10-17 |
-| [0137](0137-memory-capability-per-program.md) | Each program has its own capability to the memory service, which names it as payer | Accepted | 2026-10-17 |
+| [0137](0137-memory-capability-per-program.md) | Each program has its own capability to the memory service, which names it as payer | Accepted, amended by [0164](0164-root-task-memory-pool.md) | 2026-10-17 |
 | [0138](0138-pager-keeps-reservations.md) | Pagers keep a program's address-space reservations | Accepted | 2026-10-17 |
 | [0139](0139-results-fill-and-report.md) | A result of unknown size fills what the caller provides, and reports what remains | Accepted | 2026-10-17 |
 | [0140](0140-accounts-capability-pair.md) | An account is a pair of capabilities, one from the scheduler and one from the memory service | Accepted | 2026-10-17 |
@@ -165,3 +165,41 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0146](0146-startup-data-block.md) | Startup data is a versioned block defined in the IDL | Accepted | 2026-10-17 |
 | [0147](0147-elf-declarations-only.md) | A program's ELF sections carry only its declarations | Accepted | 2026-10-17 |
 | [0148](0148-freeze-covers-rules.md) | The freeze covers the interface design, and each interface's version 1 is fixed when it's released | Accepted | 2026-10-17 |
+| [0149](0149-bootloader-crate-uefi.md) | The kernel is booted by the `bootloader` crate, through UEFI only | Accepted | 2026-10-17 |
+| [0150](0150-bootloader-aarch64.md) | AArch64 support is added to the `bootloader` crate | Accepted | 2026-10-17 |
+| [0151](0151-boot-info-from-crate.md) | The kernel starts from the crate's boot information | Accepted | 2026-10-17 |
+| [0152](0152-kernel-log-and-reset.md) | The kernel writes its log to memory and a serial port, and resets the machine itself | Accepted | 2026-10-17 |
+| [0153](0153-build-unpacks-ramdisk.md) | The build unpacks the root task and the system library into the ramdisk | Accepted | 2026-10-17 |
+| [0154](0154-library-entry-table.md) | Programs call the system library through a table of entry points | Accepted | 2026-10-17 |
+| [0155](0155-ramdisk-reaches-storage.md) | The ramdisk holds the programs needed to reach storage | Accepted | 2026-10-17 |
+| [0156](0156-boot-loader-checks-image.md) | The boot loader checks the kernel and the ramdisk against the system image's signature | Accepted | 2026-10-17 |
+| [0157](0157-boot-settings-in-ramdisk.md) | Boot settings live in the ramdisk's header | Accepted | 2026-10-17 |
+| [0158](0158-image-try-count.md) | A new system image is tried a limited number of times, then the boot loader falls back | Accepted | 2026-10-17 |
+| [0159](0159-root-task-boot-information.md) | The root task receives the usual startup data, with a block of boot information | Accepted | 2026-10-17 |
+| [0160](0160-root-task-starts-four.md) | The root task starts four programs itself, and the rest from a boot manifest | Accepted | 2026-10-17 |
+| [0161](0161-root-task-before-scheduler.md) | The root task runs alone until it starts the scheduler | Accepted | 2026-10-17 |
+| [0162](0162-scheduler-above-priorities.md) | A core's scheduler thread runs above every priority, by a rule in the kernel | Accepted | 2026-10-17 |
+| [0163](0163-services-hand-first-capabilities.md) | A service hands the first capabilities it issues to the program that started it | Accepted | 2026-10-17 |
+| [0164](0164-root-task-memory-pool.md) | The root task keeps back a pool of memory for the programs it pages | Accepted | 2026-10-17 |
+| [0165](0165-core-objects.md) | Each core is a kernel object, named by its capability | Accepted | 2026-10-17 |
+| [0166](0166-core-revoke-offline.md) | Revoking a running core's memory takes the core offline | Accepted | 2026-10-17 |
+| [0167](0167-interrupts-as-notifications.md) | Interrupts reach drivers as notifications | Accepted | 2026-10-17 |
+| [0168](0168-device-memory-and-ports.md) | Device memory and I/O ports are capabilities of their own | Accepted | 2026-10-17 |
+| [0169](0169-iommu-service.md) | A user-mode IOMMU service keeps the devices' I/O page tables | Accepted | 2026-10-17 |
+| [0170](0170-dma-quarantine.md) | Memory mapped for a device is held back after a revoke, until the IOMMU service releases it | Accepted | 2026-10-17 |
+| [0171](0171-no-iommu-trusted-drivers.md) | Without an IOMMU, the drivers of DMA-capable devices are trusted | Accepted | 2026-10-17 |
+| [0172](0172-device-manager.md) | A device manager starts each driver with exactly its device's capabilities | Accepted | 2026-10-17 |
+| [0173](0173-time-service-entry.md) | Programs reach the time service through the namespace entry `svc/time` | Accepted | 2026-10-17 |
+| [0174](0174-random-service-and-seed.md) | Random numbers come from a random service, and every program starts with a seed | Accepted | 2026-10-17 |
+| [0175](0175-rust-target-names.md) | The Rust targets are `x86_64-unknown-thisos` and `aarch64-unknown-thisos`, with no target family | Accepted | 2026-10-17 |
+| [0176](0176-paths-and-current-directory.md) | Paths that start with `/` resolve through the namespace, and others through a current directory | Accepted | 2026-10-17 |
+| [0177](0177-locks-on-parking.md) | std's locks are built on parking, and parking on notifications | Accepted | 2026-10-17 |
+| [0178](0178-native-api-crate.md) | The native API is a separate crate | Accepted | 2026-10-17 |
+| [0179](0179-command-copies-namespace.md) | std's `Command` gives a child a copy of the spawner's namespace by default | Accepted | 2026-10-17 |
+| [0180](0180-streams-and-exit-status.md) | Standard streams use a byte-stream protocol, and a program ends with a code or an abnormal end | Accepted | 2026-10-17 |
+| [0181](0181-network-service.md) | `std::net` uses a network service through the namespace | Accepted | 2026-10-17 |
+| [0182](0182-all-of-std.md) | All of std is supported, in stages, and allocation failure aborts | Accepted | 2026-10-17 |
+| [0183](0183-access-on-directories.md) | Stored access information lives on directories, as grants to stable user IDs | Accepted | 2026-10-17 |
+| [0184](0184-shared-file-pages.md) | Read-only file pages are shared from the service's cache, which pays for them | Accepted | 2026-10-17 |
+| [0185](0185-swap-partition.md) | Swap goes to a partition, through the block-storage service | Accepted | 2026-10-17 |
+| [0186](0186-non-rust-route.md) | Non-Rust software runs on WebAssembly first, then natively on the native API | Accepted | 2026-10-17 |

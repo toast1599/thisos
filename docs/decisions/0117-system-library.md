@@ -1,6 +1,6 @@
 # 0117. Programs reach the kernel only through the system library
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0160](0160-root-task-starts-four.md)
 - **Date:** 2026-10-17
 
 ## Context

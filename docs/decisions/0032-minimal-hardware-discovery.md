@@ -1,6 +1,6 @@
 # 0032. The kernel reads only the hardware information it needs to start
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0152](0152-kernel-log-and-reset.md)
 - **Date:** 2026-10-15
 
 ## Context

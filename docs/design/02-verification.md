@@ -11,7 +11,7 @@ What the system has to trust, how programs are built and checked before they run
 
 - [0005](../decisions/0005-unsafe-code-policy.md) Unsafe code exists only in one closed, audited trusted set (superseded by [0017](../decisions/0017-unsafe-code-kernel-and-services.md))
 - [0012](../decisions/0012-no-memory-cap.md) No fixed limit on program memory
-- [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode (amended by [0082](../decisions/0082-corrections.md))
+- [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode (amended by [0082](../decisions/0082-corrections.md) and [0169](../decisions/0169-iommu-service.md))
 - [0017](../decisions/0017-unsafe-code-kernel-and-services.md) Unsafe code: one closed, audited set for the kernel and the OS's own services
 - [0037](../decisions/0037-kernel-toolchain.md) The kernel is built with one pinned, audited toolchain
 - [0038](../decisions/0038-elf-container.md) Programs ship as ELF, used only as a file container
@@ -119,8 +119,9 @@ Neither A nor B stops speculative reads inside one shared address space. Once ad
 
 ## Open questions
 
-- **Signing** ([0040](../decisions/0040-signed-programs-owner-policy.md)): the default owner policy, how signing keys are managed, who signs the system image, and where the check runs, in the loader or a separate service.
+- **Signing** ([0040](../decisions/0040-signed-programs-owner-policy.md)): the default owner policy, how signing keys are managed, and who signs the system image and the boot loader. At boot, the boot loader checks the kernel and the ramdisk, and the package store checks the rest of the image [0156](../decisions/0156-boot-loader-checks-image.md). Whether the loader or a separate service checks programs installed later is open.
 - **Program sections** ([0038](../decisions/0038-elf-container.md)): the ELF sections carry only the program's declarations [0147](../decisions/0147-elf-declarations-only.md). Programs are built position-independent [0070](../decisions/0070-position-independent-programs.md). Which relocations they may carry is open, and so is whether a program can ask for its own image to be placed at low addresses [0078](../decisions/0078-low-addresses-on-request.md).
-- **Packages** ([0041](../decisions/0041-immutable-packages.md)): the hash function, the package layout and the service that stores packages. The package around the image carries the signature and the package metadata [0147](../decisions/0147-elf-declarations-only.md).
+- **Packages** ([0041](../decisions/0041-immutable-packages.md)): the hash function, the package layout and the service that stores packages. The package around the image carries the signature and the package metadata [0147](../decisions/0147-elf-declarations-only.md). A list in the ramdisk names the system image's other packages by hash, and the boot loader's check covers it ([0155](../decisions/0155-ramdisk-reaches-storage.md), [0156](../decisions/0156-boot-loader-checks-image.md)).
+- **Updating the boot loader** ([0158](../decisions/0158-image-try-count.md)). The boot loader sits outside the system images it chooses between, so their rollback doesn't cover it. How is it updated?
 - **Outdated std in third-party programs** ([0042](../decisions/0042-updates.md)). A std fix reaches a third-party program only when its publisher rebuilds it. What does the OS do about programs built with a flawed std?
-- **The audited set** ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)). List the kernel's unsafe code and the shared wrappers the OS's own services use, with an audit record for each part.
+- **The audited set** ([0017](../decisions/0017-unsafe-code-kernel-and-services.md)). List the kernel's unsafe code, the boot loader's [0149](../decisions/0149-bootloader-crate-uefi.md), and the shared wrappers the OS's own services use, with an audit record for each part.

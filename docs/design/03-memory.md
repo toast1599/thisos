@@ -10,7 +10,7 @@ Address spaces, memory layout, allocation, and how programs share data.
 ## Decided
 
 - [0012](../decisions/0012-no-memory-cap.md) No fixed limit on program memory
-- [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode (amended by [0082](../decisions/0082-corrections.md)). Each program has its own address space.
+- [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode (amended by [0082](../decisions/0082-corrections.md) and [0169](../decisions/0169-iommu-service.md)). Each program has its own address space.
 - [0025](../decisions/0025-user-mode-memory.md) Physical memory is managed from user mode
 - [0026](../decisions/0026-programs-pay-kernel-objects.md) Programs pay for their kernel objects with memory they hold
 - [0027](../decisions/0027-user-mode-pagers.md) Page faults are handled by user-mode pagers (amended by [0081](../decisions/0081-pager-per-thread.md))
@@ -34,7 +34,7 @@ Kernel mechanisms:
 
 - [0051](../decisions/0051-kernel-clears-memory.md) The kernel clears memory before it's made into anything new
 - [0052](../decisions/0052-user-mode-page-tables.md) Page tables are kernel objects that user mode builds
-- [0053](../decisions/0053-revoke-destroys-derived.md) Revoking memory destroys everything made from it
+- [0053](../decisions/0053-revoke-destroys-derived.md) Revoking memory destroys everything made from it (amended by [0170](../decisions/0170-dma-quarantine.md))
 - [0054](../decisions/0054-kernel-enforces-execute.md) The kernel enforces the right to make memory executable
 - [0055](../decisions/0055-kernel-maps-only-objects.md) The kernel maps its own memory and kernel objects, not all of physical memory (amended by [0096](../decisions/0096-object-window-lazy-unmap.md))
 - [0060](../decisions/0060-kernel-stack-per-core.md) The kernel has one stack per CPU core, and its worst-case depth is checked at build time
@@ -67,8 +67,8 @@ Layout:
 
 ## Open questions
 
-None are left in this document. Memory questions that depend on other topics are listed with those topics:
+None are left in this document.
 
-- **File-backed memory, DMA and swap storage** ([06-system](06-system.md)).
+File-backed memory, DMA and swap storage were settled with the system design ([06-system](06-system.md)): shared file pages [0184](../decisions/0184-shared-file-pages.md), the IOMMU service and revoke ([0169](../decisions/0169-iommu-service.md), [0170](../decisions/0170-dma-quarantine.md)), and the swap partition [0185](../decisions/0185-swap-partition.md).
 
 Memory requests and notices were settled with the interfaces ([05-interfaces](05-interfaces.md)): payers [0137](../decisions/0137-memory-capability-per-program.md), reservations and low addresses [0138](../decisions/0138-pager-keeps-reservations.md), notices [0132](../decisions/0132-events-notify-then-call.md), and lost memory as an error [0133](../decisions/0133-recovery-point-in-register.md).

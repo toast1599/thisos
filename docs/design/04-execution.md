@@ -43,8 +43,8 @@ What a program is, how programs run and are scheduled, and what happens when one
 - [0104](../decisions/0104-supervisor.md) Every program has a supervisor, named at spawn, that learns how it ended
 - [0105](../decisions/0105-supervisor-reclaims.md) A failed program's supervisor has its memory taken back, and decides on a restart
 - [0106](../decisions/0106-pager-passes-on-faults.md) A pager passes faults it won't resolve to the thread's exception handler
-- [0107](../decisions/0107-loader-writes-startup-data.md) The loader writes a new program's startup information into its memory
-- [0108](../decisions/0108-startup-information.md) What a new program receives when it's spawned (amended by [0146](../decisions/0146-startup-data-block.md))
+- [0107](../decisions/0107-loader-writes-startup-data.md) The loader writes a new program's startup information into its memory (amended by [0160](../decisions/0160-root-task-starts-four.md))
+- [0108](../decisions/0108-startup-information.md) What a new program receives when it's spawned (amended by [0146](../decisions/0146-startup-data-block.md), [0174](../decisions/0174-random-service-and-seed.md), [0176](../decisions/0176-paths-and-current-directory.md) and [0179](../decisions/0179-command-copies-namespace.md))
 - [0109](../decisions/0109-panic-strategy.md) Third-party programs unwind on panic by default, and the OS's own services abort
 - [0110](../decisions/0110-kernel-panic.md) A kernel panic is logged, then the machine halts or reboots by a boot setting
 - [0111](../decisions/0111-resource-accounting.md) Each service reports the resource use it already tracks
