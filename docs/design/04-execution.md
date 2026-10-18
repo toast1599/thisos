@@ -1,11 +1,11 @@
 # 04. Programs, isolation and scheduling
 
 - **Day:** 4 (Fri 2026-10-16)
-- **Status:** In progress
+- **Status:** Frozen
 
 ## Covers
 
-What a program is, how programs run and are scheduled, and what happens when one fails.
+What a program is, how programs run and get scheduled, and what happens when one fails.
 
 ## Decided
 
@@ -54,13 +54,18 @@ What a program is, how programs run and are scheduled, and what happens when one
 - [0114](../decisions/0114-scheduler-priority.md) Each core's scheduler thread runs above every priority it schedules
 - [0115](../decisions/0115-root-task-fault-boot-setting.md) A fault in the root task is handled like a kernel panic
 
-From the final review ([07-engineering](07-engineering.md)):
+The final review ([07-engineering](07-engineering.md)) added these:
 
 - [0213](../decisions/0213-power-capability.md) A power capability lets its holder reboot, power off or fail the machine
 - [0216](../decisions/0216-essential-service-failure.md) A failure of an essential service is handled like a fault in the root task
 - [0218](../decisions/0218-lock-yield.md) Long kernel operations also yield the kernel lock at their interruption points
 - [0219](../decisions/0219-wakeup-preemption.md) A wakeup enters the scheduler only if the woken thread may run before the running one
 - [0220](../decisions/0220-endpoint-priority-order.md) Callers waiting on an endpoint are served by priority, then arrival
+
+And Day 8 ([08-roadmap](08-roadmap.md)) added two more:
+
+- [0246](../decisions/0246-interruption-stretch-limit.md) Work between interruption points is limited in code, and no stretch may take more than 20 µs
+- [0252](../decisions/0252-time-service-starts-early.md) The time service starts early, and serves wall-clock time once the clock driver reports it
 
 ## Open questions
 

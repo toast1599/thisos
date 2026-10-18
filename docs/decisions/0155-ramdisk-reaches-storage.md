@@ -1,6 +1,6 @@
 # 0155. The ramdisk holds the programs needed to reach storage
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0253](0253-ramdisk-log-and-clocks.md)
 - **Date:** 2026-10-17
 
 ## Context

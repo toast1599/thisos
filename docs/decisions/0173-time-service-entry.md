@@ -1,6 +1,6 @@
 # 0173. Programs reach the time service through the namespace entry `svc/time`
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0252](0252-time-service-starts-early.md)
 - **Date:** 2026-10-17
 
 ## Context

@@ -1,6 +1,6 @@
 # 0208. A new boot loader is installed beside the previous one, which the firmware falls back to
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0223](0223-qemu-and-laptop-checkpoints.md)
 - **Date:** 2026-10-18
 
 ## Context

@@ -1,13 +1,14 @@
 # thisOS
 
-thisOS is a general-purpose microkernel operating system. A very small kernel runs in kernel mode, and it is heavily audited and tested. Everything else runs in user mode on top of it, including drivers, filesystems and system services, and the hardware isolates programs from each other. Its APIs and ABIs are designed for this system: inspired by existing systems, but never bound to one for compatibility. Rust is the system language, and programs target the Rust standard library. There is no libc.
+thisOS is a general-purpose operating system built on a microkernel. The kernel itself is very small: it runs in kernel mode, and it's heavily audited and tested. Everything else runs in user mode on top of it, drivers, filesystems and system services included, and the hardware isolates programs from each other. We designed the APIs and ABIs for this system. Existing systems inspired them, but they're never bound to one for compatibility. Rust is the system language, and programs target the Rust standard library. There's no libc.
 
 It's called thisOS because this OS differs from the traditional ones: its system language is Rust, where OSes such as Linux distributions, Windows and macOS use C.
+
 ## Status
 
-**Week 1 (2026-10-14 → 2026-10-20) is for design only. No code is written.** Everything stays open to change during this week. At the end of the week, after Day 8, the design and the roadmap are frozen together.
+**Week 1 (2026-10-14 → 2026-10-19) was for design only.** On 2026-10-19, at the end of Day 8, the design and the roadmap froze together ([0255](docs/decisions/0255-freeze.md)). From here on, the only way to change a frozen decision is a new record that cites what building found ([0201](docs/decisions/0201-changes-after-freeze.md)).
 
-Every decision is written down in the [decision log](docs/decisions/README.md). Only decisions marked **Accepted** are binding.
+Every decision is written down in the [decision log](docs/decisions/README.md), and only the ones marked **Accepted** are binding.
 
 ## Week 1 plan
 
@@ -20,21 +21,23 @@ Every decision is written down in the [decision log](docs/decisions/README.md). 
 | 5 | Sat 17 Oct | System calls, IPC and the stable ABI | [05-interfaces](docs/design/05-interfaces.md) |
 | 6 | Sat 17 Oct | Boot, user-mode drivers, std mapping, non-Rust software | [06-system](docs/design/06-system.md) |
 | 7 | Sun 18 Oct | Toolchain, build system, license, final review | [07-engineering](docs/design/07-engineering.md) |
-| 8 | Tue 20 Oct | Implementation roadmap: the exact plan for building every part; engineering practices such as modularity and testing; freeze | [08-roadmap](docs/design/08-roadmap.md) |
+| 8 | Mon 19 Oct | Implementation roadmap: the exact plan for building every part; engineering practices such as modularity and testing; freeze | [08-roadmap](docs/design/08-roadmap.md) |
 
-## Roadmap after the freeze
+## Roadmap
 
-These are rough estimates. Day 8 replaces them with the exact roadmap ([08-roadmap](docs/design/08-roadmap.md)).
+[08-roadmap](docs/design/08-roadmap.md) has the exact roadmap. It takes the project from an empty repository to a first release of the whole design, in 24 steps and 7 phases ([0222](docs/decisions/0222-roadmap-to-first-release.md), [0227](docs/decisions/0227-steps-and-phases.md)). Every step gets built and tested in QEMU on x86_64, and from step 8 on, on AArch64 as well. When a phase ends, the development laptop boots that phase's image ([0223](docs/decisions/0223-qemu-and-laptop-checkpoints.md)).
 
-| When | Kernel | Rust standard library |
-|---|---|---|
-| Weeks 2–3 | Toolchain, build, boot in QEMU, serial output, panic and logging, test harness | Kernel builds on `core` only |
-| Weeks 3–5 | Physical and virtual memory: memory capabilities, kernel objects, page-table objects, revoke | — (the kernel has no heap and stays on `core`) |
-| Weeks 5–7 | Interrupts, timers, scheduler, context switching | — |
-| Weeks 7–9 | System calls and IPC, loader, first user-mode program on x86_64 and AArch64 | Custom target, std built with `-Zbuild-std`. Minimal std: allocation, stdout, args, exit, panics. |
-| Weeks 9–12 | User-mode drivers, filesystem, init, shell | Threads, thread-local storage, locks, time |
-| Month 3+ | SMP, networking | Filesystem, networking, process spawning. Ports of key crates. |
-| Later | WebAssembly runtime for software not written in Rust | Get the target accepted upstream in rust-lang/rust |
+| Phase | Steps |
+|---|---|
+| 1. Foundations, on x86_64 | 1–3: the repository, the build tool and its checks; booting the kernel; the kernel's base |
+| 2. The kernel's objects, on x86_64 | 4–6: memory, capabilities and revoke; address spaces and threads; system calls, the IDL compiler and the system library |
+| 3. User mode on both architectures | 7–9: the boot loader for AArch64; the first user-mode program; IPC, faults and interrupts |
+| 4. The core services | 10–14: std's first stage and the root task; the scheduler; the memory service; the default pager, the loader and the boot manifest; the log, time and random services, with std's second stage |
+| 5. Multicore and devices | 15–16: hardware discovery and multicore; the device manager, the PCI bus driver and the IOMMU service |
+| 6. Storage, packages and verified boot | 17–20: NVMe, block storage and the filesystem; USB storage; packages, with std's third stage; verified boot and updates |
+| 7. Users, the network and the first release | 21–24: the console, login and the shell; the network, with std's fourth stage; third-party programs; the first release |
+
+We estimate each step from the size of its code and the review that code needs. Checkpoints then calibrate those estimates against the pace we actually measure ([0249](docs/decisions/0249-estimates-and-checkpoints.md)).
 
 ## License
 
@@ -43,3 +46,9 @@ thisOS is licensed under either of the [MIT license](LICENSE-MIT) or the [Apache
 ## Contributing
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in thisOS by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions ([0200](docs/decisions/0200-contributions.md)).
+
+Contributions come in as pull requests, and a maintainer reviews them ([0238](docs/decisions/0238-pushes-and-pull-requests.md)).
+
+## Security
+
+If you find a security problem, please report it privately, through GitHub's private vulnerability reporting ([0239](docs/decisions/0239-security-reports.md)).

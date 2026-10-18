@@ -1,19 +1,19 @@
 # Decision log
 
-Each decision gets one record, numbered in order. A record covers the context, the options that were considered, the decision itself, and its consequences.
+Each decision gets one record, numbered in order. A record sets out the context, the options we considered, the decision itself and its consequences.
 
 ## Status values
 
-- **Accepted**: approved by the maintainer. Binding.
-- **Proposed**: written up but not yet approved. Not binding.
-- **Superseded**: replaced by a later record, which it links to.
-- **Accepted, amended by**: binding, except for the lines that a later record corrects. The status links to that record.
+- **Accepted**: the maintainer has approved it, and it's binding.
+- **Proposed**: written up but not approved yet, so it isn't binding.
+- **Superseded**: a later record replaced it, and it links to that record.
+- **Accepted, amended by**: binding, except for the lines a later record corrects. The status links to that record.
 
-Until the freeze on 2026-10-20, an Accepted decision can still be changed. Changing one means writing a new record that supersedes it, or one that amends some of its lines. Records are never edited after the fact; only their status changes.
+Until the freeze on 2026-10-19 ([0255](0255-freeze.md)), an Accepted decision could still be changed, and changing one meant writing a new record: either one that supersedes it or one that amends some of its lines. We never edit a record after the fact. Only its status changes.
 
-After the freeze, a frozen decision changes only through a new record that cites what building found, such as a failing test, a measurement or a bug, and names the roadmap step it affects ([0201](0201-changes-after-freeze.md)). Records written after the freeze are listed in a section of their own.
+After the freeze, the only way to change a frozen decision is a new record that cites what building found (a failing test, say, or a measurement or a bug) and names the roadmap step it affects ([0201](0201-changes-after-freeze.md)). The roadmap's steps change the same way ([0250](0250-plan-changes-after-freeze.md)). A topic the design leaves open gets an ordinary record at the step that designs it ([0226](0226-open-topics-at-their-step.md)); so does later work, once it's scheduled ([0251](0251-later-work.md)). Records written after the freeze get a section of their own.
 
-Open questions are listed in the [design documents](../design/), grouped by topic.
+If you'd rather read by topic, the [design documents](../design/) group the records that way, and [08-roadmap](../design/08-roadmap.md) lists the open topics along with the step that designs each one.
 
 ## Records
 
@@ -50,7 +50,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0029](0029-users-as-capabilities.md) | A user is the set of capabilities a login service grants | Accepted | 2026-10-15 |
 | [0030](0030-filesystem-decides-access.md) | The filesystem service decides who may open stored data | Accepted | 2026-10-15 |
 | [0031](0031-user-mode-loader.md) | The program loader runs in user mode, and starting programs needs a capability | Accepted | 2026-10-15 |
-| [0032](0032-minimal-hardware-discovery.md) | The kernel reads only the hardware information it needs to start | Accepted, amended by [0152](0152-kernel-log-and-reset.md) and [0213](0213-power-capability.md) | 2026-10-15 |
+| [0032](0032-minimal-hardware-discovery.md) | The kernel reads only the hardware information it needs to start | Accepted, amended by [0152](0152-kernel-log-and-reset.md), [0213](0213-power-capability.md) and [0225](0225-framebuffer-log-at-failures.md) | 2026-10-15 |
 | [0033](0033-cpu-fairness.md) | CPU fairness: fair sharing within each priority, and priorities as capabilities | Accepted, amended by [0084](0084-shares-belong-to-accounts.md) | 2026-10-15 |
 | [0034](0034-smt-trusted-pairs.md) | Only programs that trust each other share a CPU core | Accepted | 2026-10-15 |
 | [0035](0035-predictor-flush-on-request.md) | Branch predictors are flushed only on request | Superseded by [0080](0080-predictor-flush-both-ways.md) | 2026-10-15 |
@@ -63,7 +63,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0042](0042-updates.md) | The system updates atomically as one image; third-party programs update package by package | Accepted | 2026-10-15 |
 | [0043](0043-executable-memory-capability.md) | Making memory executable at run time needs a capability | Accepted | 2026-10-15 |
 | [0044](0044-system-image-is-os-shipped.md) | Everything in the system image counts as shipped by the OS | Accepted | 2026-10-15 |
-| [0045](0045-aarch64-with-first-user-program.md) | AArch64 is brought up together with the first user-mode program | Accepted | 2026-10-15 |
+| [0045](0045-aarch64-with-first-user-program.md) | AArch64 is brought up together with the first user-mode program | Accepted, amended by [0254](0254-corrections.md) | 2026-10-15 |
 | [0046](0046-scope-of-0008.md) | Scope of 0008: the OS's own code, including platform-specific code | Accepted, amended by [0152](0152-kernel-log-and-reset.md) and [0213](0213-power-capability.md) | 2026-10-15 |
 | [0047](0047-kernel-mapping.md) | The kernel stays mapped in every address space unless the CPU requires otherwise | Accepted | 2026-10-15 |
 | [0048](0048-reserve-on-grant.md) | Memory is reserved when it's granted; the system never promises more than it has | Accepted | 2026-10-15 |
@@ -170,10 +170,10 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0149](0149-bootloader-crate-uefi.md) | The kernel is booted by the `bootloader` crate, through UEFI only | Accepted | 2026-10-17 |
 | [0150](0150-bootloader-aarch64.md) | AArch64 support is added to the `bootloader` crate | Accepted | 2026-10-17 |
 | [0151](0151-boot-info-from-crate.md) | The kernel starts from the crate's boot information | Accepted | 2026-10-17 |
-| [0152](0152-kernel-log-and-reset.md) | The kernel writes its log to memory and a serial port, and resets the machine itself | Accepted | 2026-10-17 |
+| [0152](0152-kernel-log-and-reset.md) | The kernel writes its log to memory and a serial port, and resets the machine itself | Accepted, amended by [0225](0225-framebuffer-log-at-failures.md) | 2026-10-17 |
 | [0153](0153-build-unpacks-ramdisk.md) | The build unpacks the root task and the system library into the ramdisk | Accepted, amended by [0221](0221-corrections.md) | 2026-10-17 |
 | [0154](0154-library-entry-table.md) | Programs call the system library through a table of entry points | Accepted | 2026-10-17 |
-| [0155](0155-ramdisk-reaches-storage.md) | The ramdisk holds the programs needed to reach storage | Accepted | 2026-10-17 |
+| [0155](0155-ramdisk-reaches-storage.md) | The ramdisk holds the programs needed to reach storage | Accepted, amended by [0253](0253-ramdisk-log-and-clocks.md) | 2026-10-17 |
 | [0156](0156-boot-loader-checks-image.md) | The boot loader checks the kernel and the ramdisk against the system image's signature | Accepted | 2026-10-17 |
 | [0157](0157-boot-settings-in-ramdisk.md) | Boot settings live in the ramdisk's header | Accepted | 2026-10-17 |
 | [0158](0158-image-try-count.md) | A new system image is tried a limited number of times, then the boot loader falls back | Accepted | 2026-10-17 |
@@ -191,7 +191,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0170](0170-dma-quarantine.md) | Memory mapped for a device is held back after a revoke, until the IOMMU service releases it | Accepted | 2026-10-17 |
 | [0171](0171-no-iommu-trusted-drivers.md) | Without an IOMMU, the drivers of DMA-capable devices are trusted | Accepted, amended by [0214](0214-interrupt-remapping.md) | 2026-10-17 |
 | [0172](0172-device-manager.md) | A device manager starts each driver with exactly its device's capabilities | Accepted | 2026-10-17 |
-| [0173](0173-time-service-entry.md) | Programs reach the time service through the namespace entry `svc/time` | Accepted | 2026-10-17 |
+| [0173](0173-time-service-entry.md) | Programs reach the time service through the namespace entry `svc/time` | Accepted, amended by [0252](0252-time-service-starts-early.md) | 2026-10-17 |
 | [0174](0174-random-service-and-seed.md) | Random numbers come from a random service, and every program starts with a seed | Accepted | 2026-10-17 |
 | [0175](0175-rust-target-names.md) | The Rust targets are `x86_64-unknown-thisos` and `aarch64-unknown-thisos`, with no target family | Accepted | 2026-10-17 |
 | [0176](0176-paths-and-current-directory.md) | Paths that start with `/` resolve through the namespace, and others through a current directory | Accepted | 2026-10-17 |
@@ -211,11 +211,11 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0190](0190-cargo-and-build-tool.md) | Cargo builds thisOS, driven by a build tool written in Rust | Accepted | 2026-10-18 |
 | [0191](0191-audited-list-and-wrapper.md) | A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set | Accepted | 2026-10-18 |
 | [0192](0192-build-scripts-reviewed.md) | Build scripts and procedural macros run only in reviewed crates, and never link native code | Accepted | 2026-10-18 |
-| [0193](0193-vendored-reviewed-crates.md) | Third-party crates in the OS's own code are vendored and reviewed | Accepted | 2026-10-18 |
+| [0193](0193-vendored-reviewed-crates.md) | Third-party crates in the OS's own code are vendored and reviewed | Accepted, amended by [0243](0243-audit-records-and-crate-reviews.md) | 2026-10-18 |
 | [0194](0194-reproducible-builds.md) | The system image and the boot loader build reproducibly | Accepted | 2026-10-18 |
 | [0195](0195-bindings-safe-output.md) | The build tool generates the bindings, and the generated code contains no unsafe code | Accepted | 2026-10-18 |
 | [0196](0196-released-interface-copies.md) | Released interface versions are kept in the repository, and every change is checked against them | Accepted | 2026-10-18 |
-| [0197](0197-architecture-check.md) | Crates are marked by architecture, and the build rejects architecture-specific code in generic crates | Accepted | 2026-10-18 |
+| [0197](0197-architecture-check.md) | Crates are marked by architecture, and the build rejects architecture-specific code in generic crates | Accepted, amended by [0232](0232-traits-and-specific-crates.md) | 2026-10-18 |
 | [0198](0198-stack-depth-checker.md) | A checker on the linked kernel bounds its stack depth and rejects recursion | Accepted | 2026-10-18 |
 | [0199](0199-license.md) | thisOS is licensed under MIT OR Apache-2.0 | Accepted | 2026-10-18 |
 | [0200](0200-contributions.md) | Contributions come in under the project's license, with no sign-off | Accepted | 2026-10-18 |
@@ -226,7 +226,7 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0205](0205-root-and-working-keys.md) | An offline root key names the working keys, and the boot loader carries only the root | Accepted | 2026-10-18 |
 | [0206](0206-owner-approves-signers.md) | A program runs if the system image's signer or a signer the owner approved signed it | Accepted | 2026-10-18 |
 | [0207](0207-install-and-start-checks.md) | The package store checks packages at install and after each boot, and the loader checks the policy at each start | Accepted | 2026-10-18 |
-| [0208](0208-boot-loader-beside-old.md) | A new boot loader is installed beside the previous one, which the firmware falls back to | Accepted | 2026-10-18 |
+| [0208](0208-boot-loader-beside-old.md) | A new boot loader is installed beside the previous one, which the firmware falls back to | Accepted, amended by [0223](0223-qemu-and-laptop-checkpoints.md) | 2026-10-18 |
 | [0209](0209-no-rollback-protection.md) | Older signed images still boot, and rollback protection is later work | Accepted | 2026-10-18 |
 | [0210](0210-std-version-declared.md) | Programs declare the std they were built with, and the owner can refuse flawed ones | Accepted | 2026-10-18 |
 | [0211](0211-relative-relocations.md) | Programs carry only relative relocations | Accepted | 2026-10-18 |
@@ -240,3 +240,41 @@ Open questions are listed in the [design documents](../design/), grouped by topi
 | [0219](0219-wakeup-preemption.md) | A wakeup enters the scheduler only if the woken thread may run before the running one | Accepted | 2026-10-18 |
 | [0220](0220-endpoint-priority-order.md) | Callers waiting on an endpoint are served by priority, then arrival | Accepted | 2026-10-18 |
 | [0221](0221-corrections.md) | Corrections to 0003 and 0153 | Accepted | 2026-10-18 |
+| [0222](0222-roadmap-to-first-release.md) | The roadmap runs from an empty repository to a first release of the whole design | Accepted | 2026-10-19 |
+| [0223](0223-qemu-and-laptop-checkpoints.md) | thisOS is built and tested in QEMU, with a checkpoint on the development laptop at the end of each phase | Accepted | 2026-10-19 |
+| [0224](0224-laptop-usb-storage.md) | On the laptop, thisOS keeps its storage on a USB disk, and never opens the internal disk | Accepted | 2026-10-19 |
+| [0225](0225-framebuffer-log-at-failures.md) | The kernel shows its log on the framebuffer when it fails, and while bring-up images start | Accepted | 2026-10-19 |
+| [0226](0226-open-topics-at-their-step.md) | Topics no record decides are designed at the step that needs them | Accepted | 2026-10-19 |
+| [0227](0227-steps-and-phases.md) | The roadmap has 24 steps in 7 phases, each after the steps it needs | Accepted | 2026-10-19 |
+| [0228](0228-step-start-and-done.md) | A step starts once the steps it needs are done, and is done when it's tested, reviewed and mapped | Accepted | 2026-10-19 |
+| [0229](0229-std-stages.md) | std comes in four stages, each done when upstream's tests for it pass | Accepted | 2026-10-19 |
+| [0230](0230-interfaces-released-with-sdk.md) | Interfaces that third-party programs reach are released with the SDK | Accepted | 2026-10-19 |
+| [0231](0231-repository-layout.md) | One repository holds thisOS, with a Cargo workspace for each kind of target | Accepted | 2026-10-19 |
+| [0232](0232-traits-and-specific-crates.md) | Generic crates state their hardware needs as traits, and specific crates implement them | Accepted | 2026-10-19 |
+| [0233](0233-simulated-machine.md) | The kernel's generic part also runs on the host, on a simulated machine | Accepted | 2026-10-19 |
+| [0234](0234-tests-cite-records.md) | Tests name the records they check, and the build tool maps every decision to its tests | Accepted | 2026-10-19 |
+| [0235](0235-kinds-of-tests.md) | Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly | Accepted | 2026-10-19 |
+| [0236](0236-program-output-second-serial.md) | Programs write to a second serial port until the log service takes it, and test runs end through the power capability | Accepted | 2026-10-19 |
+| [0237](0237-public-repository-and-ci.md) | thisOS is public on GitHub, where CI runs the build tool's `ci` command for every change | Accepted | 2026-10-19 |
+| [0238](0238-pushes-and-pull-requests.md) | Maintainers push to main after a local `ci` run, and others send pull requests | Accepted | 2026-10-19 |
+| [0239](0239-security-reports.md) | Security problems are reported privately, through GitHub | Accepted | 2026-10-19 |
+| [0240](0240-timing-on-laptop.md) | Benchmarks and time budgets run on the development laptop | Accepted | 2026-10-19 |
+| [0241](0241-reproducibility-checks.md) | The image and the boot loader are built twice in CI, and rebuilt elsewhere before signing | Accepted | 2026-10-19 |
+| [0242](0242-review-tiers.md) | Changes are reviewed in three tiers, by role | Accepted | 2026-10-19 |
+| [0243](0243-audit-records-and-crate-reviews.md) | Each audited crate has a record beside the list, and cargo-vet records crate reviews | Accepted | 2026-10-19 |
+| [0244](0244-imported-crate-reviews.md) | Crate reviews may be imported from named organizations, outside the audited set | Accepted | 2026-10-19 |
+| [0245](0245-coverage-and-fuzzing.md) | Host tests cover every line of the generic kernel, and system calls are fuzzed from step 4 | Accepted | 2026-10-19 |
+| [0246](0246-interruption-stretch-limit.md) | Work between interruption points is limited in code, and no stretch may take more than 20 µs | Accepted | 2026-10-19 |
+| [0247](0247-kernel-size-ratchet.md) | A record rule and a size ratchet keep the kernel small | Accepted | 2026-10-19 |
+| [0248](0248-coding-and-doc-standards.md) | The code follows one set of coding and documentation standards | Accepted | 2026-10-19 |
+| [0249](0249-estimates-and-checkpoints.md) | Steps are estimated by the code they add, and calibrated at each phase's checkpoint | Accepted | 2026-10-19 |
+| [0250](0250-plan-changes-after-freeze.md) | After the freeze, steps change only through a record that cites what building found | Accepted | 2026-10-19 |
+| [0251](0251-later-work.md) | Later work stays unscheduled, and the first release states the gaps it leaves | Accepted | 2026-10-19 |
+| [0252](0252-time-service-starts-early.md) | The time service starts early, and serves wall-clock time once the clock driver reports it | Accepted | 2026-10-19 |
+| [0253](0253-ramdisk-log-and-clocks.md) | The ramdisk also holds the log service and the clock drivers | Accepted | 2026-10-19 |
+| [0254](0254-corrections.md) | Corrections to 0045 | Accepted | 2026-10-19 |
+| [0255](0255-freeze.md) | The design and the roadmap freeze with Day 8's commit, on 2026-10-19 | Accepted | 2026-10-19 |
+
+## Records written after the freeze
+
+None yet.

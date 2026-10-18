@@ -1,6 +1,6 @@
 # 0152. The kernel writes its log to memory and a serial port, and resets the machine itself
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0225](0225-framebuffer-log-at-failures.md)
 - **Date:** 2026-10-17
 
 ## Context

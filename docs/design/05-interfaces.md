@@ -1,11 +1,11 @@
 # 05. System calls, IPC and the stable ABI
 
 - **Day:** 5 (Sat 2026-10-17)
-- **Status:** In progress
+- **Status:** Frozen
 
 ## Covers
 
-The binary interface between programs and the kernel and between programs, how interfaces are defined and versioned, and the security model at the interface level.
+This is the binary interface, both between programs and the kernel and from one program to another. It also covers how interfaces are defined and versioned, and the security model at the interface level.
 
 ## Decided
 
@@ -25,7 +25,7 @@ The binary interface between programs and the kernel and between programs, how i
 - [0072](../decisions/0072-registers-only.md) System calls and IPC carry data only in registers; the kernel never reads program data
 - [0085](../decisions/0085-clients-pay-cpu-time.md) Clients pay for the CPU time services spend on them (amended by [0121](../decisions/0121-callers-help-busy-services.md))
 
-The kernel boundary and IPC:
+At the kernel boundary, and for IPC:
 
 - [0117](../decisions/0117-system-library.md) Programs reach the kernel only through the system library (amended by [0160](../decisions/0160-root-task-starts-four.md))
 - [0118](../decisions/0118-calls-and-notifications.md) IPC is synchronous calls through endpoints, with notifications for events
@@ -38,7 +38,7 @@ The kernel boundary and IPC:
 - [0125](../decisions/0125-sysret-guard.md) The kernel never returns with `sysret` to an address outside the program half
 - [0220](../decisions/0220-endpoint-priority-order.md) Callers waiting on an endpoint are served by priority, then arrival
 
-Capabilities:
+For capabilities:
 
 - [0126](../decisions/0126-capability-space-radix-table.md) A capability space is a radix table, and capabilities are named by index
 - [0127](../decisions/0127-capability-space-per-program.md) Each program has exactly one capability space
@@ -47,7 +47,7 @@ Capabilities:
 - [0130](../decisions/0130-handlers-changeable.md) A thread's pager and exception handler can be changed through its control right
 - [0131](../decisions/0131-namespace-path-prefixes.md) A namespace maps path prefixes to capabilities
 
-Events, faults and scheduling:
+On events, faults and scheduling:
 
 - [0132](../decisions/0132-events-notify-then-call.md) An event is a notification, followed by a call for its details
 - [0133](../decisions/0133-recovery-point-in-register.md) Accessors keep their recovery point in a register
@@ -56,7 +56,7 @@ Events, faults and scheduling:
 - [0136](../decisions/0136-predictor-flush-flag.md) A program asks for predictor flushes with a flag on its address space
 - [0219](../decisions/0219-wakeup-preemption.md) A wakeup enters the scheduler only if the woken thread may run before the running one
 
-Memory, accounts and identity:
+On memory, accounts and identity:
 
 - [0137](../decisions/0137-memory-capability-per-program.md) Each program has its own capability to the memory service, which names it as payer (amended by [0164](../decisions/0164-root-task-memory-pool.md))
 - [0138](../decisions/0138-pager-keeps-reservations.md) Pagers keep a program's address-space reservations
@@ -64,7 +64,7 @@ Memory, accounts and identity:
 - [0140](../decisions/0140-accounts-capability-pair.md) An account is a pair of capabilities, one from the scheduler and one from the memory service
 - [0141](../decisions/0141-identity-capability.md) The login service gives each session an identity capability
 
-Interface definitions:
+How interfaces are defined:
 
 - [0142](../decisions/0142-own-idl.md) Interfaces are defined in our own IDL, modeled on FIDL
 - [0143](../decisions/0143-add-only-versioning.md) Interfaces only grow, and a tool checks every change
@@ -75,15 +75,16 @@ Interface definitions:
 - [0148](../decisions/0148-freeze-covers-rules.md) The freeze covers the interface design, and each interface's version 1 is fixed when it's released
 - [0195](../decisions/0195-bindings-safe-output.md) The build tool generates the bindings, and the generated code contains no unsafe code
 - [0196](../decisions/0196-released-interface-copies.md) Released interface versions are kept in the repository, and every change is checked against them
+- [0230](../decisions/0230-interfaces-released-with-sdk.md) Interfaces that third-party programs reach are released with the SDK
 - [0210](../decisions/0210-std-version-declared.md) Programs declare the std they were built with, and the owner can refuse flawed ones
 - [0212](../decisions/0212-low-image-declaration.md) A program can declare the highest address for its image
 
 ## Open questions
 
-None are left in this document. Questions that depend on other topics are listed with those topics:
+None are left in this document.
 
-- **Roadmap** ([08-roadmap](08-roadmap.md)): when the system library, the IDL compiler and the compatibility checker are built, and when each interface's version 1 is released ([0117](../decisions/0117-system-library.md), [0142](../decisions/0142-own-idl.md), [0148](../decisions/0148-freeze-covers-rules.md)).
+The roadmap ([08-roadmap](08-roadmap.md)) settled the questions that depended on it. These were when the system library, the IDL compiler and the compatibility checker are built [0227](../decisions/0227-steps-and-phases.md), and when each interface's version 1 is released [0230](../decisions/0230-interfaces-released-with-sdk.md).
 
-Questions that depended on the system design were settled with it ([06-system](06-system.md)): how the system library reaches the root task and the first programs ([0153](../decisions/0153-build-unpacks-ramdisk.md), [0154](../decisions/0154-library-entry-table.md), [0160](../decisions/0160-root-task-starts-four.md)), how the scheduling-control capability reaches the scheduler [0161](../decisions/0161-root-task-before-scheduler.md), how the rights to make accounts reach the login service [0163](../decisions/0163-services-hand-first-capabilities.md), interrupts as notifications [0167](../decisions/0167-interrupts-as-notifications.md), the std mapping ([0176](../decisions/0176-paths-and-current-directory.md) to [0182](../decisions/0182-all-of-std.md)), and stored access information [0183](../decisions/0183-access-on-directories.md).
+The system design ([06-system](06-system.md)) settled the questions that depended on it: how the system library reaches the root task and the first programs ([0153](../decisions/0153-build-unpacks-ramdisk.md), [0154](../decisions/0154-library-entry-table.md), [0160](../decisions/0160-root-task-starts-four.md)), how the scheduling-control capability reaches the scheduler [0161](../decisions/0161-root-task-before-scheduler.md), how the rights to make accounts reach the login service [0163](../decisions/0163-services-hand-first-capabilities.md), interrupts as notifications [0167](../decisions/0167-interrupts-as-notifications.md), the std mapping ([0176](../decisions/0176-paths-and-current-directory.md) to [0182](../decisions/0182-all-of-std.md)), and stored access information [0183](../decisions/0183-access-on-directories.md).
 
-The rest were settled on Day 7 ([07-engineering](07-engineering.md)): the package layout, which carries the signature and the package metadata [0203](../decisions/0203-package-format.md), the bindings [0195](../decisions/0195-bindings-safe-output.md), and the compatibility checker in the build [0196](../decisions/0196-released-interface-copies.md).
+Day 7 ([07-engineering](07-engineering.md)) settled the rest: the package layout, which carries the signature and the package metadata [0203](../decisions/0203-package-format.md), the bindings [0195](../decisions/0195-bindings-safe-output.md), and the compatibility checker in the build [0196](../decisions/0196-released-interface-copies.md).

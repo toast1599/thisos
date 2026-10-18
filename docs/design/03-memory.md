@@ -1,11 +1,11 @@
 # 03. Memory model
 
 - **Day:** 3 (Thu 2026-10-15)
-- **Status:** In progress
+- **Status:** Frozen
 
 ## Covers
 
-Address spaces, memory layout, allocation, and how programs share data.
+How address spaces are laid out, how memory is allocated, and how programs share data.
 
 ## Decided
 
@@ -18,7 +18,7 @@ Address spaces, memory layout, allocation, and how programs share data.
 - [0047](../decisions/0047-kernel-mapping.md) The kernel stays mapped in every address space unless the CPU requires otherwise
 - [0100](../decisions/0100-cpu-flaw-mitigations.md) The kernel applies each CPU's documented mitigations for speculative-execution flaws
 
-How memory is handed out:
+Memory is handed out under these rules:
 
 - [0048](../decisions/0048-reserve-on-grant.md) Memory is reserved when it's granted; the system never promises more than it has
 - [0049](../decisions/0049-memory-fair-share.md) When memory runs short, it's shared fairly within each memory priority (amended by [0084](../decisions/0084-shares-belong-to-accounts.md))
@@ -30,7 +30,7 @@ How memory is handed out:
 - [0076](../decisions/0076-memory-notice-deadline.md) Programs over their fair share get a notice, then a deadline
 - [0077](../decisions/0077-swap-in-default-pager.md) Swap is a feature of the default pager; it comes later and is encrypted (amended by [0082](../decisions/0082-corrections.md))
 
-Kernel mechanisms:
+The kernel's own mechanisms:
 
 - [0051](../decisions/0051-kernel-clears-memory.md) The kernel clears memory before it's made into anything new
 - [0052](../decisions/0052-user-mode-page-tables.md) Page tables are kernel objects that user mode builds
@@ -46,7 +46,7 @@ Kernel mechanisms:
 - [0217](../decisions/0217-window-flush-batched.md) Object-window flushes are batched, at most at a set rate
 - [0218](../decisions/0218-lock-yield.md) Long kernel operations also yield the kernel lock at their interruption points
 
-Pagers and sharing:
+Pagers, and how programs share:
 
 - [0056](../decisions/0056-pager-chosen-at-spawn.md) A program's pager is chosen when it's spawned (amended by [0081](../decisions/0081-pager-per-thread.md))
 - [0057](../decisions/0057-pager-fault-chain.md) A pager's own faults go to its pager, up a chain that ends at the root task
@@ -55,7 +55,7 @@ Pagers and sharing:
 - [0065](../decisions/0065-lost-memory-is-an-error.md) Touching memory that was taken back is an error, not a crash
 - [0081](../decisions/0081-pager-per-thread.md) Page faults go to the faulting thread's pager
 
-Layout:
+The layout of an address space:
 
 - [0061](../decisions/0061-no-randomization-yet.md) Nothing is randomized at first, and the design keeps randomization possible
 - [0063](../decisions/0063-widest-addressing.md) The kernel turns on the widest virtual addressing the CPU offers
@@ -74,8 +74,10 @@ Layout:
 
 None are left in this document.
 
-File-backed memory, DMA and swap storage were settled with the system design ([06-system](06-system.md)): shared file pages [0184](../decisions/0184-shared-file-pages.md), the IOMMU service and revoke ([0169](../decisions/0169-iommu-service.md), [0170](../decisions/0170-dma-quarantine.md)), and the swap partition [0185](../decisions/0185-swap-partition.md).
+The system design ([06-system](06-system.md)) settled file-backed memory, DMA and swap storage: shared file pages [0184](../decisions/0184-shared-file-pages.md), the IOMMU service and revoke ([0169](../decisions/0169-iommu-service.md), [0170](../decisions/0170-dma-quarantine.md)), and the swap partition [0185](../decisions/0185-swap-partition.md).
 
-Memory requests and notices were settled with the interfaces ([05-interfaces](05-interfaces.md)): payers [0137](../decisions/0137-memory-capability-per-program.md), reservations and low addresses [0138](../decisions/0138-pager-keeps-reservations.md), notices [0132](../decisions/0132-events-notify-then-call.md), and lost memory as an error [0133](../decisions/0133-recovery-point-in-register.md).
+The interfaces ([05-interfaces](05-interfaces.md)) settled memory requests and notices: payers [0137](../decisions/0137-memory-capability-per-program.md), reservations and low addresses [0138](../decisions/0138-pager-keeps-reservations.md), notices [0132](../decisions/0132-events-notify-then-call.md), and lost memory as an error [0133](../decisions/0133-recovery-point-in-register.md).
 
-The final review ([07-engineering](07-engineering.md)) added the stack checker [0198](../decisions/0198-stack-depth-checker.md), batched flushes of the object window [0217](../decisions/0217-window-flush-batched.md) and yielding the kernel lock [0218](../decisions/0218-lock-yield.md), and settled two questions on the program format that 02 had left open: relocations [0211](../decisions/0211-relative-relocations.md) and low addresses for a program's image [0212](../decisions/0212-low-image-declaration.md).
+On Day 8 ([08-roadmap](08-roadmap.md)) we set a limit on the longest stretch between the kernel's interruption points [0246](../decisions/0246-interruption-stretch-limit.md).
+
+The final review ([07-engineering](07-engineering.md)) brought the stack checker [0198](../decisions/0198-stack-depth-checker.md), batched flushes of the object window [0217](../decisions/0217-window-flush-batched.md) and yielding the kernel lock [0218](../decisions/0218-lock-yield.md), and it also closed two questions on the program format that 02 had left open: relocations [0211](../decisions/0211-relative-relocations.md) and low addresses for a program's image [0212](../decisions/0212-low-image-declaration.md).

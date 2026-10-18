@@ -1,6 +1,6 @@
 # 0197. Crates are marked by architecture, and the build rejects architecture-specific code in generic crates
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0232](0232-traits-and-specific-crates.md)
 - **Date:** 2026-10-18
 
 ## Context
