@@ -1,6 +1,6 @@
 # 0201. After the freeze, a decision changes only through a new record that cites what building found
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0256](0256-audit-findings-as-evidence.md)
 - **Date:** 2026-10-18
 
 ## Context

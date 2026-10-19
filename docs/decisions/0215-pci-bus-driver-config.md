@@ -1,6 +1,6 @@
 # 0215. The PCI bus driver keeps configuration space, and mediates drivers' access to it
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0261](0261-bus-mastering-off-at-boot.md) and [0262](0262-interrupt-source-check.md)
 - **Date:** 2026-10-18
 
 ## Context

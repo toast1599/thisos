@@ -1,6 +1,6 @@
 # 0150. AArch64 support is added to the `bootloader` crate
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0261](0261-bus-mastering-off-at-boot.md)
 - **Date:** 2026-10-17
 
 ## Context

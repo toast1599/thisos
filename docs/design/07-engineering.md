@@ -36,7 +36,11 @@ The license, and how changes are made after the freeze:
 
 - [0199](../decisions/0199-license.md) thisOS is licensed under MIT OR Apache-2.0
 - [0200](../decisions/0200-contributions.md) Contributions come in under the project's license, with no sign-off
-- [0201](../decisions/0201-changes-after-freeze.md) After the freeze, a decision changes only through a new record that cites what building found
+- [0201](../decisions/0201-changes-after-freeze.md) After the freeze, a decision changes only through a new record that cites what building found (amended by [0256](../decisions/0256-audit-findings-as-evidence.md))
+
+After the freeze, the audit of 2026-10-19 brought checked findings in as evidence:
+
+- [0256](../decisions/0256-audit-findings-as-evidence.md) Checked findings of the audit after the freeze count as evidence under 0201
 
 ## The final review
 
@@ -44,11 +48,11 @@ The review began with the questions left open in [01-objective](01-objective.md)
 
 Threat model, signing and packages, which 02 had left open:
 
-- [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope
+- [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope (amended by [0257](../decisions/0257-outside-attackers.md) and [0270](../decisions/0270-offline-gap-stated.md))
 - [0203](../decisions/0203-package-format.md) A package is a signed manifest and files named by SHA-256 Merkle roots
 - [0204](../decisions/0204-hybrid-signatures.md) Signatures pair Ed25519 with ML-DSA-65
 - [0205](../decisions/0205-root-and-working-keys.md) An offline root key names the working keys, and the boot loader carries only the root
-- [0206](../decisions/0206-owner-approves-signers.md) A program runs if the system image's signer or a signer the owner approved signed it
+- [0206](../decisions/0206-owner-approves-signers.md) A program runs if the system image's signer or a signer the owner approved signed it (amended by [0271](../decisions/0271-corrections.md))
 - [0207](../decisions/0207-install-and-start-checks.md) The package store checks packages at install and after each boot, and the loader checks the policy at each start
 - [0208](../decisions/0208-boot-loader-beside-old.md) A new boot loader is installed beside the previous one, which the firmware falls back to (amended by [0223](../decisions/0223-qemu-and-laptop-checkpoints.md))
 - [0209](../decisions/0209-no-rollback-protection.md) Older signed images still boot, and rollback protection is later work
@@ -59,8 +63,8 @@ Threat model, signing and packages, which 02 had left open:
 The gaps the review found:
 
 - [0213](../decisions/0213-power-capability.md) A power capability lets its holder reboot, power off or fail the machine
-- [0214](../decisions/0214-interrupt-remapping.md) Devices raise only the interrupts they were given, through interrupt remapping
-- [0215](../decisions/0215-pci-bus-driver-config.md) The PCI bus driver keeps configuration space, and mediates drivers' access to it
+- [0214](../decisions/0214-interrupt-remapping.md) Devices raise only the interrupts they were given, through interrupt remapping (amended by [0262](../decisions/0262-interrupt-source-check.md))
+- [0215](../decisions/0215-pci-bus-driver-config.md) The PCI bus driver keeps configuration space, and mediates drivers' access to it (amended by [0261](../decisions/0261-bus-mastering-off-at-boot.md) and [0262](../decisions/0262-interrupt-source-check.md))
 - [0216](../decisions/0216-essential-service-failure.md) A failure of an essential service is handled like a fault in the root task
 - [0217](../decisions/0217-window-flush-batched.md) Object-window flushes are batched, at most at a set rate
 - [0218](../decisions/0218-lock-yield.md) Long kernel operations also yield the kernel lock at their interruption points

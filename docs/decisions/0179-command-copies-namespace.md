@@ -1,6 +1,6 @@
 # 0179. std's `Command` gives a child a copy of the spawner's namespace by default
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0268](0268-counter-by-default.md)
 - **Date:** 2026-10-17
 
 ## Context

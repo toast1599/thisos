@@ -27,14 +27,14 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0006](0006-non-rust-software.md) | Non-Rust software is supported later; route still open | Accepted, amended by [0082](0082-corrections.md) | 2026-10-14 |
 | [0007](0007-abi-calls-and-interfaces.md) | ABI: C calling convention, interfaces defined in an IDL, add-only versioning | Superseded by [0144](0144-c-calls-and-what-crosses.md) (never accepted) | 2026-10-14 |
 | [0008](0008-architecture-neutral-design.md) | Architecture-neutral design | Accepted, amended by [0082](0082-corrections.md) | 2026-10-14 |
-| [0009](0009-x86-64-first.md) | x86_64 is the first architecture | Accepted | 2026-10-14 |
+| [0009](0009-x86-64-first.md) | x86_64 is the first architecture | Accepted, amended by [0271](0271-corrections.md) | 2026-10-14 |
 | [0010](0010-64-bit-only.md) | 64-bit architectures only | Accepted | 2026-10-14 |
 | [0011](0011-aarch64-second.md) | AArch64 is the second architecture | Accepted | 2026-10-15 |
 | [0012](0012-no-memory-cap.md) | No fixed limit on program memory | Accepted | 2026-10-15 |
 | [0013](0013-isolation-domains.md) | Isolation domains: one shared system domain, one checked address space per program | Superseded by [0014](0014-microkernel.md) (never accepted) | 2026-10-15 |
 | [0014](0014-microkernel.md) | Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode | Accepted, amended by [0082](0082-corrections.md) and [0169](0169-iommu-service.md) | 2026-10-15 |
 | [0015](0015-clean-apis.md) | APIs and ABIs are designed for this system: inspired by others, never bound to them | Accepted | 2026-10-15 |
-| [0016](0016-threat-model-scope.md) | Threat model: speculative leaks between programs and denial of service are in scope | Accepted, amended by [0202](0202-offline-attackers.md) | 2026-10-15 |
+| [0016](0016-threat-model-scope.md) | Threat model: speculative leaks between programs and denial of service are in scope | Accepted, amended by [0202](0202-offline-attackers.md) and [0257](0257-outside-attackers.md) | 2026-10-15 |
 | [0017](0017-unsafe-code-kernel-and-services.md) | Unsafe code: one closed, audited set for the kernel and the OS's own services | Accepted | 2026-10-15 |
 | [0018](0018-kernel-assurance.md) | Kernel assurance: review, tests and fuzzing from the start; formal proofs later | Accepted | 2026-10-15 |
 | [0019](0019-kernel-minimality.md) | Kernel minimality: anything that can reasonably run in user mode does | Accepted | 2026-10-15 |
@@ -63,7 +63,7 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0042](0042-updates.md) | The system updates atomically as one image; third-party programs update package by package | Accepted | 2026-10-15 |
 | [0043](0043-executable-memory-capability.md) | Making memory executable at run time needs a capability | Accepted | 2026-10-15 |
 | [0044](0044-system-image-is-os-shipped.md) | Everything in the system image counts as shipped by the OS | Accepted | 2026-10-15 |
-| [0045](0045-aarch64-with-first-user-program.md) | AArch64 is brought up together with the first user-mode program | Accepted, amended by [0254](0254-corrections.md) | 2026-10-15 |
+| [0045](0045-aarch64-with-first-user-program.md) | AArch64 is brought up together with the first user-mode program | Accepted, amended by [0254](0254-corrections.md) and [0271](0271-corrections.md) | 2026-10-15 |
 | [0046](0046-scope-of-0008.md) | Scope of 0008: the OS's own code, including platform-specific code | Accepted, amended by [0152](0152-kernel-log-and-reset.md) and [0213](0213-power-capability.md) | 2026-10-15 |
 | [0047](0047-kernel-mapping.md) | The kernel stays mapped in every address space unless the CPU requires otherwise | Accepted | 2026-10-15 |
 | [0048](0048-reserve-on-grant.md) | Memory is reserved when it's granted; the system never promises more than it has | Accepted | 2026-10-15 |
@@ -123,15 +123,15 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0102](0102-exception-handler.md) | Each thread names an exception handler besides its pager | Accepted | 2026-10-16 |
 | [0103](0103-fault-without-handler.md) | A fault with nowhere to go suspends the thread, and in the root task halts the system | Accepted, amended by [0115](0115-root-task-fault-boot-setting.md) | 2026-10-16 |
 | [0104](0104-supervisor.md) | Every program has a supervisor, named at spawn, that learns how it ended | Accepted | 2026-10-16 |
-| [0105](0105-supervisor-reclaims.md) | A failed program's supervisor has its memory taken back, and decides on a restart | Accepted | 2026-10-16 |
+| [0105](0105-supervisor-reclaims.md) | A failed program's supervisor has its memory taken back, and decides on a restart | Accepted, amended by [0267](0267-supervisor-keeps-connect.md) | 2026-10-16 |
 | [0106](0106-pager-passes-on-faults.md) | A pager passes faults it won't resolve to the thread's exception handler | Accepted | 2026-10-16 |
 | [0107](0107-loader-writes-startup-data.md) | The loader writes a new program's startup information into its memory | Accepted, amended by [0160](0160-root-task-starts-four.md) | 2026-10-16 |
 | [0108](0108-startup-information.md) | What a new program receives when it's spawned | Accepted, amended by [0146](0146-startup-data-block.md), [0174](0174-random-service-and-seed.md), [0176](0176-paths-and-current-directory.md) and [0179](0179-command-copies-namespace.md) | 2026-10-16 |
 | [0109](0109-panic-strategy.md) | Third-party programs unwind on panic by default, and the OS's own services abort | Accepted | 2026-10-16 |
 | [0110](0110-kernel-panic.md) | A kernel panic is logged, then the machine halts or reboots by a boot setting | Accepted | 2026-10-16 |
 | [0111](0111-resource-accounting.md) | Each service reports the resource use it already tracks | Accepted | 2026-10-16 |
-| [0112](0112-time-service.md) | Programs read the time from a time service | Accepted | 2026-10-16 |
-| [0113](0113-counter-capability.md) | Only programs holding a capability may read the CPU's time counter | Accepted | 2026-10-16 |
+| [0112](0112-time-service.md) | Programs read the time from a time service | Accepted, amended by [0268](0268-counter-by-default.md) | 2026-10-16 |
+| [0113](0113-counter-capability.md) | Only programs holding a capability may read the CPU's time counter | Accepted, amended by [0268](0268-counter-by-default.md) | 2026-10-16 |
 | [0114](0114-scheduler-priority.md) | Each core's scheduler thread runs above every priority it schedules | Accepted | 2026-10-16 |
 | [0115](0115-root-task-fault-boot-setting.md) | A fault in the root task is handled like a kernel panic | Accepted | 2026-10-16 |
 | [0116](0116-name-thisos.md) | The OS is named thisOS | Accepted | 2026-10-16 |
@@ -139,7 +139,7 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0118](0118-calls-and-notifications.md) | IPC is synchronous calls through endpoints, with notifications for events | Accepted | 2026-10-17 |
 | [0119](0119-message-eight-words.md) | One IPC message carries up to 8 words | Accepted | 2026-10-17 |
 | [0120](0120-reply-objects.md) | Services reply through reply objects | Accepted | 2026-10-17 |
-| [0121](0121-callers-help-busy-services.md) | A caller that finds its service busy lends it its priority and time | Accepted | 2026-10-17 |
+| [0121](0121-callers-help-busy-services.md) | A caller that finds its service busy lends it its priority and time | Accepted, amended by [0266](0266-connect-endpoints.md) | 2026-10-17 |
 | [0122](0122-bound-notifications.md) | A notification can be bound to a thread | Accepted | 2026-10-17 |
 | [0123](0123-capabilities-in-messages.md) | A message carries up to four capabilities, each copied or moved | Accepted | 2026-10-17 |
 | [0124](0124-large-calls-split.md) | Kernel calls whose data doesn't fit in registers are split, and the system library joins them | Accepted | 2026-10-17 |
@@ -149,7 +149,7 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0128](0128-rights-and-badges.md) | Capabilities carry a few rights, and endpoint and notification capabilities carry a badge | Accepted | 2026-10-17 |
 | [0129](0129-revoke-any-capability.md) | Revoking any capability destroys every copy made from it | Accepted | 2026-10-17 |
 | [0130](0130-handlers-changeable.md) | A thread's pager and exception handler can be changed through its control right | Accepted | 2026-10-17 |
-| [0131](0131-namespace-path-prefixes.md) | A namespace maps path prefixes to capabilities | Accepted | 2026-10-17 |
+| [0131](0131-namespace-path-prefixes.md) | A namespace maps path prefixes to capabilities | Accepted, amended by [0266](0266-connect-endpoints.md) | 2026-10-17 |
 | [0132](0132-events-notify-then-call.md) | An event is a notification, followed by a call for its details | Accepted | 2026-10-17 |
 | [0133](0133-recovery-point-in-register.md) | Accessors keep their recovery point in a register | Accepted | 2026-10-17 |
 | [0134](0134-scheduler-interface.md) | Threads run once the scheduler takes them on, and the kernel reports to it in registers | Accepted, amended by [0161](0161-root-task-before-scheduler.md) | 2026-10-17 |
@@ -168,7 +168,7 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0147](0147-elf-declarations-only.md) | A program's ELF sections carry only its declarations | Accepted, amended by [0210](0210-std-version-declared.md) and [0212](0212-low-image-declaration.md) | 2026-10-17 |
 | [0148](0148-freeze-covers-rules.md) | The freeze covers the interface design, and each interface's version 1 is fixed when it's released | Accepted | 2026-10-17 |
 | [0149](0149-bootloader-crate-uefi.md) | The kernel is booted by the `bootloader` crate, through UEFI only | Accepted | 2026-10-17 |
-| [0150](0150-bootloader-aarch64.md) | AArch64 support is added to the `bootloader` crate | Accepted | 2026-10-17 |
+| [0150](0150-bootloader-aarch64.md) | AArch64 support is added to the `bootloader` crate | Accepted, amended by [0261](0261-bus-mastering-off-at-boot.md) | 2026-10-17 |
 | [0151](0151-boot-info-from-crate.md) | The kernel starts from the crate's boot information | Accepted | 2026-10-17 |
 | [0152](0152-kernel-log-and-reset.md) | The kernel writes its log to memory and a serial port, and resets the machine itself | Accepted, amended by [0225](0225-framebuffer-log-at-failures.md) | 2026-10-17 |
 | [0153](0153-build-unpacks-ramdisk.md) | The build unpacks the root task and the system library into the ramdisk | Accepted, amended by [0221](0221-corrections.md) | 2026-10-17 |
@@ -195,9 +195,9 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0174](0174-random-service-and-seed.md) | Random numbers come from a random service, and every program starts with a seed | Accepted | 2026-10-17 |
 | [0175](0175-rust-target-names.md) | The Rust targets are `x86_64-unknown-thisos` and `aarch64-unknown-thisos`, with no target family | Accepted | 2026-10-17 |
 | [0176](0176-paths-and-current-directory.md) | Paths that start with `/` resolve through the namespace, and others through a current directory | Accepted | 2026-10-17 |
-| [0177](0177-locks-on-parking.md) | std's locks are built on parking, and parking on notifications | Accepted | 2026-10-17 |
+| [0177](0177-locks-on-parking.md) | std's locks are built on parking, and parking on notifications | Accepted, amended by [0269](0269-std-mutex-condvar.md) | 2026-10-17 |
 | [0178](0178-native-api-crate.md) | The native API is a separate crate | Accepted | 2026-10-17 |
-| [0179](0179-command-copies-namespace.md) | std's `Command` gives a child a copy of the spawner's namespace by default | Accepted | 2026-10-17 |
+| [0179](0179-command-copies-namespace.md) | std's `Command` gives a child a copy of the spawner's namespace by default | Accepted, amended by [0268](0268-counter-by-default.md) | 2026-10-17 |
 | [0180](0180-streams-and-exit-status.md) | Standard streams use a byte-stream protocol, and a program ends with a code or an abnormal end | Accepted | 2026-10-17 |
 | [0181](0181-network-service.md) | `std::net` uses a network service through the namespace | Accepted | 2026-10-17 |
 | [0182](0182-all-of-std.md) | All of std is supported, in stages, and allocation failure aborts | Accepted | 2026-10-17 |
@@ -219,12 +219,12 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0198](0198-stack-depth-checker.md) | A checker on the linked kernel bounds its stack depth and rejects recursion | Accepted | 2026-10-18 |
 | [0199](0199-license.md) | thisOS is licensed under MIT OR Apache-2.0 | Accepted | 2026-10-18 |
 | [0200](0200-contributions.md) | Contributions come in under the project's license, with no sign-off | Accepted | 2026-10-18 |
-| [0201](0201-changes-after-freeze.md) | After the freeze, a decision changes only through a new record that cites what building found | Accepted | 2026-10-18 |
-| [0202](0202-offline-attackers.md) | Attackers who get the machine while it's off are in scope | Accepted | 2026-10-18 |
+| [0201](0201-changes-after-freeze.md) | After the freeze, a decision changes only through a new record that cites what building found | Accepted, amended by [0256](0256-audit-findings-as-evidence.md) | 2026-10-18 |
+| [0202](0202-offline-attackers.md) | Attackers who get the machine while it's off are in scope | Accepted, amended by [0257](0257-outside-attackers.md) and [0270](0270-offline-gap-stated.md) | 2026-10-18 |
 | [0203](0203-package-format.md) | A package is a signed manifest and files named by SHA-256 Merkle roots | Accepted | 2026-10-18 |
 | [0204](0204-hybrid-signatures.md) | Signatures pair Ed25519 with ML-DSA-65 | Accepted | 2026-10-18 |
 | [0205](0205-root-and-working-keys.md) | An offline root key names the working keys, and the boot loader carries only the root | Accepted | 2026-10-18 |
-| [0206](0206-owner-approves-signers.md) | A program runs if the system image's signer or a signer the owner approved signed it | Accepted | 2026-10-18 |
+| [0206](0206-owner-approves-signers.md) | A program runs if the system image's signer or a signer the owner approved signed it | Accepted, amended by [0271](0271-corrections.md) | 2026-10-18 |
 | [0207](0207-install-and-start-checks.md) | The package store checks packages at install and after each boot, and the loader checks the policy at each start | Accepted | 2026-10-18 |
 | [0208](0208-boot-loader-beside-old.md) | A new boot loader is installed beside the previous one, which the firmware falls back to | Accepted, amended by [0223](0223-qemu-and-laptop-checkpoints.md) | 2026-10-18 |
 | [0209](0209-no-rollback-protection.md) | Older signed images still boot, and rollback protection is later work | Accepted | 2026-10-18 |
@@ -232,8 +232,8 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0211](0211-relative-relocations.md) | Programs carry only relative relocations | Accepted | 2026-10-18 |
 | [0212](0212-low-image-declaration.md) | A program can declare the highest address for its image | Accepted | 2026-10-18 |
 | [0213](0213-power-capability.md) | A power capability lets its holder reboot, power off or fail the machine | Accepted | 2026-10-18 |
-| [0214](0214-interrupt-remapping.md) | Devices raise only the interrupts they were given, through interrupt remapping | Accepted | 2026-10-18 |
-| [0215](0215-pci-bus-driver-config.md) | The PCI bus driver keeps configuration space, and mediates drivers' access to it | Accepted | 2026-10-18 |
+| [0214](0214-interrupt-remapping.md) | Devices raise only the interrupts they were given, through interrupt remapping | Accepted, amended by [0262](0262-interrupt-source-check.md) | 2026-10-18 |
+| [0215](0215-pci-bus-driver-config.md) | The PCI bus driver keeps configuration space, and mediates drivers' access to it | Accepted, amended by [0261](0261-bus-mastering-off-at-boot.md) and [0262](0262-interrupt-source-check.md) | 2026-10-18 |
 | [0216](0216-essential-service-failure.md) | A failure of an essential service is handled like a fault in the root task | Accepted | 2026-10-18 |
 | [0217](0217-window-flush-batched.md) | Object-window flushes are batched, at most at a set rate | Accepted | 2026-10-18 |
 | [0218](0218-lock-yield.md) | Long kernel operations also yield the kernel lock at their interruption points | Accepted | 2026-10-18 |
@@ -245,7 +245,7 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0224](0224-laptop-usb-storage.md) | On the laptop, thisOS keeps its storage on a USB disk, and never opens the internal disk | Accepted | 2026-10-19 |
 | [0225](0225-framebuffer-log-at-failures.md) | The kernel shows its log on the framebuffer when it fails, and while bring-up images start | Accepted | 2026-10-19 |
 | [0226](0226-open-topics-at-their-step.md) | Topics no record decides are designed at the step that needs them | Accepted | 2026-10-19 |
-| [0227](0227-steps-and-phases.md) | The roadmap has 24 steps in 7 phases, each after the steps it needs | Accepted | 2026-10-19 |
+| [0227](0227-steps-and-phases.md) | The roadmap has 24 steps in 7 phases, each after the steps it needs | Accepted, amended by [0271](0271-corrections.md) | 2026-10-19 |
 | [0228](0228-step-start-and-done.md) | A step starts once the steps it needs are done, and is done when it's tested, reviewed and mapped | Accepted | 2026-10-19 |
 | [0229](0229-std-stages.md) | std comes in four stages, each done when upstream's tests for it pass | Accepted | 2026-10-19 |
 | [0230](0230-interfaces-released-with-sdk.md) | Interfaces that third-party programs reach are released with the SDK | Accepted | 2026-10-19 |
@@ -253,23 +253,23 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0232](0232-traits-and-specific-crates.md) | Generic crates state their hardware needs as traits, and specific crates implement them | Accepted | 2026-10-19 |
 | [0233](0233-simulated-machine.md) | The kernel's generic part also runs on the host, on a simulated machine | Accepted | 2026-10-19 |
 | [0234](0234-tests-cite-records.md) | Tests name the records they check, and the build tool maps every decision to its tests | Accepted | 2026-10-19 |
-| [0235](0235-kinds-of-tests.md) | Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly | Accepted | 2026-10-19 |
+| [0235](0235-kinds-of-tests.md) | Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly | Accepted, amended by [0263](0263-arm64-host-tests.md) and [0264](0264-performance-targets.md) | 2026-10-19 |
 | [0236](0236-program-output-second-serial.md) | Programs write to a second serial port until the log service takes it, and test runs end through the power capability | Accepted | 2026-10-19 |
-| [0237](0237-public-repository-and-ci.md) | thisOS is public on GitHub, where CI runs the build tool's `ci` command for every change | Accepted | 2026-10-19 |
+| [0237](0237-public-repository-and-ci.md) | thisOS is public on GitHub, where CI runs the build tool's `ci` command for every change | Accepted, amended by [0263](0263-arm64-host-tests.md) | 2026-10-19 |
 | [0238](0238-pushes-and-pull-requests.md) | Maintainers push to main after a local `ci` run, and others send pull requests | Accepted | 2026-10-19 |
 | [0239](0239-security-reports.md) | Security problems are reported privately, through GitHub | Accepted | 2026-10-19 |
 | [0240](0240-timing-on-laptop.md) | Benchmarks and time budgets run on the development laptop | Accepted | 2026-10-19 |
 | [0241](0241-reproducibility-checks.md) | The image and the boot loader are built twice in CI, and rebuilt elsewhere before signing | Accepted | 2026-10-19 |
-| [0242](0242-review-tiers.md) | Changes are reviewed in three tiers, by role | Accepted | 2026-10-19 |
+| [0242](0242-review-tiers.md) | Changes are reviewed in three tiers, by role | Accepted, amended by [0258](0258-outside-input-tier-2.md) | 2026-10-19 |
 | [0243](0243-audit-records-and-crate-reviews.md) | Each audited crate has a record beside the list, and cargo-vet records crate reviews | Accepted | 2026-10-19 |
 | [0244](0244-imported-crate-reviews.md) | Crate reviews may be imported from named organizations, outside the audited set | Accepted | 2026-10-19 |
-| [0245](0245-coverage-and-fuzzing.md) | Host tests cover every line of the generic kernel, and system calls are fuzzed from step 4 | Accepted | 2026-10-19 |
+| [0245](0245-coverage-and-fuzzing.md) | Host tests cover every line of the generic kernel, and system calls are fuzzed from step 4 | Accepted, amended by [0259](0259-outside-input-fuzzed.md) | 2026-10-19 |
 | [0246](0246-interruption-stretch-limit.md) | Work between interruption points is limited in code, and no stretch may take more than 20 µs | Accepted | 2026-10-19 |
 | [0247](0247-kernel-size-ratchet.md) | A record rule and a size ratchet keep the kernel small | Accepted | 2026-10-19 |
 | [0248](0248-coding-and-doc-standards.md) | The code follows one set of coding and documentation standards | Accepted | 2026-10-19 |
-| [0249](0249-estimates-and-checkpoints.md) | Steps are estimated by the code they add, and calibrated at each phase's checkpoint | Accepted | 2026-10-19 |
-| [0250](0250-plan-changes-after-freeze.md) | After the freeze, steps change only through a record that cites what building found | Accepted | 2026-10-19 |
-| [0251](0251-later-work.md) | Later work stays unscheduled, and the first release states the gaps it leaves | Accepted | 2026-10-19 |
+| [0249](0249-estimates-and-checkpoints.md) | Steps are estimated by the code they add, and calibrated at each phase's checkpoint | Accepted, amended by [0264](0264-performance-targets.md) | 2026-10-19 |
+| [0250](0250-plan-changes-after-freeze.md) | After the freeze, steps change only through a record that cites what building found | Accepted, amended by [0256](0256-audit-findings-as-evidence.md) | 2026-10-19 |
+| [0251](0251-later-work.md) | Later work stays unscheduled, and the first release states the gaps it leaves | Accepted, amended by [0270](0270-offline-gap-stated.md) | 2026-10-19 |
 | [0252](0252-time-service-starts-early.md) | The time service starts early, and serves wall-clock time once the clock driver reports it | Accepted | 2026-10-19 |
 | [0253](0253-ramdisk-log-and-clocks.md) | The ramdisk also holds the log service and the clock drivers | Accepted | 2026-10-19 |
 | [0254](0254-corrections.md) | Corrections to 0045 | Accepted | 2026-10-19 |
@@ -277,4 +277,23 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 
 ## Records written after the freeze
 
-None yet.
+These follow the audit of 2026-10-19, whose checked findings count as evidence under [0201](0201-changes-after-freeze.md) ([0256](0256-audit-findings-as-evidence.md)).
+
+| # | Decision | Status | Date |
+|---|---|---|---|
+| [0256](0256-audit-findings-as-evidence.md) | Checked findings of the audit after the freeze count as evidence under 0201 | Accepted | 2026-10-19 |
+| [0257](0257-outside-attackers.md) | Attackers who reach a running machine from outside are in scope | Accepted | 2026-10-19 |
+| [0258](0258-outside-input-tier-2.md) | Code that parses outside input, or carries what users type, is reviewed in tier 2 | Accepted | 2026-10-19 |
+| [0259](0259-outside-input-fuzzed.md) | Network packets, USB input and disk images are fuzzed | Accepted | 2026-10-19 |
+| [0260](0260-credentials-path.md) | Credentials reach the login service only through tier 2 code, and one key combination always reaches it | Accepted | 2026-10-19 |
+| [0261](0261-bus-mastering-off-at-boot.md) | The boot loader turns off bus mastering before it starts the kernel | Accepted | 2026-10-19 |
+| [0262](0262-interrupt-source-check.md) | Interrupt entries check their source, and the configuration ports are never granted | Accepted | 2026-10-19 |
+| [0263](0263-arm64-host-tests.md) | Host tests also run on arm64, and lock-free code is model-checked | Accepted | 2026-10-19 |
+| [0264](0264-performance-targets.md) | Checkpoints set performance targets, and a missed target becomes a record | Accepted | 2026-10-19 |
+| [0265](0265-lent-memory-library.md) | Memory lent by clients goes through one library, measured at checkpoint 4 | Accepted | 2026-10-19 |
+| [0266](0266-connect-endpoints.md) | Services spread their callers through a connect endpoint | Accepted | 2026-10-19 |
+| [0267](0267-supervisor-keeps-connect.md) | A restartable service's supervisor keeps its connect endpoint | Accepted | 2026-10-19 |
+| [0268](0268-counter-by-default.md) | Programs read the CPU's counter by default | Accepted | 2026-10-19 |
+| [0269](0269-std-mutex-condvar.md) | std's `Mutex` and `Condvar` are built on parking | Accepted | 2026-10-19 |
+| [0270](0270-offline-gap-stated.md) | The first release states the offline gap in full, and the machine-bound key needs measured boot or the owner's secret | Accepted | 2026-10-19 |
+| [0271](0271-corrections.md) | Corrections to 0009, 0045, 0206 and 0227 | Accepted | 2026-10-19 |

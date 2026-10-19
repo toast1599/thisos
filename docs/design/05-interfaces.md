@@ -31,7 +31,7 @@ At the kernel boundary, and for IPC:
 - [0118](../decisions/0118-calls-and-notifications.md) IPC is synchronous calls through endpoints, with notifications for events
 - [0119](../decisions/0119-message-eight-words.md) One IPC message carries up to 8 words
 - [0120](../decisions/0120-reply-objects.md) Services reply through reply objects
-- [0121](../decisions/0121-callers-help-busy-services.md) A caller that finds its service busy lends it its priority and time
+- [0121](../decisions/0121-callers-help-busy-services.md) A caller that finds its service busy lends it its priority and time (amended by [0266](../decisions/0266-connect-endpoints.md))
 - [0122](../decisions/0122-bound-notifications.md) A notification can be bound to a thread
 - [0123](../decisions/0123-capabilities-in-messages.md) A message carries up to four capabilities, each copied or moved
 - [0124](../decisions/0124-large-calls-split.md) Kernel calls whose data doesn't fit in registers are split, and the system library joins them
@@ -45,7 +45,7 @@ For capabilities:
 - [0128](../decisions/0128-rights-and-badges.md) Capabilities carry a few rights, and endpoint and notification capabilities carry a badge
 - [0129](../decisions/0129-revoke-any-capability.md) Revoking any capability destroys every copy made from it
 - [0130](../decisions/0130-handlers-changeable.md) A thread's pager and exception handler can be changed through its control right
-- [0131](../decisions/0131-namespace-path-prefixes.md) A namespace maps path prefixes to capabilities
+- [0131](../decisions/0131-namespace-path-prefixes.md) A namespace maps path prefixes to capabilities (amended by [0266](../decisions/0266-connect-endpoints.md))
 
 On events, faults and scheduling:
 
@@ -78,6 +78,11 @@ How interfaces are defined:
 - [0230](../decisions/0230-interfaces-released-with-sdk.md) Interfaces that third-party programs reach are released with the SDK
 - [0210](../decisions/0210-std-version-declared.md) Programs declare the std they were built with, and the owner can refuse flawed ones
 - [0212](../decisions/0212-low-image-declaration.md) A program can declare the highest address for its image
+
+After the freeze, the audit of 2026-10-19 ([0256](../decisions/0256-audit-findings-as-evidence.md)) added these on services' endpoints:
+
+- [0266](../decisions/0266-connect-endpoints.md) Services spread their callers through a connect endpoint
+- [0267](../decisions/0267-supervisor-keeps-connect.md) A restartable service's supervisor keeps its connect endpoint
 
 ## Open questions
 

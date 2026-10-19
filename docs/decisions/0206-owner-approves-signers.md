@@ -1,6 +1,6 @@
 # 0206. A program runs if the system image's signer or a signer the owner approved signed it
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0271](0271-corrections.md)
 - **Date:** 2026-10-18
 
 ## Context

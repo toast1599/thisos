@@ -1,6 +1,6 @@
 # 0237. thisOS is public on GitHub, where CI runs the build tool's `ci` command for every change
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0263](0263-arm64-host-tests.md)
 - **Date:** 2026-10-19
 
 ## Context

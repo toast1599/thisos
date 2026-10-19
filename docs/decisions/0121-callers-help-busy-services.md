@@ -1,6 +1,6 @@
 # 0121. A caller that finds its service busy lends it its priority and time
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0266](0266-connect-endpoints.md)
 - **Date:** 2026-10-17
 
 ## Context

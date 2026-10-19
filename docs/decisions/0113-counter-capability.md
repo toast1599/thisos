@@ -1,6 +1,6 @@
 # 0113. Only programs holding a capability may read the CPU's time counter
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0268](0268-counter-by-default.md)
 - **Date:** 2026-10-16
 
 ## Context

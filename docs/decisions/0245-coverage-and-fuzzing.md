@@ -1,6 +1,6 @@
 # 0245. Host tests cover every line of the generic kernel, and system calls are fuzzed from step 4
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0259](0259-outside-input-fuzzed.md)
 - **Date:** 2026-10-19
 
 ## Context

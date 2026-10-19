@@ -1,6 +1,6 @@
 # 0202. Attackers who get the machine while it's off are in scope
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0257](0257-outside-attackers.md) and [0270](0270-offline-gap-stated.md)
 - **Date:** 2026-10-18
 
 ## Context

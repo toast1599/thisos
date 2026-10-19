@@ -1,6 +1,6 @@
 # 0112. Programs read the time from a time service
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0268](0268-counter-by-default.md)
 - **Date:** 2026-10-16
 
 ## Context

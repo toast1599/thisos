@@ -13,10 +13,10 @@ Some decisions from earlier days already fix part of the order or the practices:
 
 - [0006](../decisions/0006-non-rust-software.md) Non-Rust software is supported later; route still open (amended by [0082](../decisions/0082-corrections.md))
 - [0008](../decisions/0008-architecture-neutral-design.md) Architecture-neutral design (amended by [0082](../decisions/0082-corrections.md))
-- [0009](../decisions/0009-x86-64-first.md) x86_64 is the first architecture
+- [0009](../decisions/0009-x86-64-first.md) x86_64 is the first architecture (amended by [0271](../decisions/0271-corrections.md))
 - [0018](../decisions/0018-kernel-assurance.md) Kernel assurance: review, tests and fuzzing from the start; formal proofs later
 - [0019](../decisions/0019-kernel-minimality.md) Kernel minimality: anything that can reasonably run in user mode does
-- [0045](../decisions/0045-aarch64-with-first-user-program.md) AArch64 is brought up together with the first user-mode program (amended by [0254](../decisions/0254-corrections.md))
+- [0045](../decisions/0045-aarch64-with-first-user-program.md) AArch64 is brought up together with the first user-mode program (amended by [0254](../decisions/0254-corrections.md) and [0271](../decisions/0271-corrections.md))
 - [0046](../decisions/0046-scope-of-0008.md) Scope of 0008: the OS's own code, including platform-specific code (amended by [0152](../decisions/0152-kernel-log-and-reset.md) and [0213](../decisions/0213-power-capability.md))
 - [0061](../decisions/0061-no-randomization-yet.md) Nothing is randomized at first, and the design keeps randomization possible
 - [0068](../decisions/0068-no-kernel-heap.md) The kernel has no heap (amended by [0097](../decisions/0097-user-mode-starts-cores.md))
@@ -31,8 +31,8 @@ Day 7 ([07-engineering](07-engineering.md)) added these:
 - [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed (amended by [0243](../decisions/0243-audit-records-and-crate-reviews.md))
 - [0194](../decisions/0194-reproducible-builds.md) The system image and the boot loader build reproducibly
 - [0197](../decisions/0197-architecture-check.md) Crates are marked by architecture, and the build rejects architecture-specific code in generic crates (amended by [0232](../decisions/0232-traits-and-specific-crates.md))
-- [0201](../decisions/0201-changes-after-freeze.md) After the freeze, a decision changes only through a new record that cites what building found
-- [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope
+- [0201](../decisions/0201-changes-after-freeze.md) After the freeze, a decision changes only through a new record that cites what building found (amended by [0256](../decisions/0256-audit-findings-as-evidence.md))
+- [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope (amended by [0257](../decisions/0257-outside-attackers.md) and [0270](../decisions/0270-offline-gap-stated.md))
 - [0209](../decisions/0209-no-rollback-protection.md) Older signed images still boot, and rollback protection is later work
 
 Day 8 settled the scope, the machines and how open topics are handled:
@@ -45,7 +45,7 @@ Day 8 settled the scope, the machines and how open topics are handled:
 
 Then the steps themselves:
 
-- [0227](../decisions/0227-steps-and-phases.md) The roadmap has 24 steps in 7 phases, each after the steps it needs
+- [0227](../decisions/0227-steps-and-phases.md) The roadmap has 24 steps in 7 phases, each after the steps it needs (amended by [0271](../decisions/0271-corrections.md))
 - [0228](../decisions/0228-step-start-and-done.md) A step starts once the steps it needs are done, and is done when it's tested, reviewed and mapped
 - [0229](../decisions/0229-std-stages.md) std comes in four stages, each done when upstream's tests for it pass
 - [0230](../decisions/0230-interfaces-released-with-sdk.md) Interfaces that third-party programs reach are released with the SDK
@@ -59,9 +59,9 @@ On modularity:
 
 For testing and CI:
 
-- [0235](../decisions/0235-kinds-of-tests.md) Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly
+- [0235](../decisions/0235-kinds-of-tests.md) Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly (amended by [0263](../decisions/0263-arm64-host-tests.md) and [0264](../decisions/0264-performance-targets.md))
 - [0236](../decisions/0236-program-output-second-serial.md) Programs write to a second serial port until the log service takes it, and test runs end through the power capability
-- [0237](../decisions/0237-public-repository-and-ci.md) thisOS is public on GitHub, where CI runs the build tool's `ci` command for every change
+- [0237](../decisions/0237-public-repository-and-ci.md) thisOS is public on GitHub, where CI runs the build tool's `ci` command for every change (amended by [0263](../decisions/0263-arm64-host-tests.md))
 - [0238](../decisions/0238-pushes-and-pull-requests.md) Maintainers push to main after a local `ci` run, and others send pull requests
 - [0239](../decisions/0239-security-reports.md) Security problems are reported privately, through GitHub
 - [0240](../decisions/0240-timing-on-laptop.md) Benchmarks and time budgets run on the development laptop
@@ -69,19 +69,19 @@ For testing and CI:
 
 Review and kernel assurance:
 
-- [0242](../decisions/0242-review-tiers.md) Changes are reviewed in three tiers, by role
+- [0242](../decisions/0242-review-tiers.md) Changes are reviewed in three tiers, by role (amended by [0258](../decisions/0258-outside-input-tier-2.md))
 - [0243](../decisions/0243-audit-records-and-crate-reviews.md) Each audited crate has a record beside the list, and cargo-vet records crate reviews
 - [0244](../decisions/0244-imported-crate-reviews.md) Crate reviews may be imported from named organizations, outside the audited set
-- [0245](../decisions/0245-coverage-and-fuzzing.md) Host tests cover every line of the generic kernel, and system calls are fuzzed from step 4
+- [0245](../decisions/0245-coverage-and-fuzzing.md) Host tests cover every line of the generic kernel, and system calls are fuzzed from step 4 (amended by [0259](../decisions/0259-outside-input-fuzzed.md))
 - [0246](../decisions/0246-interruption-stretch-limit.md) Work between interruption points is limited in code, and no stretch may take more than 20 µs
 - [0247](../decisions/0247-kernel-size-ratchet.md) A record rule and a size ratchet keep the kernel small
 
 The standards, the estimates, changes to the plan and later work:
 
 - [0248](../decisions/0248-coding-and-doc-standards.md) The code follows one set of coding and documentation standards
-- [0249](../decisions/0249-estimates-and-checkpoints.md) Steps are estimated by the code they add, and calibrated at each phase's checkpoint
-- [0250](../decisions/0250-plan-changes-after-freeze.md) After the freeze, steps change only through a record that cites what building found
-- [0251](../decisions/0251-later-work.md) Later work stays unscheduled, and the first release states the gaps it leaves
+- [0249](../decisions/0249-estimates-and-checkpoints.md) Steps are estimated by the code they add, and calibrated at each phase's checkpoint (amended by [0264](../decisions/0264-performance-targets.md))
+- [0250](../decisions/0250-plan-changes-after-freeze.md) After the freeze, steps change only through a record that cites what building found (amended by [0256](../decisions/0256-audit-findings-as-evidence.md))
+- [0251](../decisions/0251-later-work.md) Later work stays unscheduled, and the first release states the gaps it leaves (amended by [0270](../decisions/0270-offline-gap-stated.md))
 
 Placing the steps turned up gaps, and a slip in an earlier record:
 
@@ -92,6 +92,25 @@ Placing the steps turned up gaps, and a slip in an earlier record:
 And the freeze itself:
 
 - [0255](../decisions/0255-freeze.md) The design and the roadmap freeze with Day 8's commit, on 2026-10-19
+
+After the freeze, the audit of 2026-10-19 brought these records. Its checked findings count as evidence under [0201](../decisions/0201-changes-after-freeze.md):
+
+- [0256](../decisions/0256-audit-findings-as-evidence.md) Checked findings of the audit after the freeze count as evidence under 0201
+- [0257](../decisions/0257-outside-attackers.md) Attackers who reach a running machine from outside are in scope
+- [0258](../decisions/0258-outside-input-tier-2.md) Code that parses outside input, or carries what users type, is reviewed in tier 2
+- [0259](../decisions/0259-outside-input-fuzzed.md) Network packets, USB input and disk images are fuzzed
+- [0260](../decisions/0260-credentials-path.md) Credentials reach the login service only through tier 2 code, and one key combination always reaches it
+- [0261](../decisions/0261-bus-mastering-off-at-boot.md) The boot loader turns off bus mastering before it starts the kernel
+- [0262](../decisions/0262-interrupt-source-check.md) Interrupt entries check their source, and the configuration ports are never granted
+- [0263](../decisions/0263-arm64-host-tests.md) Host tests also run on arm64, and lock-free code is model-checked
+- [0264](../decisions/0264-performance-targets.md) Checkpoints set performance targets, and a missed target becomes a record
+- [0265](../decisions/0265-lent-memory-library.md) Memory lent by clients goes through one library, measured at checkpoint 4
+- [0266](../decisions/0266-connect-endpoints.md) Services spread their callers through a connect endpoint
+- [0267](../decisions/0267-supervisor-keeps-connect.md) A restartable service's supervisor keeps its connect endpoint
+- [0268](../decisions/0268-counter-by-default.md) Programs read the CPU's counter by default
+- [0269](../decisions/0269-std-mutex-condvar.md) std's `Mutex` and `Condvar` are built on parking
+- [0270](../decisions/0270-offline-gap-stated.md) The first release states the offline gap in full, and the machine-bound key needs measured boot or the owner's secret
+- [0271](../decisions/0271-corrections.md) Corrections to 0009, 0045, 0206 and 0227
 
 ## The roadmap
 
@@ -146,9 +165,9 @@ Nothing comes before this step.
 
 It lays down the repository's workspaces ([0231](../decisions/0231-repository-layout.md)) and the pinned toolchain ([0187](../decisions/0187-pinned-stable-toolchain.md)). It also brings the build tool ([0190](../decisions/0190-cargo-and-build-tool.md)), along with the compiler wrapper ([0191](../decisions/0191-audited-list-and-wrapper.md), [0192](../decisions/0192-build-scripts-reviewed.md)), the architecture and dependency checks ([0197](../decisions/0197-architecture-check.md), [0232](../decisions/0232-traits-and-specific-crates.md)), the offline sandbox ([0192](../decisions/0192-build-scripts-reviewed.md)), the count of the kernel's size ([0247](../decisions/0247-kernel-size-ratchet.md)) and the map of records to tests ([0234](../decisions/0234-tests-cite-records.md)). Vendoring is set up too, with cargo-vet, imported reviews and cargo-deny ([0193](../decisions/0193-vendored-reviewed-crates.md), [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0244](../decisions/0244-imported-crate-reviews.md)). And the project gets the `ci` command and GitHub's workflows ([0237](../decisions/0237-public-repository-and-ci.md)), the ruleset on main ([0238](../decisions/0238-pushes-and-pull-requests.md)), and `SECURITY.md` ([0239](../decisions/0239-security-reports.md)).
 
-- **Implements:** [0008](../decisions/0008-architecture-neutral-design.md), [0010](../decisions/0010-64-bit-only.md), [0017](../decisions/0017-unsafe-code-kernel-and-services.md), [0018](../decisions/0018-kernel-assurance.md), [0019](../decisions/0019-kernel-minimality.md), [0037](../decisions/0037-kernel-toolchain.md), [0044](../decisions/0044-system-image-is-os-shipped.md), [0046](../decisions/0046-scope-of-0008.md), [0187](../decisions/0187-pinned-stable-toolchain.md), [0190](../decisions/0190-cargo-and-build-tool.md), [0191](../decisions/0191-audited-list-and-wrapper.md), [0192](../decisions/0192-build-scripts-reviewed.md), [0193](../decisions/0193-vendored-reviewed-crates.md), [0197](../decisions/0197-architecture-check.md), [0199](../decisions/0199-license.md), [0200](../decisions/0200-contributions.md), [0231](../decisions/0231-repository-layout.md), [0232](../decisions/0232-traits-and-specific-crates.md), [0234](../decisions/0234-tests-cite-records.md), [0237](../decisions/0237-public-repository-and-ci.md), [0238](../decisions/0238-pushes-and-pull-requests.md), [0239](../decisions/0239-security-reports.md), [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0244](../decisions/0244-imported-crate-reviews.md), [0247](../decisions/0247-kernel-size-ratchet.md), [0248](../decisions/0248-coding-and-doc-standards.md).
-- **Designs:** how tests name the records they check ([0234](../decisions/0234-tests-cite-records.md)), the project's set of lints ([0248](../decisions/0248-coding-and-doc-standards.md)), and the CI workflows and the nightly runs ([0237](../decisions/0237-public-repository-and-ci.md)).
-- **Tests:** each check rejects planted violations. We plant unsafe code or a feature gate in a crate that isn't on the list, a build script that links native code, architecture code in a generic crate, a generic crate that depends on a specific one, a crate with a known advisory or a refused license, and a crate with no review.
+- **Implements:** [0008](../decisions/0008-architecture-neutral-design.md), [0010](../decisions/0010-64-bit-only.md), [0017](../decisions/0017-unsafe-code-kernel-and-services.md), [0018](../decisions/0018-kernel-assurance.md), [0019](../decisions/0019-kernel-minimality.md), [0037](../decisions/0037-kernel-toolchain.md), [0044](../decisions/0044-system-image-is-os-shipped.md), [0046](../decisions/0046-scope-of-0008.md), [0187](../decisions/0187-pinned-stable-toolchain.md), [0190](../decisions/0190-cargo-and-build-tool.md), [0191](../decisions/0191-audited-list-and-wrapper.md), [0192](../decisions/0192-build-scripts-reviewed.md), [0193](../decisions/0193-vendored-reviewed-crates.md), [0197](../decisions/0197-architecture-check.md), [0199](../decisions/0199-license.md), [0200](../decisions/0200-contributions.md), [0231](../decisions/0231-repository-layout.md), [0232](../decisions/0232-traits-and-specific-crates.md), [0234](../decisions/0234-tests-cite-records.md), [0237](../decisions/0237-public-repository-and-ci.md), [0238](../decisions/0238-pushes-and-pull-requests.md), [0239](../decisions/0239-security-reports.md), [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0244](../decisions/0244-imported-crate-reviews.md), [0247](../decisions/0247-kernel-size-ratchet.md), [0248](../decisions/0248-coding-and-doc-standards.md), [0263](../decisions/0263-arm64-host-tests.md).
+- **Designs:** how tests name the records they check ([0234](../decisions/0234-tests-cite-records.md)), the project's set of lints ([0248](../decisions/0248-coding-and-doc-standards.md)), and the CI workflows and the nightly runs, with host tests on GitHub's arm64 runners and loom ([0237](../decisions/0237-public-repository-and-ci.md), [0263](../decisions/0263-arm64-host-tests.md)).
+- **Tests:** each check rejects planted violations. We plant unsafe code or a feature gate in a crate that isn't on the list, a build script that links native code, architecture code in a generic crate, a generic crate that depends on a specific one, a crate with a known advisory or a refused license, and a crate with no review. A planted ordering bug in lock-free test code fails under loom, and the host tests pass on arm64 ([0263](../decisions/0263-arm64-host-tests.md)).
 
 #### 2. Booting the kernel
 
@@ -201,9 +220,9 @@ This step needs step 5. System calls get their entry and exit, with the `sysret`
 
 Next comes the IDL compiler, with the fixed-layout types, the entry table and the reference documentation ([0142](../decisions/0142-own-idl.md), [0195](../decisions/0195-bindings-safe-output.md)), and the compatibility checker ([0143](../decisions/0143-add-only-versioning.md), [0196](../decisions/0196-released-interface-copies.md)). The system library follows, with its entry table ([0117](../decisions/0117-system-library.md), [0144](../decisions/0144-c-calls-and-what-crosses.md), [0154](../decisions/0154-library-entry-table.md)) and the joining of split calls ([0124](../decisions/0124-large-calls-split.md)). The first part of the IDL runtime is built here ([0195](../decisions/0195-bindings-safe-output.md)), and the startup data and the boot information are defined as IDL types ([0146](../decisions/0146-startup-data-block.md), [0159](../decisions/0159-root-task-boot-information.md)).
 
-- **Implements:** [0021](../decisions/0021-ipc-simple-upgradable.md), [0072](../decisions/0072-registers-only.md), [0117](../decisions/0117-system-library.md), [0124](../decisions/0124-large-calls-split.md), [0125](../decisions/0125-sysret-guard.md), [0142](../decisions/0142-own-idl.md), [0143](../decisions/0143-add-only-versioning.md), [0144](../decisions/0144-c-calls-and-what-crosses.md), [0146](../decisions/0146-startup-data-block.md), [0154](../decisions/0154-library-entry-table.md), [0159](../decisions/0159-root-task-boot-information.md), [0195](../decisions/0195-bindings-safe-output.md), [0196](../decisions/0196-released-interface-copies.md).
-- **Interfaces:** the system library's, the startup data's and the boot information's. They're defined here but not released ([0230](../decisions/0230-interfaces-released-with-sdk.md)).
-- **Tests:** a return address outside the program half never reaches `sysret` ([0125](../decisions/0125-sysret-guard.md)), and system calls from outside the library are refused ([0117](../decisions/0117-system-library.md)). Against test copies, the checker rejects planted incompatible changes ([0196](../decisions/0196-released-interface-copies.md)).
+- **Implements:** [0021](../decisions/0021-ipc-simple-upgradable.md), [0072](../decisions/0072-registers-only.md), [0117](../decisions/0117-system-library.md), [0124](../decisions/0124-large-calls-split.md), [0125](../decisions/0125-sysret-guard.md), [0142](../decisions/0142-own-idl.md), [0143](../decisions/0143-add-only-versioning.md), [0144](../decisions/0144-c-calls-and-what-crosses.md), [0146](../decisions/0146-startup-data-block.md), [0154](../decisions/0154-library-entry-table.md), [0159](../decisions/0159-root-task-boot-information.md), [0195](../decisions/0195-bindings-safe-output.md), [0196](../decisions/0196-released-interface-copies.md), [0266](../decisions/0266-connect-endpoints.md), [0267](../decisions/0267-supervisor-keeps-connect.md).
+- **Interfaces:** the system library's, the startup data's and the boot information's. They're defined here but not released ([0230](../decisions/0230-interfaces-released-with-sdk.md)). The IDL compiler also builds the connect pattern, through which services spread their callers, and supervisors keep the connect endpoints of the services they restart ([0266](../decisions/0266-connect-endpoints.md), [0267](../decisions/0267-supervisor-keeps-connect.md)).
+- **Tests:** a return address outside the program half never reaches `sysret` ([0125](../decisions/0125-sysret-guard.md)), and system calls from outside the library are refused ([0117](../decisions/0117-system-library.md)). Against test copies, the checker rejects planted incompatible changes ([0196](../decisions/0196-released-interface-copies.md)). Callers that connect to a service get endpoints of their own ([0266](../decisions/0266-connect-endpoints.md)).
 
 Checkpoint 2: the laptop runs the kernel's test build, and the results appear on the framebuffer ([0225](../decisions/0225-framebuffer-log-at-failures.md)).
 
@@ -232,10 +251,10 @@ Step 9 needs step 8. It starts with IPC itself: endpoints, reply objects and not
 
 Faults are the second half. Page faults go to pagers ([0081](../decisions/0081-pager-per-thread.md)) and exceptions to handlers ([0102](../decisions/0102-exception-handler.md)); pagers can decline ([0106](../decisions/0106-pager-passes-on-faults.md)), and fault messages carry the recovery register ([0133](../decisions/0133-recovery-point-in-register.md)). A suspended thread's address space gets a notification ([0103](../decisions/0103-fault-without-handler.md), [0132](../decisions/0132-events-notify-then-call.md)), and handlers can be changed ([0130](../decisions/0130-handlers-changeable.md)). Interrupts become notifications, from lines and from MSIs, on the APIC and the GIC ([0167](../decisions/0167-interrupts-as-notifications.md)). The step also adds the boot core's object ([0165](../decisions/0165-core-objects.md)) and runs the system-call fuzzer in QEMU ([0245](../decisions/0245-coverage-and-fuzzing.md)).
 
-- **Implements:** [0018](../decisions/0018-kernel-assurance.md), [0019](../decisions/0019-kernel-minimality.md), [0021](../decisions/0021-ipc-simple-upgradable.md), [0027](../decisions/0027-user-mode-pagers.md), [0036](../decisions/0036-ipc-message-max.md), [0058](../decisions/0058-shared-and-handed-over.md), [0072](../decisions/0072-registers-only.md), [0081](../decisions/0081-pager-per-thread.md), [0085](../decisions/0085-clients-pay-cpu-time.md), [0091](../decisions/0091-direct-switch-on-calls.md), [0092](../decisions/0092-scheduler-keeps-time.md), [0102](../decisions/0102-exception-handler.md), [0103](../decisions/0103-fault-without-handler.md), [0106](../decisions/0106-pager-passes-on-faults.md), [0118](../decisions/0118-calls-and-notifications.md), [0119](../decisions/0119-message-eight-words.md), [0120](../decisions/0120-reply-objects.md), [0121](../decisions/0121-callers-help-busy-services.md), [0122](../decisions/0122-bound-notifications.md), [0123](../decisions/0123-capabilities-in-messages.md), [0124](../decisions/0124-large-calls-split.md), [0130](../decisions/0130-handlers-changeable.md), [0132](../decisions/0132-events-notify-then-call.md), [0133](../decisions/0133-recovery-point-in-register.md), [0134](../decisions/0134-scheduler-interface.md), [0165](../decisions/0165-core-objects.md), [0167](../decisions/0167-interrupts-as-notifications.md), [0219](../decisions/0219-wakeup-preemption.md), [0220](../decisions/0220-endpoint-priority-order.md), [0245](../decisions/0245-coverage-and-fuzzing.md), [0247](../decisions/0247-kernel-size-ratchet.md).
+- **Implements:** [0018](../decisions/0018-kernel-assurance.md), [0019](../decisions/0019-kernel-minimality.md), [0021](../decisions/0021-ipc-simple-upgradable.md), [0027](../decisions/0027-user-mode-pagers.md), [0036](../decisions/0036-ipc-message-max.md), [0058](../decisions/0058-shared-and-handed-over.md), [0072](../decisions/0072-registers-only.md), [0081](../decisions/0081-pager-per-thread.md), [0085](../decisions/0085-clients-pay-cpu-time.md), [0091](../decisions/0091-direct-switch-on-calls.md), [0092](../decisions/0092-scheduler-keeps-time.md), [0102](../decisions/0102-exception-handler.md), [0103](../decisions/0103-fault-without-handler.md), [0106](../decisions/0106-pager-passes-on-faults.md), [0118](../decisions/0118-calls-and-notifications.md), [0119](../decisions/0119-message-eight-words.md), [0120](../decisions/0120-reply-objects.md), [0121](../decisions/0121-callers-help-busy-services.md), [0122](../decisions/0122-bound-notifications.md), [0123](../decisions/0123-capabilities-in-messages.md), [0124](../decisions/0124-large-calls-split.md), [0130](../decisions/0130-handlers-changeable.md), [0132](../decisions/0132-events-notify-then-call.md), [0133](../decisions/0133-recovery-point-in-register.md), [0134](../decisions/0134-scheduler-interface.md), [0165](../decisions/0165-core-objects.md), [0167](../decisions/0167-interrupts-as-notifications.md), [0219](../decisions/0219-wakeup-preemption.md), [0220](../decisions/0220-endpoint-priority-order.md), [0245](../decisions/0245-coverage-and-fuzzing.md), [0247](../decisions/0247-kernel-size-ratchet.md), [0264](../decisions/0264-performance-targets.md).
 - **Tests:** fuzzing on both architectures, plus attacks: inversion through a busy service ([0121](../decisions/0121-callers-help-busy-services.md)), and wakeup storms on a busy core ([0219](../decisions/0219-wakeup-preemption.md)). Once the step is done, the kernel's size counts become its budget ([0247](../decisions/0247-kernel-size-ratchet.md)).
 
-Checkpoint 3: the laptop runs the stub's tests. It powers off when they pass and shows the failure on the framebuffer when one fails ([0225](../decisions/0225-framebuffer-log-at-failures.md)).
+Checkpoint 3: the laptop runs the stub's tests. It powers off when they pass and shows the failure on the framebuffer when one fails ([0225](../decisions/0225-framebuffer-log-at-failures.md)). The checkpoint also sets the first performance targets, for the IPC round trip and a page fault ([0264](../decisions/0264-performance-targets.md)).
 
 ### Phase 4. The core services
 
@@ -252,17 +271,17 @@ The root task is the big piece. It reads its boot information ([0159](../decisio
 
 Needs step 10. This step builds the scheduler ([0088](../decisions/0088-user-mode-scheduler.md)), which has a thread on each core ([0093](../decisions/0093-scheduler-per-core.md)). It gives fair shares by account within each priority ([0033](../decisions/0033-cpu-fairness.md), [0084](../decisions/0084-shares-belong-to-accounts.md), [0086](../decisions/0086-priorities-per-program-shares-per-account.md)), handles time slices, and does sleep and timeouts through the deadline ([0094](../decisions/0094-one-deadline-per-core.md)). It also takes the kernel's reports ([0092](../decisions/0092-scheduler-keeps-time.md), [0134](../decisions/0134-scheduler-interface.md)).
 
-The scheduler runs above every priority ([0114](../decisions/0114-scheduler-priority.md), [0162](../decisions/0162-scheduler-above-priorities.md)) and starts before any other program ([0161](../decisions/0161-root-task-before-scheduler.md)). Around it sit core-sharing groups ([0135](../decisions/0135-core-sharing-from-scheduler.md)), CPU accounts ([0140](../decisions/0140-accounts-capability-pair.md)) and reports of CPU use ([0111](../decisions/0111-resource-accounting.md)). Its first capabilities go to the root task ([0163](../decisions/0163-services-hand-first-capabilities.md)).
+The scheduler runs above every priority ([0114](../decisions/0114-scheduler-priority.md), [0162](../decisions/0162-scheduler-above-priorities.md)) and starts before any other program ([0161](../decisions/0161-root-task-before-scheduler.md)). Around it sit core-sharing groups ([0135](../decisions/0135-core-sharing-from-scheduler.md)), CPU accounts ([0140](../decisions/0140-accounts-capability-pair.md)) and reports of CPU use ([0111](../decisions/0111-resource-accounting.md)). Its first capabilities go to the root task ([0163](../decisions/0163-services-hand-first-capabilities.md)). The step also builds the library for records in lent memory, which the scheduler is the first to use ([0265](../decisions/0265-lent-memory-library.md)).
 
-- **Implements:** [0023](../decisions/0023-no-quotas.md), [0033](../decisions/0033-cpu-fairness.md), [0084](../decisions/0084-shares-belong-to-accounts.md), [0085](../decisions/0085-clients-pay-cpu-time.md), [0086](../decisions/0086-priorities-per-program-shares-per-account.md), [0088](../decisions/0088-user-mode-scheduler.md), [0092](../decisions/0092-scheduler-keeps-time.md), [0093](../decisions/0093-scheduler-per-core.md), [0094](../decisions/0094-one-deadline-per-core.md), [0111](../decisions/0111-resource-accounting.md), [0114](../decisions/0114-scheduler-priority.md), [0134](../decisions/0134-scheduler-interface.md), [0135](../decisions/0135-core-sharing-from-scheduler.md), [0140](../decisions/0140-accounts-capability-pair.md), [0161](../decisions/0161-root-task-before-scheduler.md), [0162](../decisions/0162-scheduler-above-priorities.md), [0163](../decisions/0163-services-hand-first-capabilities.md).
+- **Implements:** [0023](../decisions/0023-no-quotas.md), [0033](../decisions/0033-cpu-fairness.md), [0084](../decisions/0084-shares-belong-to-accounts.md), [0085](../decisions/0085-clients-pay-cpu-time.md), [0086](../decisions/0086-priorities-per-program-shares-per-account.md), [0088](../decisions/0088-user-mode-scheduler.md), [0092](../decisions/0092-scheduler-keeps-time.md), [0093](../decisions/0093-scheduler-per-core.md), [0094](../decisions/0094-one-deadline-per-core.md), [0111](../decisions/0111-resource-accounting.md), [0114](../decisions/0114-scheduler-priority.md), [0134](../decisions/0134-scheduler-interface.md), [0135](../decisions/0135-core-sharing-from-scheduler.md), [0140](../decisions/0140-accounts-capability-pair.md), [0161](../decisions/0161-root-task-before-scheduler.md), [0162](../decisions/0162-scheduler-above-priorities.md), [0163](../decisions/0163-services-hand-first-capabilities.md), [0265](../decisions/0265-lent-memory-library.md), [0266](../decisions/0266-connect-endpoints.md).
 - **Interfaces:** the scheduler's protocol.
-- **Tests:** accounts at one priority share time evenly, and no program raises its own priority. A woken thread below the running one doesn't enter the scheduler ([0219](../decisions/0219-wakeup-preemption.md)). Nothing caps CPU time while the CPU is free ([0023](../decisions/0023-no-quotas.md)).
+- **Tests:** accounts at one priority share time evenly, and no program raises its own priority. A woken thread below the running one doesn't enter the scheduler ([0219](../decisions/0219-wakeup-preemption.md)). Nothing caps CPU time while the CPU is free ([0023](../decisions/0023-no-quotas.md)). A client that takes back its lent memory loses only its own threads' records, and the scheduler keeps running ([0265](../decisions/0265-lent-memory-library.md)).
 
 #### 12. The memory service
 
 Needs step 11. The memory service reserves memory when it grants it ([0048](../decisions/0048-reserve-on-grant.md)) and names payers by badge ([0064](../decisions/0064-memory-belongs-to-payer.md), [0137](../decisions/0137-memory-capability-per-program.md)). It has memory accounts ([0084](../decisions/0084-shares-belong-to-accounts.md), [0140](../decisions/0140-accounts-capability-pair.md)) and memory priorities ([0062](../decisions/0062-memory-priority-capability.md)), and when memory is short it hands out fair shares ([0049](../decisions/0049-memory-fair-share.md)). Programs over their share get notices and deadlines ([0076](../decisions/0076-memory-notice-deadline.md), [0132](../decisions/0132-events-notify-then-call.md)). Supervisors receive reclaim capabilities ([0105](../decisions/0105-supervisor-reclaims.md)), the service reports memory use ([0111](../decisions/0111-resource-accounting.md)), and the first capabilities it issues go to the root task ([0163](../decisions/0163-services-hand-first-capabilities.md)).
 
-- **Implements:** [0012](../decisions/0012-no-memory-cap.md), [0023](../decisions/0023-no-quotas.md), [0025](../decisions/0025-user-mode-memory.md), [0048](../decisions/0048-reserve-on-grant.md), [0049](../decisions/0049-memory-fair-share.md), [0050](../decisions/0050-clients-pay.md), [0062](../decisions/0062-memory-priority-capability.md), [0064](../decisions/0064-memory-belongs-to-payer.md), [0076](../decisions/0076-memory-notice-deadline.md), [0084](../decisions/0084-shares-belong-to-accounts.md), [0105](../decisions/0105-supervisor-reclaims.md), [0111](../decisions/0111-resource-accounting.md), [0132](../decisions/0132-events-notify-then-call.md), [0137](../decisions/0137-memory-capability-per-program.md), [0140](../decisions/0140-accounts-capability-pair.md), [0163](../decisions/0163-services-hand-first-capabilities.md).
+- **Implements:** [0012](../decisions/0012-no-memory-cap.md), [0023](../decisions/0023-no-quotas.md), [0025](../decisions/0025-user-mode-memory.md), [0048](../decisions/0048-reserve-on-grant.md), [0049](../decisions/0049-memory-fair-share.md), [0050](../decisions/0050-clients-pay.md), [0062](../decisions/0062-memory-priority-capability.md), [0064](../decisions/0064-memory-belongs-to-payer.md), [0076](../decisions/0076-memory-notice-deadline.md), [0084](../decisions/0084-shares-belong-to-accounts.md), [0105](../decisions/0105-supervisor-reclaims.md), [0111](../decisions/0111-resource-accounting.md), [0132](../decisions/0132-events-notify-then-call.md), [0137](../decisions/0137-memory-capability-per-program.md), [0140](../decisions/0140-accounts-capability-pair.md), [0163](../decisions/0163-services-hand-first-capabilities.md), [0265](../decisions/0265-lent-memory-library.md), [0266](../decisions/0266-connect-endpoints.md).
 - **Interfaces:** the memory service's protocol.
 - **Tests:** a request over its share fails while memory is short ([0049](../decisions/0049-memory-fair-share.md)), and a program that ignores a notice is stopped at its deadline ([0076](../decisions/0076-memory-notice-deadline.md)). Nothing caps a program while memory is free ([0012](../decisions/0012-no-memory-cap.md), [0023](../decisions/0023-no-quotas.md)). In the attack test, a client that floods a service with state pays for it ([0050](../decisions/0050-clients-pay.md)).
 
@@ -274,7 +293,7 @@ The loader reads ELF as a container ([0038](../decisions/0038-elf-container.md),
 
 Beyond those come the boot manifest, with the root task starting the ramdisk's other programs through the loader ([0160](../decisions/0160-root-task-starts-four.md)); regions, handover and fill-and-report in the bindings ([0058](../decisions/0058-shared-and-handed-over.md), [0059](../decisions/0059-caller-allocates.md), [0139](../decisions/0139-results-fill-and-report.md)); the accessors ([0065](../decisions/0065-lost-memory-is-an-error.md), [0133](../decisions/0133-recovery-point-in-register.md)); and lending to services ([0050](../decisions/0050-clients-pay.md)).
 
-- **Implements:** [0022](../decisions/0022-explicit-spawn.md), [0027](../decisions/0027-user-mode-pagers.md), [0028](../decisions/0028-namespace-at-spawn.md), [0031](../decisions/0031-user-mode-loader.md), [0038](../decisions/0038-elf-container.md), [0039](../decisions/0039-native-per-arch.md), [0048](../decisions/0048-reserve-on-grant.md), [0050](../decisions/0050-clients-pay.md), [0056](../decisions/0056-pager-chosen-at-spawn.md), [0057](../decisions/0057-pager-fault-chain.md), [0058](../decisions/0058-shared-and-handed-over.md), [0059](../decisions/0059-caller-allocates.md), [0061](../decisions/0061-no-randomization-yet.md), [0065](../decisions/0065-lost-memory-is-an-error.md), [0070](../decisions/0070-position-independent-programs.md), [0074](../decisions/0074-low-64k-unmapped.md), [0078](../decisions/0078-low-addresses-on-request.md), [0106](../decisions/0106-pager-passes-on-faults.md), [0107](../decisions/0107-loader-writes-startup-data.md), [0108](../decisions/0108-startup-information.md), [0117](../decisions/0117-system-library.md), [0131](../decisions/0131-namespace-path-prefixes.md), [0133](../decisions/0133-recovery-point-in-register.md), [0136](../decisions/0136-predictor-flush-flag.md), [0138](../decisions/0138-pager-keeps-reservations.md), [0139](../decisions/0139-results-fill-and-report.md), [0146](../decisions/0146-startup-data-block.md), [0147](../decisions/0147-elf-declarations-only.md), [0155](../decisions/0155-ramdisk-reaches-storage.md), [0160](../decisions/0160-root-task-starts-four.md), [0179](../decisions/0179-command-copies-namespace.md), [0195](../decisions/0195-bindings-safe-output.md), [0211](../decisions/0211-relative-relocations.md), [0212](../decisions/0212-low-image-declaration.md), [0217](../decisions/0217-window-flush-batched.md).
+- **Implements:** [0022](../decisions/0022-explicit-spawn.md), [0027](../decisions/0027-user-mode-pagers.md), [0028](../decisions/0028-namespace-at-spawn.md), [0031](../decisions/0031-user-mode-loader.md), [0038](../decisions/0038-elf-container.md), [0039](../decisions/0039-native-per-arch.md), [0048](../decisions/0048-reserve-on-grant.md), [0050](../decisions/0050-clients-pay.md), [0056](../decisions/0056-pager-chosen-at-spawn.md), [0057](../decisions/0057-pager-fault-chain.md), [0058](../decisions/0058-shared-and-handed-over.md), [0059](../decisions/0059-caller-allocates.md), [0061](../decisions/0061-no-randomization-yet.md), [0065](../decisions/0065-lost-memory-is-an-error.md), [0070](../decisions/0070-position-independent-programs.md), [0074](../decisions/0074-low-64k-unmapped.md), [0078](../decisions/0078-low-addresses-on-request.md), [0106](../decisions/0106-pager-passes-on-faults.md), [0107](../decisions/0107-loader-writes-startup-data.md), [0108](../decisions/0108-startup-information.md), [0117](../decisions/0117-system-library.md), [0131](../decisions/0131-namespace-path-prefixes.md), [0133](../decisions/0133-recovery-point-in-register.md), [0136](../decisions/0136-predictor-flush-flag.md), [0138](../decisions/0138-pager-keeps-reservations.md), [0139](../decisions/0139-results-fill-and-report.md), [0146](../decisions/0146-startup-data-block.md), [0147](../decisions/0147-elf-declarations-only.md), [0155](../decisions/0155-ramdisk-reaches-storage.md), [0160](../decisions/0160-root-task-starts-four.md), [0179](../decisions/0179-command-copies-namespace.md), [0195](../decisions/0195-bindings-safe-output.md), [0211](../decisions/0211-relative-relocations.md), [0212](../decisions/0212-low-image-declaration.md), [0217](../decisions/0217-window-flush-batched.md), [0265](../decisions/0265-lent-memory-library.md), [0266](../decisions/0266-connect-endpoints.md).
 - **Interfaces:** the pager's, the loader's and the boot manifest's.
 - **Tests:** a program with other relocations is refused ([0211](../decisions/0211-relative-relocations.md)), and a child holds only what it was given ([0022](../decisions/0022-explicit-spawn.md)). A service that loses a client's lent memory keeps serving the others ([0065](../decisions/0065-lost-memory-is-an-error.md)). Layouts repeat from boot to boot ([0061](../decisions/0061-no-randomization-yet.md)).
 
@@ -282,13 +301,13 @@ Beyond those come the boot manifest, with the root task starting the ramdisk's o
 
 Needs step 13. The log service lives in the ramdisk ([0253](../decisions/0253-ramdisk-log-and-clocks.md)); it takes over the second serial port and shows logs on the framebuffer ([0236](../decisions/0236-program-output-second-serial.md)). The time service starts right after the loader, with monotonic time from the counter ([0112](../decisions/0112-time-service.md), [0113](../decisions/0113-counter-capability.md), [0173](../decisions/0173-time-service-entry.md), [0252](../decisions/0252-time-service-starts-early.md)). The random service is seeded from the CPU and the firmware ([0174](../decisions/0174-random-service-and-seed.md)), and our fork of the boot loader passes on the firmware's seed.
 
-std's second stage covers threads, parking and locks ([0177](../decisions/0177-locks-on-parking.md)), sleep, thread-locals, time, randomness, standard streams ([0180](../decisions/0180-streams-and-exit-status.md)), and unwinding ([0109](../decisions/0109-panic-strategy.md)).
+std's second stage covers threads, parking and locks ([0177](../decisions/0177-locks-on-parking.md)), with `Mutex` and `Condvar` built on parking ([0269](../decisions/0269-std-mutex-condvar.md)), sleep, thread-locals, time, with `Instant::now` reading the counter where the program holds it ([0268](../decisions/0268-counter-by-default.md)), randomness, standard streams ([0180](../decisions/0180-streams-and-exit-status.md)), and unwinding ([0109](../decisions/0109-panic-strategy.md)).
 
-- **Implements:** [0003](../decisions/0003-rust-std-no-libc.md), [0109](../decisions/0109-panic-strategy.md), [0112](../decisions/0112-time-service.md), [0113](../decisions/0113-counter-capability.md), [0173](../decisions/0173-time-service-entry.md), [0174](../decisions/0174-random-service-and-seed.md), [0177](../decisions/0177-locks-on-parking.md), [0180](../decisions/0180-streams-and-exit-status.md), [0182](../decisions/0182-all-of-std.md), [0229](../decisions/0229-std-stages.md), [0236](../decisions/0236-program-output-second-serial.md), [0252](../decisions/0252-time-service-starts-early.md), [0253](../decisions/0253-ramdisk-log-and-clocks.md).
+- **Implements:** [0003](../decisions/0003-rust-std-no-libc.md), [0109](../decisions/0109-panic-strategy.md), [0112](../decisions/0112-time-service.md), [0113](../decisions/0113-counter-capability.md), [0173](../decisions/0173-time-service-entry.md), [0174](../decisions/0174-random-service-and-seed.md), [0177](../decisions/0177-locks-on-parking.md), [0180](../decisions/0180-streams-and-exit-status.md), [0182](../decisions/0182-all-of-std.md), [0229](../decisions/0229-std-stages.md), [0236](../decisions/0236-program-output-second-serial.md), [0252](../decisions/0252-time-service-starts-early.md), [0253](../decisions/0253-ramdisk-log-and-clocks.md), [0264](../decisions/0264-performance-targets.md), [0266](../decisions/0266-connect-endpoints.md), [0268](../decisions/0268-counter-by-default.md), [0269](../decisions/0269-std-mutex-condvar.md).
 - **Designs:** the log service ([0226](../decisions/0226-open-topics-at-their-step.md)).
-- **Tests:** upstream's std tests for stage 2, and programs without `svc/time` or `svc/random` behaving as [0173](../decisions/0173-time-service-entry.md) and [0174](../decisions/0174-random-service-and-seed.md) say.
+- **Tests:** upstream's std tests for stage 2, and programs without `svc/time` or `svc/random` behaving as [0173](../decisions/0173-time-service-entry.md) and [0174](../decisions/0174-random-service-and-seed.md) say. `Mutex` and `Condvar` pass loom ([0263](../decisions/0263-arm64-host-tests.md), [0269](../decisions/0269-std-mutex-condvar.md)), and `Instant::now` works with the counter and without it ([0268](../decisions/0268-counter-by-default.md)).
 
-Checkpoint 4: the laptop runs the core services, and the log service shows their logs on the framebuffer.
+Checkpoint 4: the laptop runs the core services, and the log service shows their logs on the framebuffer. The checkpoint sets targets for a time read and for lent memory, and revises the estimates of steps 11 to 13 ([0264](../decisions/0264-performance-targets.md), [0265](../decisions/0265-lent-memory-library.md)).
 
 ### Phase 5. Multicore and devices
 
@@ -308,11 +327,13 @@ Needs step 15. First the device manager ([0172](../decisions/0172-device-manager
 
 The clock drivers sit in the ramdisk ([0253](../decisions/0253-ramdisk-log-and-clocks.md)). They cover the CMOS clock and the PL031, and they give the time service its wall-clock time ([0173](../decisions/0173-time-service-entry.md), [0252](../decisions/0252-time-service-starts-early.md)).
 
-- **Implements:** [0167](../decisions/0167-interrupts-as-notifications.md), [0168](../decisions/0168-device-memory-and-ports.md), [0169](../decisions/0169-iommu-service.md), [0170](../decisions/0170-dma-quarantine.md), [0171](../decisions/0171-no-iommu-trusted-drivers.md), [0172](../decisions/0172-device-manager.md), [0173](../decisions/0173-time-service-entry.md), [0214](../decisions/0214-interrupt-remapping.md), [0215](../decisions/0215-pci-bus-driver-config.md), [0252](../decisions/0252-time-service-starts-early.md), [0253](../decisions/0253-ramdisk-log-and-clocks.md).
-- **Designs:** the device manager's matching, and the drivers' protocols; the regions that the firmware reserves for devices, such as VT-d's RMRR ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md), [0226](../decisions/0226-open-topics-at-their-step.md)).
-- **Tests:** the attacks are edu's DMA outside its mapping, which is refused, and its MSI, which reaches only its own interrupt ([0169](../decisions/0169-iommu-service.md), [0214](../decisions/0214-interrupt-remapping.md)). Configuration writes that move a device's ranges or turn on ATS are refused ([0215](../decisions/0215-pci-bus-driver-config.md)). Memory mapped for a device is held back after a revoke until the IOMMU service releases it ([0170](../decisions/0170-dma-quarantine.md)), and images run without an IOMMU ([0171](../decisions/0171-no-iommu-trusted-drivers.md)).
+Our fork of the boot loader turns off bus mastering on every PCI device but the display before it starts the kernel, and the PCI bus driver turns it back on for each device whose driver gets DMA ([0261](../decisions/0261-bus-mastering-off-at-boot.md)). The IOMMU service turns on the source check in every interrupt-remapping entry it writes, and on x86_64 only the PCI bus driver holds the configuration ports ([0262](../decisions/0262-interrupt-source-check.md)).
 
-Checkpoint 5: the laptop runs on all its cores, with VT-d confining its devices, and lists its PCI devices.
+- **Implements:** [0167](../decisions/0167-interrupts-as-notifications.md), [0168](../decisions/0168-device-memory-and-ports.md), [0169](../decisions/0169-iommu-service.md), [0170](../decisions/0170-dma-quarantine.md), [0171](../decisions/0171-no-iommu-trusted-drivers.md), [0172](../decisions/0172-device-manager.md), [0173](../decisions/0173-time-service-entry.md), [0214](../decisions/0214-interrupt-remapping.md), [0215](../decisions/0215-pci-bus-driver-config.md), [0252](../decisions/0252-time-service-starts-early.md), [0253](../decisions/0253-ramdisk-log-and-clocks.md), [0257](../decisions/0257-outside-attackers.md), [0261](../decisions/0261-bus-mastering-off-at-boot.md), [0262](../decisions/0262-interrupt-source-check.md), [0264](../decisions/0264-performance-targets.md).
+- **Designs:** the device manager's matching, and the drivers' protocols; the regions that the firmware reserves for devices, such as VT-d's RMRR ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md), [0226](../decisions/0226-open-topics-at-their-step.md)); whether the IOMMU blocks DMA from the boot loader's handoff ([0261](../decisions/0261-bus-mastering-off-at-boot.md)).
+- **Tests:** the attacks are edu's DMA outside its mapping, which is refused, and its MSI, which reaches only its own interrupt ([0169](../decisions/0169-iommu-service.md), [0214](../decisions/0214-interrupt-remapping.md)). Configuration writes that move a device's ranges or turn on ATS are refused ([0215](../decisions/0215-pci-bus-driver-config.md)). Memory mapped for a device is held back after a revoke until the IOMMU service releases it ([0170](../decisions/0170-dma-quarantine.md)), and images run without an IOMMU ([0171](../decisions/0171-no-iommu-trusted-drivers.md)). So are edu writing another device's remapping entry, and a driver that asks for ports 0xCF8 to 0xCFF ([0262](../decisions/0262-interrupt-source-check.md)). Devices start with bus mastering off ([0261](../decisions/0261-bus-mastering-off-at-boot.md)).
+
+Checkpoint 5: the laptop runs on all its cores, with VT-d confining its devices, and lists its PCI devices. The checkpoint sets targets for the IPC, fault and time paths across cores ([0264](../decisions/0264-performance-targets.md)).
 
 ### Phase 6. Storage, packages and verified boot
 
@@ -320,25 +341,25 @@ Checkpoint 5: the laptop runs on all its cores, with VT-d confining its devices,
 
 Needs step 16. The step builds the NVMe driver ([0224](../decisions/0224-laptop-usb-storage.md)) and the block-storage service, which handles GPT partitions, among them a swap partition's type ([0185](../decisions/0185-swap-partition.md)). On top sits the filesystem service, with its on-disk format, directories that have owners and grants ([0183](../decisions/0183-access-on-directories.md)), files that record their creators, paths resolved from capabilities ([0030](../decisions/0030-filesystem-decides-access.md), [0176](../decisions/0176-paths-and-current-directory.md)), and read-only pages shared from its cache ([0184](../decisions/0184-shared-file-pages.md)).
 
-- **Implements:** [0030](../decisions/0030-filesystem-decides-access.md), [0050](../decisions/0050-clients-pay.md), [0155](../decisions/0155-ramdisk-reaches-storage.md), [0183](../decisions/0183-access-on-directories.md), [0184](../decisions/0184-shared-file-pages.md), [0185](../decisions/0185-swap-partition.md), [0224](../decisions/0224-laptop-usb-storage.md).
+- **Implements:** [0030](../decisions/0030-filesystem-decides-access.md), [0050](../decisions/0050-clients-pay.md), [0155](../decisions/0155-ramdisk-reaches-storage.md), [0183](../decisions/0183-access-on-directories.md), [0184](../decisions/0184-shared-file-pages.md), [0185](../decisions/0185-swap-partition.md), [0224](../decisions/0224-laptop-usb-storage.md), [0257](../decisions/0257-outside-attackers.md), [0259](../decisions/0259-outside-input-fuzzed.md), [0267](../decisions/0267-supervisor-keeps-connect.md).
 - **Designs:** the filesystem's on-disk format and protocol; the block protocol, the partition types and the disk layout ([0226](../decisions/0226-open-topics-at-their-step.md)).
-- **Tests:** crash consistency, with the power cut in QEMU in the middle of writes, and grants on directories ([0183](../decisions/0183-access-on-directories.md)). In the attack test, a client that floods the filesystem pays for it ([0050](../decisions/0050-clients-pay.md)).
+- **Tests:** crash consistency, with the power cut in QEMU in the middle of writes, and grants on directories ([0183](../decisions/0183-access-on-directories.md)). In the attack test, a client that floods the filesystem pays for it ([0050](../decisions/0050-clients-pay.md)). Crafted disk images are fuzzed into the filesystem ([0257](../decisions/0257-outside-attackers.md), [0259](../decisions/0259-outside-input-fuzzed.md)), and a restarted filesystem is reached again through its namespace entry ([0267](../decisions/0267-supervisor-keeps-connect.md)).
 
 #### 18. USB and USB storage
 
 This step also needs step 16. It builds the xHCI driver, the USB core, USB mass storage and USB keyboards ([0224](../decisions/0224-laptop-usb-storage.md)), plus laptop images that start no driver for the internal disk ([0224](../decisions/0224-laptop-usb-storage.md)).
 
-- **Implements:** [0224](../decisions/0224-laptop-usb-storage.md).
+- **Implements:** [0224](../decisions/0224-laptop-usb-storage.md), [0257](../decisions/0257-outside-attackers.md), [0258](../decisions/0258-outside-input-tier-2.md), [0259](../decisions/0259-outside-input-fuzzed.md).
 - **Designs:** the USB drivers' protocols ([0226](../decisions/0226-open-topics-at-their-step.md)).
-- **Tests:** QEMU's xHCI controller, with USB storage and a USB keyboard, on both architectures.
+- **Tests:** QEMU's xHCI controller, with USB storage and a USB keyboard, on both architectures. USB descriptors and transfers are fuzzed into the USB core and its drivers, through a simulated host controller ([0257](../decisions/0257-outside-attackers.md), [0259](../decisions/0259-outside-input-fuzzed.md)).
 
 #### 19. Packages, and std's third stage
 
 Needs step 17. We start with the package format and its tools ([0203](../decisions/0203-package-format.md)) and the signatures ([0204](../decisions/0204-hybrid-signatures.md)). The package store handles installs, checks after each boot, checks of every block, and the owner's approvals ([0041](../decisions/0041-immutable-packages.md), [0206](../decisions/0206-owner-approves-signers.md), [0207](../decisions/0207-install-and-start-checks.md)). It also deals with declared std versions ([0210](../decisions/0210-std-version-declared.md)), loads the rest of the system image from storage ([0155](../decisions/0155-ramdisk-reaches-storage.md)), and serves code pages with the execute right ([0054](../decisions/0054-kernel-enforces-execute.md), [0184](../decisions/0184-shared-file-pages.md)). At each start, the loader checks the owner's policy ([0207](../decisions/0207-install-and-start-checks.md)).
 
-std's third stage brings files, paths and the current directory ([0176](../decisions/0176-paths-and-current-directory.md)), and processes, exit statuses and pipes ([0179](../decisions/0179-command-copies-namespace.md), [0180](../decisions/0180-streams-and-exit-status.md)). The `thisos` crate and `std::os::thisos` arrive with it ([0178](../decisions/0178-native-api-crate.md)).
+std's third stage brings files, paths and the current directory ([0176](../decisions/0176-paths-and-current-directory.md)), and processes, exit statuses and pipes ([0179](../decisions/0179-command-copies-namespace.md), [0180](../decisions/0180-streams-and-exit-status.md)), with `Command` passing the counter capability by default ([0268](../decisions/0268-counter-by-default.md)). The `thisos` crate and `std::os::thisos` arrive with it ([0178](../decisions/0178-native-api-crate.md)).
 
-- **Implements:** [0003](../decisions/0003-rust-std-no-libc.md), [0040](../decisions/0040-signed-programs-owner-policy.md), [0041](../decisions/0041-immutable-packages.md), [0042](../decisions/0042-updates.md), [0054](../decisions/0054-kernel-enforces-execute.md), [0104](../decisions/0104-supervisor.md), [0155](../decisions/0155-ramdisk-reaches-storage.md), [0176](../decisions/0176-paths-and-current-directory.md), [0178](../decisions/0178-native-api-crate.md), [0179](../decisions/0179-command-copies-namespace.md), [0180](../decisions/0180-streams-and-exit-status.md), [0182](../decisions/0182-all-of-std.md), [0184](../decisions/0184-shared-file-pages.md), [0203](../decisions/0203-package-format.md), [0204](../decisions/0204-hybrid-signatures.md), [0206](../decisions/0206-owner-approves-signers.md), [0207](../decisions/0207-install-and-start-checks.md), [0210](../decisions/0210-std-version-declared.md), [0229](../decisions/0229-std-stages.md).
+- **Implements:** [0003](../decisions/0003-rust-std-no-libc.md), [0040](../decisions/0040-signed-programs-owner-policy.md), [0041](../decisions/0041-immutable-packages.md), [0042](../decisions/0042-updates.md), [0054](../decisions/0054-kernel-enforces-execute.md), [0104](../decisions/0104-supervisor.md), [0155](../decisions/0155-ramdisk-reaches-storage.md), [0176](../decisions/0176-paths-and-current-directory.md), [0178](../decisions/0178-native-api-crate.md), [0179](../decisions/0179-command-copies-namespace.md), [0180](../decisions/0180-streams-and-exit-status.md), [0182](../decisions/0182-all-of-std.md), [0184](../decisions/0184-shared-file-pages.md), [0203](../decisions/0203-package-format.md), [0204](../decisions/0204-hybrid-signatures.md), [0206](../decisions/0206-owner-approves-signers.md), [0207](../decisions/0207-install-and-start-checks.md), [0210](../decisions/0210-std-version-declared.md), [0229](../decisions/0229-std-stages.md), [0268](../decisions/0268-counter-by-default.md).
 - **Designs:** where the package store keeps packages ([0226](../decisions/0226-open-topics-at-their-step.md)).
 - **Tests:** upstream's std tests for stage 3, and attacks, in which a tampered block or manifest is caught ([0203](../decisions/0203-package-format.md), [0207](../decisions/0207-install-and-start-checks.md)).
 
@@ -360,17 +381,17 @@ Checkpoint 6: the laptop boots from a USB stick, with its storage on a USB disk 
 
 Needs steps 18 and 19. The console works with the framebuffer, a PS/2 keyboard and USB keyboards ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md)). The login service covers authentication, sessions with their accounts ([0140](../decisions/0140-accounts-capability-pair.md)) and identity capabilities ([0141](../decisions/0141-identity-capability.md)), stable user IDs ([0183](../decisions/0183-access-on-directories.md)), and the owner, who approves signers ([0206](../decisions/0206-owner-approves-signers.md)). The step ends with a shell and a system monitor that reads the services' reports ([0111](../decisions/0111-resource-accounting.md)).
 
-- **Implements:** [0029](../decisions/0029-users-as-capabilities.md), [0030](../decisions/0030-filesystem-decides-access.md), [0111](../decisions/0111-resource-accounting.md), [0140](../decisions/0140-accounts-capability-pair.md), [0141](../decisions/0141-identity-capability.md), [0183](../decisions/0183-access-on-directories.md), [0206](../decisions/0206-owner-approves-signers.md).
-- **Designs:** the console and terminal, how users authenticate, how the owner is set up, and the shell ([0226](../decisions/0226-open-topics-at-their-step.md)).
-- **Tests:** a session reaches only what its grants give ([0183](../decisions/0183-access-on-directories.md)), and an identity capability grants nothing by itself ([0141](../decisions/0141-identity-capability.md)).
+- **Implements:** [0029](../decisions/0029-users-as-capabilities.md), [0030](../decisions/0030-filesystem-decides-access.md), [0111](../decisions/0111-resource-accounting.md), [0140](../decisions/0140-accounts-capability-pair.md), [0141](../decisions/0141-identity-capability.md), [0183](../decisions/0183-access-on-directories.md), [0206](../decisions/0206-owner-approves-signers.md), [0257](../decisions/0257-outside-attackers.md), [0258](../decisions/0258-outside-input-tier-2.md), [0260](../decisions/0260-credentials-path.md).
+- **Designs:** the console and terminal, how users authenticate, with credentials kept out of the console and a key combination that always reaches the login service ([0260](../decisions/0260-credentials-path.md)), how the owner is set up, and the shell ([0226](../decisions/0226-open-topics-at-their-step.md)).
+- **Tests:** a session reaches only what its grants give ([0183](../decisions/0183-access-on-directories.md)), and an identity capability grants nothing by itself ([0141](../decisions/0141-identity-capability.md)). Credentials never reach the console, and the key combination reaches the login service whatever else is running ([0260](../decisions/0260-credentials-path.md)).
 
 #### 22. The network, and std's fourth stage
 
 Needs step 19. Here we build the virtio-net driver and the network service, with a TCP/IP stack, name resolution and narrower entries ([0181](../decisions/0181-network-service.md)), followed by std's fourth stage ([0229](../decisions/0229-std-stages.md)).
 
-- **Implements:** [0003](../decisions/0003-rust-std-no-libc.md), [0181](../decisions/0181-network-service.md), [0182](../decisions/0182-all-of-std.md), [0229](../decisions/0229-std-stages.md).
+- **Implements:** [0003](../decisions/0003-rust-std-no-libc.md), [0181](../decisions/0181-network-service.md), [0182](../decisions/0182-all-of-std.md), [0229](../decisions/0229-std-stages.md), [0257](../decisions/0257-outside-attackers.md), [0258](../decisions/0258-outside-input-tier-2.md), [0259](../decisions/0259-outside-input-fuzzed.md).
 - **Designs:** the network stack, and the network service's protocol ([0226](../decisions/0226-open-topics-at-their-step.md)).
-- **Tests:** upstream's std tests for networking. A program without `svc/net` has no network ([0181](../decisions/0181-network-service.md)).
+- **Tests:** upstream's std tests for networking. A program without `svc/net` has no network ([0181](../decisions/0181-network-service.md)). Network packets are fuzzed into the network service ([0257](../decisions/0257-outside-attackers.md), [0259](../decisions/0259-outside-input-fuzzed.md)).
 
 #### 23. Third-party programs
 
@@ -382,9 +403,9 @@ Needs steps 20, 21 and 22. The step publishes the target specs, std's patch and 
 
 #### 24. The first release
 
-Needs step 23. The project's root key and working keys are made offline ([0205](../decisions/0205-root-and-working-keys.md)). A second machine rebuilds the first system image and boot loader before they're signed ([0241](../decisions/0241-reproducibility-checks.md)), and the release notes state the gaps that later work closes ([0251](../decisions/0251-later-work.md)).
+Needs step 23. The project's root key and working keys are made offline ([0205](../decisions/0205-root-and-working-keys.md)). A second machine rebuilds the first system image and boot loader before they're signed ([0241](../decisions/0241-reproducibility-checks.md)), and the release notes state the gaps that later work closes ([0251](../decisions/0251-later-work.md)), the offline gap in full among them ([0270](../decisions/0270-offline-gap-stated.md)).
 
-- **Implements:** [0194](../decisions/0194-reproducible-builds.md), [0205](../decisions/0205-root-and-working-keys.md), [0241](../decisions/0241-reproducibility-checks.md), [0251](../decisions/0251-later-work.md).
+- **Implements:** [0194](../decisions/0194-reproducible-builds.md), [0205](../decisions/0205-root-and-working-keys.md), [0241](../decisions/0241-reproducibility-checks.md), [0251](../decisions/0251-later-work.md), [0270](../decisions/0270-offline-gap-stated.md).
 - **Designs:** how the root key is made and kept ([0226](../decisions/0226-open-topics-at-their-step.md)).
 - **Tests:** the full suite on both architectures, with and without an IOMMU.
 Checkpoint 7: the laptop runs the whole system, apart from its network.
@@ -397,13 +418,14 @@ We design each open topic at the step that needs it, and settle it with an ordin
 |---|---|---|
 | How tests name the records they check | 1 | [0234](../decisions/0234-tests-cite-records.md) |
 | The project's set of lints | 1 | [0248](../decisions/0248-coding-and-doc-standards.md) |
-| The CI workflows, and the nightly runs | 1 | [0237](../decisions/0237-public-repository-and-ci.md) |
+| The CI workflows, and the nightly runs | 1 | [0237](../decisions/0237-public-repository-and-ci.md), [0263](../decisions/0263-arm64-host-tests.md) |
 | The image's version numbers | 2 | [0209](../decisions/0209-no-rollback-protection.md) |
 | How the root task finds the second serial port before hardware discovery runs | 8 | [0236](../decisions/0236-program-output-second-serial.md) |
 | The log service | 14 | [0152](../decisions/0152-kernel-log-and-reset.md), [0180](../decisions/0180-streams-and-exit-status.md), [0236](../decisions/0236-program-output-second-serial.md) |
 | The hardware-discovery service's interface | 15 | [0032](../decisions/0032-minimal-hardware-discovery.md), [0097](../decisions/0097-user-mode-starts-cores.md), [0165](../decisions/0165-core-objects.md) |
 | The device manager's matching, and the drivers' protocols | 16 | [0172](../decisions/0172-device-manager.md) |
 | The regions that the firmware reserves for devices, such as VT-d's RMRR | 16 | [0169](../decisions/0169-iommu-service.md), [0223](../decisions/0223-qemu-and-laptop-checkpoints.md) |
+| Whether the IOMMU blocks DMA from the boot loader's handoff | 16 | [0261](../decisions/0261-bus-mastering-off-at-boot.md) |
 | The filesystem's on-disk format and protocol | 17 | [0030](../decisions/0030-filesystem-decides-access.md), [0183](../decisions/0183-access-on-directories.md), [0184](../decisions/0184-shared-file-pages.md) |
 | The block protocol, the partition types and the disk layout | 17 | [0185](../decisions/0185-swap-partition.md) |
 | The USB drivers' protocols | 18 | [0224](../decisions/0224-laptop-usb-storage.md) |
@@ -411,7 +433,7 @@ We design each open topic at the step that needs it, and settle it with an ordin
 | Where updates come from | 20 | [0042](../decisions/0042-updates.md), [0158](../decisions/0158-image-try-count.md) |
 | How the boot loader tells removable media apart | 20 | [0208](../decisions/0208-boot-loader-beside-old.md), [0223](../decisions/0223-qemu-and-laptop-checkpoints.md) |
 | The console and terminal | 21 | [0180](../decisions/0180-streams-and-exit-status.md), [0223](../decisions/0223-qemu-and-laptop-checkpoints.md) |
-| How users authenticate, and how the owner is set up | 21 | [0029](../decisions/0029-users-as-capabilities.md), [0141](../decisions/0141-identity-capability.md), [0206](../decisions/0206-owner-approves-signers.md) |
+| How users authenticate, and how the owner is set up | 21 | [0029](../decisions/0029-users-as-capabilities.md), [0141](../decisions/0141-identity-capability.md), [0206](../decisions/0206-owner-approves-signers.md), [0260](../decisions/0260-credentials-path.md) |
 | The shell | 21 | [0022](../decisions/0022-explicit-spawn.md), [0179](../decisions/0179-command-copies-namespace.md) |
 | The network stack, and the network service's protocol | 22 | [0181](../decisions/0181-network-service.md) |
 | The SDK's form, and how it's published | 23 | [0187](../decisions/0187-pinned-stable-toolchain.md), [0195](../decisions/0195-bindings-safe-output.md) |
@@ -430,7 +452,7 @@ Architecture- and platform-specific code lives only in crates marked as such, an
 
 ## Testing
 
-The kinds of tests come from [0235](../decisions/0235-kinds-of-tests.md). Every generic crate gets host tests, and that includes the generic kernel on the simulated machine ([0233](../decisions/0233-simulated-machine.md)). Miri and AddressSanitizer run over the audited set's host code. QEMU tests cover the kernel, user-mode programs, std by stage ([0229](../decisions/0229-std-stages.md)) and whole images, with and without an IOMMU. On top of those there are planted violations for every build check, an attack test for each recorded defence, a regression test for every bug fix, and benchmarks.
+The kinds of tests come from [0235](../decisions/0235-kinds-of-tests.md). Every generic crate gets host tests, and that includes the generic kernel on the simulated machine ([0233](../decisions/0233-simulated-machine.md)). Miri and AddressSanitizer run over the audited set's host code. The host tests also run natively on GitHub's arm64 runners, and lock-free code is checked with loom ([0263](../decisions/0263-arm64-host-tests.md)). QEMU tests cover the kernel, user-mode programs, std by stage ([0229](../decisions/0229-std-stages.md)) and whole images, with and without an IOMMU. On top of those there are planted violations for every build check, an attack test for each recorded defence, a regression test for every bug fix, and benchmarks.
 
 Output and results follow [0236](../decisions/0236-program-output-second-serial.md). The kernel writes to its own serial port, and programs write to a second one, which the root task drives until the log service takes it over. A test run ends through the power capability.
 
@@ -444,11 +466,11 @@ To cover the design ([0234](../decisions/0234-tests-cite-records.md)), tests nam
 
 ## Review and kernel assurance
 
-Review has three tiers, by role ([0242](../decisions/0242-review-tiers.md)). Tier 1 is reviewed line by line against a checklist, and covers the kernel, our fork of the boot loader, the audited set, and the build checks that enforce safety. Tier 2 gets a full review against the threat model: the trusted-base services, the random service, the image builder and the signing tools. Tier 3, which is everything else, gets a normal review. No change is approved by its own author.
+Review has three tiers, by role ([0242](../decisions/0242-review-tiers.md)). Tier 1 is reviewed line by line against a checklist, and covers the kernel, our fork of the boot loader, the audited set, and the build checks that enforce safety. Tier 2 gets a full review against the threat model: the trusted-base services, the random service, the image builder and the signing tools. It also covers the code that parses outside input or carries what users type: the network service, the USB stack, the console and the keyboard drivers ([0258](../decisions/0258-outside-input-tier-2.md)). Tier 3, which is everything else, gets a normal review. No change is approved by its own author.
 
 The audit records ([0243](../decisions/0243-audit-records-and-crate-reviews.md)) start from the list of audited crates, in TOML, with one Markdown record for each crate: its safety arguments, the tests and fuzzing that cover it, and a log of its audits. cargo-vet records the review of every vendored crate, and cargo-deny reads a snapshot of the advisory database. Reviews may be imported from named organizations, except for the audited set ([0244](../decisions/0244-imported-crate-reviews.md)).
 
-On coverage and fuzzing ([0245](../decisions/0245-coverage-and-fuzzing.md)), every line of the generic kernel is measured on the simulated machine, and every function of the architecture and platform code is reached in QEMU. System calls get coverage-guided fuzzing from step 4, and in QEMU from step 9. Each trusted-base service's protocol is fuzzed through its bindings.
+On coverage and fuzzing ([0245](../decisions/0245-coverage-and-fuzzing.md)), every line of the generic kernel is measured on the simulated machine, and every function of the architecture and platform code is reached in QEMU. System calls get coverage-guided fuzzing from step 4, and in QEMU from step 9. Each trusted-base service's protocol is fuzzed through its bindings. Outside input is fuzzed too: disk images from step 17, USB input from step 18 and network packets from step 22 ([0259](../decisions/0259-outside-input-fuzzed.md)).
 
 The longest stretch ([0246](../decisions/0246-interruption-stretch-limit.md)) is limited by work limits between interruption points, which are constants that the simulator checks, and by a budget of 20 µs on the laptop. That bounds the kernel's interrupt latency ([0089](../decisions/0089-interrupts-off-in-kernel.md)) and the wait for its lock ([0218](../decisions/0218-lock-yield.md)).
 
@@ -471,7 +493,7 @@ A step's estimate is the code it adds, split by review tier, and the review time
 | Step | Tier 1 | Tier 2 | Tier 3 | Vendored code we audit or review | Review hours |
 |---|---|---|---|---|---|
 | 1 | 2.3k | — | 6.3k | The tools' crates, mostly through imported reviews | 35 |
-| 2 | 4.5k | 3.0k | 4.5k | The `bootloader` crate and its dependencies, about 40,000 lines, audited | 200 |
+| 2 | 4.5k | 3.0k | 4.5k | The `bootloader` crate and its dependencies, about 40,000 lines, audited | 315 |
 | 3 | 5.0k | — | 2.0k | — | 35 |
 | 4 | 4.0k | — | 7.3k | The fuzzing tools' crates | 50 |
 | 5 | 4.5k | — | 3.0k | — | 35 |
@@ -480,27 +502,29 @@ A step's estimate is the code it adds, split by review tier, and the review time
 | 8 | 7.5k | 0.5k | 2.0k | — | 55 |
 | 9 | 7.0k | — | 6.5k | — | 60 |
 | 10 | 4.0k | 6.5k | 3.5k | — | 55 |
-| 11 | — | 4.0k | 2.5k | — | 20 |
+| 11 | 1.5k | 4.0k | 2.5k | — | 30 |
 | 12 | — | 5.0k | 3.0k | — | 20 |
 | 13 | 0.6k | 9.0k | 7.0k | — | 45 |
-| 14 | 4.3k | 1.0k | 6.5k | An unwinder and a random-number generator, about 7,000 lines | 60 |
+| 14 | 5.3k | 1.0k | 6.5k | An unwinder and a random-number generator, about 7,000 lines | 67 |
 | 15 | 2.5k | 2.0k | 7.0k | ACPI and device-tree parsers, about 17,000 lines | 60 |
 | 16 | 2.0k | 13.0k | 5.6k | — | 65 |
 | 17 | — | 10.0k | 10.5k | — | 50 |
-| 18 | — | — | 12.0k | — | 20 |
-| 19 | 6.0k | 7.3k | 6.0k | Signature and hash crates, about 25,000 lines, audited | 135 |
+| 18 | — | 12.0k | — | — | 40 |
+| 19 | 6.0k | 7.3k | 6.0k | Signature and hash crates, about 25,000 lines, audited | 241 |
 | 20 | 2.0k | 5.5k | 4.0k | — | 40 |
-| 21 | — | 4.0k | 10.6k | A password-hashing crate, if login uses passwords | 35 |
-| 22 | 2.0k | — | 8.5k | A TCP/IP stack, about 30,000 lines | 60 |
+| 21 | — | 7.0k | 7.6k | A password-hashing crate, if login uses passwords | 40 |
+| 22 | 2.0k | 7.0k | 1.5k | A TCP/IP stack, about 30,000 lines | 72 |
 | 23 | 0.5k | 1.0k | 4.5k | — | 15 |
 | 24 | — | 0.5k | 1.0k | — | 5 |
-| **All** | **68k** | **72k** | **133k** | | **1,230** |
+| **All** | **70k** | **94k** | **111k** | | **1,515** |
+
+Vendored code that needs our own audit, because it's in the audited set ([0244](../decisions/0244-imported-crate-reviews.md)), is estimated at tier 1's rate. The estimates count review only. Designing the open topics, rework, debugging and toolchain upgrades come on top. The audit after the freeze corrected the table before step 1: its sum, the audited crates' rate, and the parts that moved to tier 2 ([0256](../decisions/0256-audit-findings-as-evidence.md), [0258](../decisions/0258-outside-input-tier-2.md), [0265](../decisions/0265-lent-memory-library.md), [0269](../decisions/0269-std-mutex-condvar.md)).
 
 Toolchain upgrades are recurring work that runs beside the steps ([0188](../decisions/0188-upgrade-every-second-release.md)). Each upgrade audits the changes to unsafe code in `core`, `alloc` and std, moves std's patch to the new release, rebuilds our fork of the boot loader, and passes the full tests. The first one falls due with Rust 1.101.
 
 ## Checkpoints
 
-A checkpoint closes each phase ([0249](../decisions/0249-estimates-and-checkpoints.md)). At one, we compare the actual sizes and times with the estimates and re-estimate the remaining steps, the laptop runs that phase's image ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md)), and the kernel's size counts get reviewed ([0247](../decisions/0247-kernel-size-ratchet.md)). The results are recorded here.
+A checkpoint closes each phase ([0249](../decisions/0249-estimates-and-checkpoints.md)). At one, we compare the actual sizes and times with the estimates and re-estimate the remaining steps, the laptop runs that phase's image ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md)), and the kernel's size counts get reviewed ([0247](../decisions/0247-kernel-size-ratchet.md)). The results are recorded here. From checkpoint 3 on, each checkpoint also sets performance targets for the paths it can measure, and checks the targets set before. A missed target becomes a record under 0201, which reopens the decisions it names or raises the target with a reason ([0264](../decisions/0264-performance-targets.md)).
 
 | Checkpoint | After step | On the laptop | Result |
 |---|---|---|---|
@@ -518,7 +542,7 @@ Once the design is frozen, a frozen decision changes only through a record that 
 
 ## Later work
 
-Nothing here is scheduled ([0251](../decisions/0251-later-work.md)), though a checkpoint may schedule an item through an ordinary record. The first release states the gaps that later work closes. Two examples are stored data kept in the clear ([0202](../decisions/0202-offline-attackers.md)) and older signed images that still boot ([0209](../decisions/0209-no-rollback-protection.md)).
+Nothing here is scheduled ([0251](../decisions/0251-later-work.md)), though a checkpoint may schedule an item through an ordinary record. The first release states the gaps that later work closes. Two examples are stored data kept in the clear ([0202](../decisions/0202-offline-attackers.md)) and older signed images that still boot ([0209](../decisions/0209-no-rollback-protection.md)). The notes also state the offline gap in full: an attacker with the disk can make the system run a program of their choosing, as a user ([0270](../decisions/0270-offline-gap-stated.md)).
 
 | Item | Records | Needs first | Earliest after step |
 |---|---|---|---|
@@ -530,7 +554,7 @@ Nothing here is scheduled ([0251](../decisions/0251-later-work.md)), though a ch
 | Formal proofs of parts of the kernel | [0018](../decisions/0018-kernel-assurance.md) | A kernel whose mechanisms are all in | 9 |
 | The Rust targets offered to rust-lang/rust | [0187](../decisions/0187-pinned-stable-toolchain.md) | std's patch, complete | 22 |
 | Our changes to the `bootloader` crate offered upstream | [0150](../decisions/0150-bootloader-aarch64.md) | The fork's changes | 7, and 20 for the rest |
-| Encrypted stored data, with keys from the login service and a key bound to the machine | [0202](../decisions/0202-offline-attackers.md) | The filesystem and the login service | 21 |
+| Encrypted stored data, with keys from the login service and a key bound to the machine | [0202](../decisions/0202-offline-attackers.md), [0270](../decisions/0270-offline-gap-stated.md) | The filesystem and the login service, and measured boot or the owner's secret for the machine's key | 21 |
 | A signature from Microsoft's UEFI certificate authority for the boot loader | [0205](../decisions/0205-root-and-working-keys.md) | A released boot loader | 24 |
 | Rollback protection | [0209](../decisions/0209-no-rollback-protection.md) | Verified boot | 20 |
 | The 16 and 64 KiB granules on AArch64 | [0069](../decisions/0069-all-page-sizes.md) | AArch64's paging | 8 |
@@ -799,10 +823,28 @@ This table lists every Accepted record, the steps that build it and what checks 
 | [0253](../decisions/0253-ramdisk-log-and-clocks.md) The ramdisk also holds the log service and the clock drivers | 14, 16 | Image tests |
 | [0254](../decisions/0254-corrections.md) Corrections to 0045 | — | Not testable: corrections |
 | [0255](../decisions/0255-freeze.md) The design and the roadmap freeze with Day 8's commit, on 2026-10-19 | — | Not testable: a process |
+| [0256](../decisions/0256-audit-findings-as-evidence.md) Checked findings of the audit after the freeze count as evidence under 0201 | — | Not testable: a process |
+| [0257](../decisions/0257-outside-attackers.md) Attackers who reach a running machine from outside are in scope | 16, 17, 18, 21, 22 | Attack tests and fuzzing of outside input |
+| [0258](../decisions/0258-outside-input-tier-2.md) Code that parses outside input, or carries what users type, is reviewed in tier 2 | 18, 21, 22 | Not testable: a review process |
+| [0259](../decisions/0259-outside-input-fuzzed.md) Network packets, USB input and disk images are fuzzed | 17, 18, 22 | Fuzzing in CI and nightly |
+| [0260](../decisions/0260-credentials-path.md) Credentials reach the login service only through tier 2 code, and one key combination always reaches it | 21 | QEMU tests: credentials and the key combination |
+| [0261](../decisions/0261-bus-mastering-off-at-boot.md) The boot loader turns off bus mastering before it starts the kernel | 16 | QEMU tests: devices start with bus mastering off |
+| [0262](../decisions/0262-interrupt-source-check.md) Interrupt entries check their source, and the configuration ports are never granted | 16 | Attack tests: a forged remapping entry, and the configuration ports |
+| [0263](../decisions/0263-arm64-host-tests.md) Host tests also run on arm64, and lock-free code is model-checked | 1 | CI on arm64 runners, and loom |
+| [0264](../decisions/0264-performance-targets.md) Checkpoints set performance targets, and a missed target becomes a record | 9, 14, 16 | Checkpoint results |
+| [0265](../decisions/0265-lent-memory-library.md) Memory lent by clients goes through one library, measured at checkpoint 4 | 11, 12, 13 | Host tests, Miri, and checkpoint 4's measurement |
+| [0266](../decisions/0266-connect-endpoints.md) Services spread their callers through a connect endpoint | 6, 11, 12, 13, 14 | QEMU tests: callers on several cores |
+| [0267](../decisions/0267-supervisor-keeps-connect.md) A restartable service's supervisor keeps its connect endpoint | 6, 17 | QEMU tests: a restarted filesystem is reached again |
+| [0268](../decisions/0268-counter-by-default.md) Programs read the CPU's counter by default | 14, 19 | Std tests, with and without the counter |
+| [0269](../decisions/0269-std-mutex-condvar.md) std's `Mutex` and `Condvar` are built on parking | 14 | Std tests, and loom |
+| [0270](../decisions/0270-offline-gap-stated.md) The first release states the offline gap in full, and the machine-bound key needs measured boot or the owner's secret | 24 | Not testable: release notes |
+| [0271](../decisions/0271-corrections.md) Corrections to 0009, 0045, 0206 and 0227 | — | Not testable: corrections |
 
 ## The freeze
 
 Day 8's commit, on 2026-10-19, froze the design and the roadmap ([0255](../decisions/0255-freeze.md)). Every design document's status is Frozen. New records from here on either follow [0201](../decisions/0201-changes-after-freeze.md) and [0250](../decisions/0250-plan-changes-after-freeze.md), or settle open topics and later work ([0226](../decisions/0226-open-topics-at-their-step.md), [0251](../decisions/0251-later-work.md)).
+
+After the freeze, the audit of 2026-10-19 brought records [0256](../decisions/0256-audit-findings-as-evidence.md) to [0271](../decisions/0271-corrections.md). Its findings count as evidence under 0201 only where a check confirmed them ([0256](../decisions/0256-audit-findings-as-evidence.md)).
 
 ## Open questions
 

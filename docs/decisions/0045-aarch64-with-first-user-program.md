@@ -1,6 +1,6 @@
 # 0045. AArch64 is brought up together with the first user-mode program
 
-- **Status:** Accepted, amended by [0254](0254-corrections.md)
+- **Status:** Accepted, amended by [0254](0254-corrections.md) and [0271](0271-corrections.md)
 - **Date:** 2026-10-15
 
 ## Context

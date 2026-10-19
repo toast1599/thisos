@@ -1,6 +1,6 @@
 # 0242. Changes are reviewed in three tiers, by role
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0258](0258-outside-input-tier-2.md)
 - **Date:** 2026-10-19
 
 ## Context

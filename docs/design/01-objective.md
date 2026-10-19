@@ -14,27 +14,34 @@ What the OS is for and how much it takes on, the threat model it defends against
 - [0003](../decisions/0003-rust-std-no-libc.md) Rust is the system language; the Rust standard library replaces libc (amended by [0082](../decisions/0082-corrections.md) and [0221](../decisions/0221-corrections.md))
 - [0004](../decisions/0004-not-unix.md) Not Unix-like: `target_family` is not `unix`
 - [0008](../decisions/0008-architecture-neutral-design.md) Architecture-neutral design (amended by [0082](../decisions/0082-corrections.md))
-- [0009](../decisions/0009-x86-64-first.md) x86_64 is the first architecture
+- [0009](../decisions/0009-x86-64-first.md) x86_64 is the first architecture (amended by [0271](../decisions/0271-corrections.md))
 - [0010](../decisions/0010-64-bit-only.md) 64-bit architectures only
 - [0011](../decisions/0011-aarch64-second.md) AArch64 is the second architecture
 - [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode (amended by [0082](../decisions/0082-corrections.md) and [0169](../decisions/0169-iommu-service.md))
 - [0015](../decisions/0015-clean-apis.md) APIs and ABIs are designed for this system: inspired by others, never bound to them
-- [0016](../decisions/0016-threat-model-scope.md) Threat model: speculative leaks between programs and denial of service are in scope (amended by [0202](../decisions/0202-offline-attackers.md))
+- [0016](../decisions/0016-threat-model-scope.md) Threat model: speculative leaks between programs and denial of service are in scope (amended by [0202](../decisions/0202-offline-attackers.md) and [0257](../decisions/0257-outside-attackers.md))
 - [0019](../decisions/0019-kernel-minimality.md) Kernel minimality: anything that can reasonably run in user mode does
-- [0045](../decisions/0045-aarch64-with-first-user-program.md) AArch64 is brought up together with the first user-mode program (amended by [0254](../decisions/0254-corrections.md))
+- [0045](../decisions/0045-aarch64-with-first-user-program.md) AArch64 is brought up together with the first user-mode program (amended by [0254](../decisions/0254-corrections.md) and [0271](../decisions/0271-corrections.md))
 - [0046](../decisions/0046-scope-of-0008.md) Scope of 0008: the OS's own code, including platform-specific code (amended by [0152](../decisions/0152-kernel-log-and-reset.md) and [0213](../decisions/0213-power-capability.md))
 - [0116](../decisions/0116-name-thisos.md) The OS is named thisOS
 
 The final review ([07-engineering](07-engineering.md)) added these on the threat model and on trust:
 
-- [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope
-- [0214](../decisions/0214-interrupt-remapping.md) Devices raise only the interrupts they were given, through interrupt remapping
-- [0215](../decisions/0215-pci-bus-driver-config.md) The PCI bus driver keeps configuration space, and mediates drivers' access to it
+- [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope (amended by [0257](../decisions/0257-outside-attackers.md) and [0270](../decisions/0270-offline-gap-stated.md))
+- [0214](../decisions/0214-interrupt-remapping.md) Devices raise only the interrupts they were given, through interrupt remapping (amended by [0262](../decisions/0262-interrupt-source-check.md))
+- [0215](../decisions/0215-pci-bus-driver-config.md) The PCI bus driver keeps configuration space, and mediates drivers' access to it (amended by [0261](../decisions/0261-bus-mastering-off-at-boot.md) and [0262](../decisions/0262-interrupt-source-check.md))
 - [0216](../decisions/0216-essential-service-failure.md) A failure of an essential service is handled like a fault in the root task
 
 How the kernel stays small was settled on Day 8 ([08-roadmap](08-roadmap.md)):
 
 - [0247](../decisions/0247-kernel-size-ratchet.md) A record rule and a size ratchet keep the kernel small
+
+After the freeze, the audit of 2026-10-19 ([0256](../decisions/0256-audit-findings-as-evidence.md)) widened the threat model, and closed gaps in trust:
+
+- [0257](../decisions/0257-outside-attackers.md) Attackers who reach a running machine from outside are in scope
+- [0260](../decisions/0260-credentials-path.md) Credentials reach the login service only through tier 2 code, and one key combination always reaches it
+- [0261](../decisions/0261-bus-mastering-off-at-boot.md) The boot loader turns off bus mastering before it starts the kernel
+- [0262](../decisions/0262-interrupt-source-check.md) Interrupt entries check their source, and the configuration ports are never granted
 
 ## The kernel's contents
 

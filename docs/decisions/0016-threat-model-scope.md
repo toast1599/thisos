@@ -1,6 +1,6 @@
 # 0016. Threat model: speculative leaks between programs and denial of service are in scope
 
-- **Status:** Accepted, amended by [0202](0202-offline-attackers.md)
+- **Status:** Accepted, amended by [0202](0202-offline-attackers.md) and [0257](0257-outside-attackers.md)
 - **Date:** 2026-10-15
 
 ## Context

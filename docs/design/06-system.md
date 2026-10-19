@@ -16,14 +16,14 @@ This covers how the system starts, how it talks to hardware, and how the Rust st
 - [0032](../decisions/0032-minimal-hardware-discovery.md) The kernel reads only the hardware information it needs to start (amended by [0152](../decisions/0152-kernel-log-and-reset.md), [0213](../decisions/0213-power-capability.md) and [0225](../decisions/0225-framebuffer-log-at-failures.md))
 - [0071](../decisions/0071-three-memory-programs.md) The root task, the memory service and the default pager are three separate programs
 - [0097](../decisions/0097-user-mode-starts-cores.md) User mode finds the CPUs, and the root task asks the kernel to start each one
-- [0131](../decisions/0131-namespace-path-prefixes.md) A namespace maps path prefixes to capabilities
+- [0131](../decisions/0131-namespace-path-prefixes.md) A namespace maps path prefixes to capabilities (amended by [0266](../decisions/0266-connect-endpoints.md))
 - [0145](../decisions/0145-std-over-native-api.md) std is a layer over the native API
 - [0146](../decisions/0146-startup-data-block.md) Startup data is a versioned block defined in the IDL
 
 The boot path first:
 
 - [0149](../decisions/0149-bootloader-crate-uefi.md) The kernel is booted by the `bootloader` crate, through UEFI only
-- [0150](../decisions/0150-bootloader-aarch64.md) AArch64 support is added to the `bootloader` crate
+- [0150](../decisions/0150-bootloader-aarch64.md) AArch64 support is added to the `bootloader` crate (amended by [0261](../decisions/0261-bus-mastering-off-at-boot.md))
 - [0151](../decisions/0151-boot-info-from-crate.md) The kernel starts from the crate's boot information
 - [0152](../decisions/0152-kernel-log-and-reset.md) The kernel writes its log to memory and a serial port, and resets the machine itself (amended by [0225](../decisions/0225-framebuffer-log-at-failures.md))
 - [0225](../decisions/0225-framebuffer-log-at-failures.md) The kernel shows its log on the framebuffer when it fails, and while bring-up images start
@@ -59,8 +59,8 @@ Drivers and devices come next:
 - [0170](../decisions/0170-dma-quarantine.md) Memory mapped for a device is held back after a revoke, until the IOMMU service releases it
 - [0171](../decisions/0171-no-iommu-trusted-drivers.md) Without an IOMMU, the drivers of DMA-capable devices are trusted (amended by [0214](../decisions/0214-interrupt-remapping.md))
 - [0172](../decisions/0172-device-manager.md) A device manager starts each driver with exactly its device's capabilities
-- [0214](../decisions/0214-interrupt-remapping.md) Devices raise only the interrupts they were given, through interrupt remapping
-- [0215](../decisions/0215-pci-bus-driver-config.md) The PCI bus driver keeps configuration space, and mediates drivers' access to it
+- [0214](../decisions/0214-interrupt-remapping.md) Devices raise only the interrupts they were given, through interrupt remapping (amended by [0262](../decisions/0262-interrupt-source-check.md))
+- [0215](../decisions/0215-pci-bus-driver-config.md) The PCI bus driver keeps configuration space, and mediates drivers' access to it (amended by [0261](../decisions/0261-bus-mastering-off-at-boot.md) and [0262](../decisions/0262-interrupt-source-check.md))
 - [0173](../decisions/0173-time-service-entry.md) Programs reach the time service through the namespace entry `svc/time` (amended by [0252](../decisions/0252-time-service-starts-early.md))
 - [0174](../decisions/0174-random-service-and-seed.md) Random numbers come from a random service, and every program starts with a seed
 - [0252](../decisions/0252-time-service-starts-early.md) The time service starts early, and serves wall-clock time once the clock driver reports it
@@ -69,9 +69,9 @@ Then the std mapping:
 
 - [0175](../decisions/0175-rust-target-names.md) The Rust targets are `x86_64-unknown-thisos` and `aarch64-unknown-thisos`, with no target family
 - [0176](../decisions/0176-paths-and-current-directory.md) Paths that start with `/` resolve through the namespace, and others through a current directory
-- [0177](../decisions/0177-locks-on-parking.md) std's locks are built on parking, and parking on notifications
+- [0177](../decisions/0177-locks-on-parking.md) std's locks are built on parking, and parking on notifications (amended by [0269](../decisions/0269-std-mutex-condvar.md))
 - [0178](../decisions/0178-native-api-crate.md) The native API is a separate crate
-- [0179](../decisions/0179-command-copies-namespace.md) std's `Command` gives a child a copy of the spawner's namespace by default
+- [0179](../decisions/0179-command-copies-namespace.md) std's `Command` gives a child a copy of the spawner's namespace by default (amended by [0268](../decisions/0268-counter-by-default.md))
 - [0180](../decisions/0180-streams-and-exit-status.md) Standard streams use a byte-stream protocol, and a program ends with a code or an abnormal end
 - [0181](../decisions/0181-network-service.md) `std::net` uses a network service through the namespace
 - [0182](../decisions/0182-all-of-std.md) All of std is supported, in stages, and allocation failure aborts
@@ -83,6 +83,13 @@ Last, storage and non-Rust software:
 - [0184](../decisions/0184-shared-file-pages.md) Read-only file pages are shared from the service's cache, which pays for them
 - [0185](../decisions/0185-swap-partition.md) Swap goes to a partition, through the block-storage service
 - [0186](../decisions/0186-non-rust-route.md) Non-Rust software runs on WebAssembly first, then natively on the native API
+
+After the freeze, the audit of 2026-10-19 ([0256](../decisions/0256-audit-findings-as-evidence.md)) added these on devices and the std mapping:
+
+- [0261](../decisions/0261-bus-mastering-off-at-boot.md) The boot loader turns off bus mastering before it starts the kernel
+- [0262](../decisions/0262-interrupt-source-check.md) Interrupt entries check their source, and the configuration ports are never granted
+- [0268](../decisions/0268-counter-by-default.md) Programs read the CPU's counter by default
+- [0269](../decisions/0269-std-mutex-condvar.md) std's `Mutex` and `Condvar` are built on parking
 
 ## Open questions
 

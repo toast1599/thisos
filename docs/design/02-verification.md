@@ -34,11 +34,11 @@ On the toolchain and the build, from [07-engineering](07-engineering.md):
 
 Signing and packages were settled in the final review:
 
-- [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope
+- [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope (amended by [0257](../decisions/0257-outside-attackers.md) and [0270](../decisions/0270-offline-gap-stated.md))
 - [0203](../decisions/0203-package-format.md) A package is a signed manifest and files named by SHA-256 Merkle roots
 - [0204](../decisions/0204-hybrid-signatures.md) Signatures pair Ed25519 with ML-DSA-65
 - [0205](../decisions/0205-root-and-working-keys.md) An offline root key names the working keys, and the boot loader carries only the root
-- [0206](../decisions/0206-owner-approves-signers.md) A program runs if the system image's signer or a signer the owner approved signed it
+- [0206](../decisions/0206-owner-approves-signers.md) A program runs if the system image's signer or a signer the owner approved signed it (amended by [0271](../decisions/0271-corrections.md))
 - [0207](../decisions/0207-install-and-start-checks.md) The package store checks packages at install and after each boot, and the loader checks the policy at each start
 - [0208](../decisions/0208-boot-loader-beside-old.md) A new boot loader is installed beside the previous one, which the firmware falls back to (amended by [0223](../decisions/0223-qemu-and-laptop-checkpoints.md))
 - [0209](../decisions/0209-no-rollback-protection.md) Older signed images still boot, and rollback protection is later work
@@ -48,11 +48,19 @@ Signing and packages were settled in the final review:
 
 Day 8 ([08-roadmap](08-roadmap.md)) brought the records on reviews, audits and tests:
 
-- [0235](../decisions/0235-kinds-of-tests.md) Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly
+- [0235](../decisions/0235-kinds-of-tests.md) Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly (amended by [0263](../decisions/0263-arm64-host-tests.md) and [0264](../decisions/0264-performance-targets.md))
 - [0241](../decisions/0241-reproducibility-checks.md) The image and the boot loader are built twice in CI, and rebuilt elsewhere before signing
-- [0242](../decisions/0242-review-tiers.md) Changes are reviewed in three tiers, by role
+- [0242](../decisions/0242-review-tiers.md) Changes are reviewed in three tiers, by role (amended by [0258](../decisions/0258-outside-input-tier-2.md))
 - [0243](../decisions/0243-audit-records-and-crate-reviews.md) Each audited crate has a record beside the list, and cargo-vet records crate reviews
 - [0244](../decisions/0244-imported-crate-reviews.md) Crate reviews may be imported from named organizations, outside the audited set
+
+After the freeze, the audit of 2026-10-19 ([0256](../decisions/0256-audit-findings-as-evidence.md)) changed review, tests and the offline gap:
+
+- [0258](../decisions/0258-outside-input-tier-2.md) Code that parses outside input, or carries what users type, is reviewed in tier 2
+- [0259](../decisions/0259-outside-input-fuzzed.md) Network packets, USB input and disk images are fuzzed
+- [0263](../decisions/0263-arm64-host-tests.md) Host tests also run on arm64, and lock-free code is model-checked
+- [0270](../decisions/0270-offline-gap-stated.md) The first release states the offline gap in full, and the machine-bound key needs measured boot or the owner's secret
+- [0271](../decisions/0271-corrections.md) Corrections to 0009, 0045, 0206 and 0227
 
 ## Key finding: the Rust compiler is not itself a soundness proof
 

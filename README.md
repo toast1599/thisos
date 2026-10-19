@@ -6,7 +6,7 @@ It's called thisOS because this OS differs from the traditional ones: its system
 
 ## Status
 
-**Week 1 (2026-10-14 → 2026-10-19) was for design only.** On 2026-10-19, at the end of Day 8, the design and the roadmap froze together ([0255](docs/decisions/0255-freeze.md)). From here on, the only way to change a frozen decision is a new record that cites what building found ([0201](docs/decisions/0201-changes-after-freeze.md)).
+**Week 1 (2026-10-14 → 2026-10-19) was for design only.** On 2026-10-19, at the end of Day 8, the design and the roadmap froze together ([0255](docs/decisions/0255-freeze.md)). From here on, the only way to change a frozen decision is a new record that cites what building found ([0201](docs/decisions/0201-changes-after-freeze.md)). The design was audited on the same day, after the freeze, and its checked findings count as such evidence ([0256](docs/decisions/0256-audit-findings-as-evidence.md)). They brought records 0256 to 0271.
 
 Every decision is written down in the [decision log](docs/decisions/README.md), and only the ones marked **Accepted** are binding.
 

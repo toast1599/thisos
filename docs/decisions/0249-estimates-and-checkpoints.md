@@ -1,6 +1,6 @@
 # 0249. Steps are estimated by the code they add, and calibrated at each phase's checkpoint
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0264](0264-performance-targets.md)
 - **Date:** 2026-10-19
 
 ## Context

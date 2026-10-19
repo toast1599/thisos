@@ -1,6 +1,6 @@
 # 0214. Devices raise only the interrupts they were given, through interrupt remapping
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0262](0262-interrupt-source-check.md)
 - **Date:** 2026-10-18
 
 ## Context

@@ -1,6 +1,6 @@
 # 0131. A namespace maps path prefixes to capabilities
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0266](0266-connect-endpoints.md)
 - **Date:** 2026-10-17
 
 ## Context

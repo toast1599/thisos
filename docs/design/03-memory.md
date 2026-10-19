@@ -70,6 +70,10 @@ The layout of an address space:
 - [0211](../decisions/0211-relative-relocations.md) Programs carry only relative relocations
 - [0212](../decisions/0212-low-image-declaration.md) A program can declare the highest address for its image
 
+After the freeze, the audit of 2026-10-19 ([0256](../decisions/0256-audit-findings-as-evidence.md)) added this on lent memory:
+
+- [0265](../decisions/0265-lent-memory-library.md) Memory lent by clients goes through one library, measured at checkpoint 4
+
 ## Open questions
 
 None are left in this document.

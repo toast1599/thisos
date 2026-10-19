@@ -1,6 +1,6 @@
 # 0105. A failed program's supervisor has its memory taken back, and decides on a restart
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0267](0267-supervisor-keeps-connect.md)
 - **Date:** 2026-10-16
 
 ## Context

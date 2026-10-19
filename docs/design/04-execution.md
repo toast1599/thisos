@@ -42,15 +42,15 @@ What a program is, how programs run and get scheduled, and what happens when one
 - [0102](../decisions/0102-exception-handler.md) Each thread names an exception handler besides its pager
 - [0103](../decisions/0103-fault-without-handler.md) A fault with nowhere to go suspends the thread, and in the root task halts the system (amended by [0115](../decisions/0115-root-task-fault-boot-setting.md))
 - [0104](../decisions/0104-supervisor.md) Every program has a supervisor, named at spawn, that learns how it ended
-- [0105](../decisions/0105-supervisor-reclaims.md) A failed program's supervisor has its memory taken back, and decides on a restart
+- [0105](../decisions/0105-supervisor-reclaims.md) A failed program's supervisor has its memory taken back, and decides on a restart (amended by [0267](../decisions/0267-supervisor-keeps-connect.md))
 - [0106](../decisions/0106-pager-passes-on-faults.md) A pager passes faults it won't resolve to the thread's exception handler
 - [0107](../decisions/0107-loader-writes-startup-data.md) The loader writes a new program's startup information into its memory (amended by [0160](../decisions/0160-root-task-starts-four.md))
 - [0108](../decisions/0108-startup-information.md) What a new program receives when it's spawned (amended by [0146](../decisions/0146-startup-data-block.md), [0174](../decisions/0174-random-service-and-seed.md), [0176](../decisions/0176-paths-and-current-directory.md) and [0179](../decisions/0179-command-copies-namespace.md))
 - [0109](../decisions/0109-panic-strategy.md) Third-party programs unwind on panic by default, and the OS's own services abort
 - [0110](../decisions/0110-kernel-panic.md) A kernel panic is logged, then the machine halts or reboots by a boot setting
 - [0111](../decisions/0111-resource-accounting.md) Each service reports the resource use it already tracks
-- [0112](../decisions/0112-time-service.md) Programs read the time from a time service
-- [0113](../decisions/0113-counter-capability.md) Only programs holding a capability may read the CPU's time counter
+- [0112](../decisions/0112-time-service.md) Programs read the time from a time service (amended by [0268](../decisions/0268-counter-by-default.md))
+- [0113](../decisions/0113-counter-capability.md) Only programs holding a capability may read the CPU's time counter (amended by [0268](../decisions/0268-counter-by-default.md))
 - [0114](../decisions/0114-scheduler-priority.md) Each core's scheduler thread runs above every priority it schedules
 - [0115](../decisions/0115-root-task-fault-boot-setting.md) A fault in the root task is handled like a kernel panic
 
@@ -66,6 +66,12 @@ And Day 8 ([08-roadmap](08-roadmap.md)) added two more:
 
 - [0246](../decisions/0246-interruption-stretch-limit.md) Work between interruption points is limited in code, and no stretch may take more than 20 µs
 - [0252](../decisions/0252-time-service-starts-early.md) The time service starts early, and serves wall-clock time once the clock driver reports it
+
+After the freeze, the audit of 2026-10-19 ([0256](../decisions/0256-audit-findings-as-evidence.md)) added these:
+
+- [0264](../decisions/0264-performance-targets.md) Checkpoints set performance targets, and a missed target becomes a record
+- [0267](../decisions/0267-supervisor-keeps-connect.md) A restartable service's supervisor keeps its connect endpoint
+- [0268](../decisions/0268-counter-by-default.md) Programs read the CPU's counter by default
 
 ## Open questions
 

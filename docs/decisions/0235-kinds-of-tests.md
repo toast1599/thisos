@@ -1,6 +1,6 @@
 # 0235. Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0263](0263-arm64-host-tests.md) and [0264](0264-performance-targets.md)
 - **Date:** 2026-10-19
 
 ## Context

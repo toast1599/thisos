@@ -1,6 +1,6 @@
 # 0177. std's locks are built on parking, and parking on notifications
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0269](0269-std-mutex-condvar.md)
 - **Date:** 2026-10-17
 
 ## Context
