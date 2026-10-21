@@ -69,7 +69,7 @@ And Day 8 ([08-roadmap](08-roadmap.md)) added two more:
 
 After the freeze, the audit of 2026-10-19 ([0256](../decisions/0256-audit-findings-as-evidence.md)) added these:
 
-- [0264](../decisions/0264-performance-targets.md) Checkpoints set performance targets, and a missed target becomes a record
+- [0264](../decisions/0264-performance-targets.md) Checkpoints set performance targets, and a missed target becomes a record (amended by [0274](../decisions/0274-milestone-definition.md))
 - [0267](../decisions/0267-supervisor-keeps-connect.md) A restartable service's supervisor keeps its connect endpoint
 - [0268](../decisions/0268-counter-by-default.md) Programs read the CPU's counter by default
 

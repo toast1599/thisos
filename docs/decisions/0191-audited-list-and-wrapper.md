@@ -1,6 +1,6 @@
 # 0191. A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0286](0286-unsafe-in-trusted-crates.md)
 - **Date:** 2026-10-18
 
 ## Context

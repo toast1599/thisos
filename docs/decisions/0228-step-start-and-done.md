@@ -1,6 +1,6 @@
 # 0228. A step starts once the steps it needs are done, and is done when it's tested, reviewed and mapped
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0278](0278-design-pass-work-items.md) and [0281](0281-step-statuses.md)
 - **Date:** 2026-10-19
 
 ## Context

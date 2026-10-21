@@ -35,7 +35,7 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0014](0014-microkernel.md) | Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode | Accepted, amended by [0082](0082-corrections.md) and [0169](0169-iommu-service.md) | 2026-10-15 |
 | [0015](0015-clean-apis.md) | APIs and ABIs are designed for this system: inspired by others, never bound to them | Accepted | 2026-10-15 |
 | [0016](0016-threat-model-scope.md) | Threat model: speculative leaks between programs and denial of service are in scope | Accepted, amended by [0202](0202-offline-attackers.md) and [0257](0257-outside-attackers.md) | 2026-10-15 |
-| [0017](0017-unsafe-code-kernel-and-services.md) | Unsafe code: one closed, audited set for the kernel and the OS's own services | Accepted | 2026-10-15 |
+| [0017](0017-unsafe-code-kernel-and-services.md) | Unsafe code: one closed, audited set for the kernel and the OS's own services | Accepted, amended by [0286](0286-unsafe-in-trusted-crates.md) and [0288](0288-rust-project-trusted.md) | 2026-10-15 |
 | [0018](0018-kernel-assurance.md) | Kernel assurance: review, tests and fuzzing from the start; formal proofs later | Accepted | 2026-10-15 |
 | [0019](0019-kernel-minimality.md) | Kernel minimality: anything that can reasonably run in user mode does | Accepted | 2026-10-15 |
 | [0020](0020-capabilities.md) | Authority comes from capabilities | Accepted | 2026-10-15 |
@@ -206,12 +206,12 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0185](0185-swap-partition.md) | Swap goes to a partition, through the block-storage service | Accepted | 2026-10-17 |
 | [0186](0186-non-rust-route.md) | Non-Rust software runs on WebAssembly first, then natively on the native API | Accepted | 2026-10-17 |
 | [0187](0187-pinned-stable-toolchain.md) | The toolchain is a pinned stable Rust release, and std's platform layer is a patch over its library | Accepted | 2026-10-18 |
-| [0188](0188-upgrade-every-second-release.md) | The toolchain is upgraded every second stable release | Accepted | 2026-10-18 |
+| [0188](0188-upgrade-every-second-release.md) | The toolchain is upgraded every second stable release | Accepted, amended by [0288](0288-rust-project-trusted.md) | 2026-10-18 |
 | [0189](0189-kernel-none-targets.md) | The kernel builds for the built-in `-none` targets | Accepted | 2026-10-18 |
 | [0190](0190-cargo-and-build-tool.md) | Cargo builds thisOS, driven by a build tool written in Rust | Accepted | 2026-10-18 |
-| [0191](0191-audited-list-and-wrapper.md) | A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set | Accepted | 2026-10-18 |
+| [0191](0191-audited-list-and-wrapper.md) | A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set | Accepted, amended by [0286](0286-unsafe-in-trusted-crates.md) | 2026-10-18 |
 | [0192](0192-build-scripts-reviewed.md) | Build scripts and procedural macros run only in reviewed crates, and never link native code | Accepted | 2026-10-18 |
-| [0193](0193-vendored-reviewed-crates.md) | Third-party crates in the OS's own code are vendored and reviewed | Accepted, amended by [0243](0243-audit-records-and-crate-reviews.md) | 2026-10-18 |
+| [0193](0193-vendored-reviewed-crates.md) | Third-party crates in the OS's own code are vendored and reviewed | Accepted, amended by [0243](0243-audit-records-and-crate-reviews.md), [0285](0285-trusted-publishers.md) and [0287](0287-trusted-crate-updates.md) | 2026-10-18 |
 | [0194](0194-reproducible-builds.md) | The system image and the boot loader build reproducibly | Accepted | 2026-10-18 |
 | [0195](0195-bindings-safe-output.md) | The build tool generates the bindings, and the generated code contains no unsafe code | Accepted | 2026-10-18 |
 | [0196](0196-released-interface-copies.md) | Released interface versions are kept in the repository, and every change is checked against them | Accepted | 2026-10-18 |
@@ -240,13 +240,13 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0219](0219-wakeup-preemption.md) | A wakeup enters the scheduler only if the woken thread may run before the running one | Accepted | 2026-10-18 |
 | [0220](0220-endpoint-priority-order.md) | Callers waiting on an endpoint are served by priority, then arrival | Accepted | 2026-10-18 |
 | [0221](0221-corrections.md) | Corrections to 0003 and 0153 | Accepted | 2026-10-18 |
-| [0222](0222-roadmap-to-first-release.md) | The roadmap runs from an empty repository to a first release of the whole design | Accepted | 2026-10-19 |
-| [0223](0223-qemu-and-laptop-checkpoints.md) | thisOS is built and tested in QEMU, with a checkpoint on the development laptop at the end of each phase | Accepted | 2026-10-19 |
+| [0222](0222-roadmap-to-first-release.md) | The roadmap runs from an empty repository to a first release of the whole design | Accepted, amended by [0273](0273-whole-design-in-milestones.md) and [0290](0290-scope-moves-by-record.md) | 2026-10-19 |
+| [0223](0223-qemu-and-laptop-checkpoints.md) | thisOS is built and tested in QEMU, with a checkpoint on the development laptop at the end of each phase | Accepted, amended by [0274](0274-milestone-definition.md) | 2026-10-19 |
 | [0224](0224-laptop-usb-storage.md) | On the laptop, thisOS keeps its storage on a USB disk, and never opens the internal disk | Accepted | 2026-10-19 |
 | [0225](0225-framebuffer-log-at-failures.md) | The kernel shows its log on the framebuffer when it fails, and while bring-up images start | Accepted | 2026-10-19 |
-| [0226](0226-open-topics-at-their-step.md) | Topics no record decides are designed at the step that needs them | Accepted | 2026-10-19 |
-| [0227](0227-steps-and-phases.md) | The roadmap has 24 steps in 7 phases, each after the steps it needs | Accepted, amended by [0271](0271-corrections.md) | 2026-10-19 |
-| [0228](0228-step-start-and-done.md) | A step starts once the steps it needs are done, and is done when it's tested, reviewed and mapped | Accepted | 2026-10-19 |
+| [0226](0226-open-topics-at-their-step.md) | Topics no record decides are designed at the step that needs them | Accepted, amended by [0278](0278-design-pass-work-items.md) | 2026-10-19 |
+| [0227](0227-steps-and-phases.md) | The roadmap has 24 steps in 7 phases, each after the steps it needs | Accepted, amended by [0271](0271-corrections.md), [0275](0275-eight-milestones.md) and [0283](0283-boot-loader-check-at-step-2.md) | 2026-10-19 |
+| [0228](0228-step-start-and-done.md) | A step starts once the steps it needs are done, and is done when it's tested, reviewed and mapped | Accepted, amended by [0278](0278-design-pass-work-items.md) and [0281](0281-step-statuses.md) | 2026-10-19 |
 | [0229](0229-std-stages.md) | std comes in four stages, each done when upstream's tests for it pass | Accepted | 2026-10-19 |
 | [0230](0230-interfaces-released-with-sdk.md) | Interfaces that third-party programs reach are released with the SDK | Accepted | 2026-10-19 |
 | [0231](0231-repository-layout.md) | One repository holds thisOS, with a Cargo workspace for each kind of target | Accepted | 2026-10-19 |
@@ -256,28 +256,28 @@ If you'd rather read by topic, the [design documents](../design/) group the reco
 | [0235](0235-kinds-of-tests.md) | Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly | Accepted, amended by [0263](0263-arm64-host-tests.md) and [0264](0264-performance-targets.md) | 2026-10-19 |
 | [0236](0236-program-output-second-serial.md) | Programs write to a second serial port until the log service takes it, and test runs end through the power capability | Accepted | 2026-10-19 |
 | [0237](0237-public-repository-and-ci.md) | thisOS is public on GitHub, where CI runs the build tool's `ci` command for every change | Accepted, amended by [0263](0263-arm64-host-tests.md) | 2026-10-19 |
-| [0238](0238-pushes-and-pull-requests.md) | Maintainers push to main after a local `ci` run, and others send pull requests | Accepted | 2026-10-19 |
+| [0238](0238-pushes-and-pull-requests.md) | Maintainers push to main after a local `ci` run, and others send pull requests | Accepted, amended by [0291](0291-tags-protected.md) | 2026-10-19 |
 | [0239](0239-security-reports.md) | Security problems are reported privately, through GitHub | Accepted | 2026-10-19 |
 | [0240](0240-timing-on-laptop.md) | Benchmarks and time budgets run on the development laptop | Accepted | 2026-10-19 |
 | [0241](0241-reproducibility-checks.md) | The image and the boot loader are built twice in CI, and rebuilt elsewhere before signing | Accepted | 2026-10-19 |
-| [0242](0242-review-tiers.md) | Changes are reviewed in three tiers, by role | Accepted, amended by [0258](0258-outside-input-tier-2.md) | 2026-10-19 |
-| [0243](0243-audit-records-and-crate-reviews.md) | Each audited crate has a record beside the list, and cargo-vet records crate reviews | Accepted | 2026-10-19 |
-| [0244](0244-imported-crate-reviews.md) | Crate reviews may be imported from named organizations, outside the audited set | Accepted | 2026-10-19 |
+| [0242](0242-review-tiers.md) | Changes are reviewed in three tiers, by role | Accepted, amended by [0258](0258-outside-input-tier-2.md), [0280](0280-reviews-in-progress-log.md) and [0289](0289-forked-crates.md) | 2026-10-19 |
+| [0243](0243-audit-records-and-crate-reviews.md) | Each audited crate has a record beside the list, and cargo-vet records crate reviews | Accepted, amended by [0285](0285-trusted-publishers.md) and [0286](0286-unsafe-in-trusted-crates.md) | 2026-10-19 |
+| [0244](0244-imported-crate-reviews.md) | Crate reviews may be imported from named organizations, outside the audited set | Superseded by [0285](0285-trusted-publishers.md) | 2026-10-19 |
 | [0245](0245-coverage-and-fuzzing.md) | Host tests cover every line of the generic kernel, and system calls are fuzzed from step 4 | Accepted, amended by [0259](0259-outside-input-fuzzed.md) | 2026-10-19 |
 | [0246](0246-interruption-stretch-limit.md) | Work between interruption points is limited in code, and no stretch may take more than 20 µs | Accepted | 2026-10-19 |
 | [0247](0247-kernel-size-ratchet.md) | A record rule and a size ratchet keep the kernel small | Accepted | 2026-10-19 |
 | [0248](0248-coding-and-doc-standards.md) | The code follows one set of coding and documentation standards | Accepted | 2026-10-19 |
-| [0249](0249-estimates-and-checkpoints.md) | Steps are estimated by the code they add, and calibrated at each phase's checkpoint | Accepted, amended by [0264](0264-performance-targets.md) | 2026-10-19 |
-| [0250](0250-plan-changes-after-freeze.md) | After the freeze, steps change only through a record that cites what building found | Accepted, amended by [0256](0256-audit-findings-as-evidence.md) | 2026-10-19 |
-| [0251](0251-later-work.md) | Later work stays unscheduled, and the first release states the gaps it leaves | Accepted, amended by [0270](0270-offline-gap-stated.md) | 2026-10-19 |
+| [0249](0249-estimates-and-checkpoints.md) | Steps are estimated by the code they add, and calibrated at each phase's checkpoint | Accepted, amended by [0264](0264-performance-targets.md), [0274](0274-milestone-definition.md) and [0277](0277-sized-work-no-dates.md) | 2026-10-19 |
+| [0250](0250-plan-changes-after-freeze.md) | After the freeze, steps change only through a record that cites what building found | Accepted, amended by [0256](0256-audit-findings-as-evidence.md), [0272](0272-roadmap-reopened.md) and [0292](0292-roadmap-refreezes.md) | 2026-10-19 |
+| [0251](0251-later-work.md) | Later work stays unscheduled, and the first release states the gaps it leaves | Accepted, amended by [0270](0270-offline-gap-stated.md) and [0290](0290-scope-moves-by-record.md) | 2026-10-19 |
 | [0252](0252-time-service-starts-early.md) | The time service starts early, and serves wall-clock time once the clock driver reports it | Accepted | 2026-10-19 |
 | [0253](0253-ramdisk-log-and-clocks.md) | The ramdisk also holds the log service and the clock drivers | Accepted | 2026-10-19 |
 | [0254](0254-corrections.md) | Corrections to 0045 | Accepted | 2026-10-19 |
-| [0255](0255-freeze.md) | The design and the roadmap freeze with Day 8's commit, on 2026-10-19 | Accepted | 2026-10-19 |
+| [0255](0255-freeze.md) | The design and the roadmap freeze with Day 8's commit, on 2026-10-19 | Accepted, amended by [0272](0272-roadmap-reopened.md) and [0292](0292-roadmap-refreezes.md) | 2026-10-19 |
 
 ## Records written after the freeze
 
-These follow the audit of 2026-10-19, whose checked findings count as evidence under [0201](0201-changes-after-freeze.md) ([0256](0256-audit-findings-as-evidence.md)).
+Records 0256 to 0271 follow the audit of 2026-10-19, whose checked findings count as evidence under [0201](0201-changes-after-freeze.md) ([0256](0256-audit-findings-as-evidence.md)). Records 0272 to 0292 redesign the roadmap, which reopened on what step 1 found ([0272](0272-roadmap-reopened.md)), and froze again with the tag roadmap-2 ([0292](0292-roadmap-refreezes.md)).
 
 | # | Decision | Status | Date |
 |---|---|---|---|
@@ -289,7 +289,7 @@ These follow the audit of 2026-10-19, whose checked findings count as evidence u
 | [0261](0261-bus-mastering-off-at-boot.md) | The boot loader turns off bus mastering before it starts the kernel | Accepted | 2026-10-19 |
 | [0262](0262-interrupt-source-check.md) | Interrupt entries check their source, and the configuration ports are never granted | Accepted | 2026-10-19 |
 | [0263](0263-arm64-host-tests.md) | Host tests also run on arm64, and lock-free code is model-checked | Accepted | 2026-10-19 |
-| [0264](0264-performance-targets.md) | Checkpoints set performance targets, and a missed target becomes a record | Accepted | 2026-10-19 |
+| [0264](0264-performance-targets.md) | Checkpoints set performance targets, and a missed target becomes a record | Accepted, amended by [0274](0274-milestone-definition.md) | 2026-10-19 |
 | [0265](0265-lent-memory-library.md) | Memory lent by clients goes through one library, measured at checkpoint 4 | Accepted | 2026-10-19 |
 | [0266](0266-connect-endpoints.md) | Services spread their callers through a connect endpoint | Accepted | 2026-10-19 |
 | [0267](0267-supervisor-keeps-connect.md) | A restartable service's supervisor keeps its connect endpoint | Accepted | 2026-10-19 |
@@ -297,3 +297,24 @@ These follow the audit of 2026-10-19, whose checked findings count as evidence u
 | [0269](0269-std-mutex-condvar.md) | std's `Mutex` and `Condvar` are built on parking | Accepted | 2026-10-19 |
 | [0270](0270-offline-gap-stated.md) | The first release states the offline gap in full, and the machine-bound key needs measured boot or the owner's secret | Accepted | 2026-10-19 |
 | [0271](0271-corrections.md) | Corrections to 0009, 0045, 0206 and 0227 | Accepted | 2026-10-19 |
+| [0272](0272-roadmap-reopened.md) | The roadmap reopens on what step 1 found, and the rest of the design stays frozen | Accepted | 2026-10-20 |
+| [0273](0273-whole-design-in-milestones.md) | The roadmap reaches the whole design through milestones | Accepted | 2026-10-20 |
+| [0274](0274-milestone-definition.md) | A milestone is a working image that's reviewed, passes a security pass and is tagged | Accepted | 2026-10-20 |
+| [0275](0275-eight-milestones.md) | Eight milestones follow the seven phases | Accepted | 2026-10-20 |
+| [0276](0276-milestone-security-pass.md) | Each milestone passes a written security pass before it's tagged | Accepted | 2026-10-20 |
+| [0277](0277-sized-work-no-dates.md) | The roadmap sizes the work and promises no dates | Accepted | 2026-10-20 |
+| [0278](0278-design-pass-work-items.md) | Each step opens with a design pass, and its code lands as small work items | Accepted | 2026-10-20 |
+| [0279](0279-progress-log.md) | Progress lives in a dated log, in docs/progress.md | Accepted | 2026-10-20 |
+| [0280](0280-reviews-in-progress-log.md) | Reviews are recorded in the progress log | Accepted | 2026-10-20 |
+| [0281](0281-step-statuses.md) | A step's status is Not started, In progress or Done | Accepted | 2026-10-20 |
+| [0282](0282-spikes-and-risks.md) | The first milestone opens with two spikes, and 08-roadmap keeps a risk register | Accepted | 2026-10-20 |
+| [0283](0283-boot-loader-check-at-step-2.md) | The boot loader checks the image's signature from step 2 | Accepted | 2026-10-20 |
+| [0284](0284-development-images.md) | Milestone images run only on test machines, and say they're development images | Accepted | 2026-10-20 |
+| [0285](0285-trusted-publishers.md) | Third-party crates come from trusted publishers, and their code isn't reviewed | Accepted | 2026-10-20 |
+| [0286](0286-unsafe-in-trusted-crates.md) | A trusted crate may contain unsafe code, which is recorded but not audited | Accepted | 2026-10-20 |
+| [0287](0287-trusted-crate-updates.md) | Trusted crates stay pinned, and move when an advisory or a fix calls for it | Accepted | 2026-10-20 |
+| [0288](0288-rust-project-trusted.md) | The Rust project's releases are trusted, and an upgrade isn't an audit | Accepted | 2026-10-20 |
+| [0289](0289-forked-crates.md) | A forked crate's upstream is trusted, and our changes to it are audited | Accepted | 2026-10-20 |
+| [0290](0290-scope-moves-by-record.md) | If the measured pace shows the plan far off, scope moves to later work by record | Accepted | 2026-10-20 |
+| [0291](0291-tags-protected.md) | The tag ruleset protects the freeze, roadmap-2 and the milestone tags | Accepted | 2026-10-20 |
+| [0292](0292-roadmap-refreezes.md) | The redesigned roadmap freezes with the tag roadmap-2 | Accepted | 2026-10-20 |

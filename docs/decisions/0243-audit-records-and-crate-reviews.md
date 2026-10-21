@@ -1,6 +1,6 @@
 # 0243. Each audited crate has a record beside the list, and cargo-vet records crate reviews
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0285](0285-trusted-publishers.md) and [0286](0286-unsafe-in-trusted-crates.md)
 - **Date:** 2026-10-19
 
 ## Context

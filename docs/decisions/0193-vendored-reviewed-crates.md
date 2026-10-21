@@ -1,6 +1,6 @@
 # 0193. Third-party crates in the OS's own code are vendored and reviewed
 
-- **Status:** Accepted, amended by [0243](0243-audit-records-and-crate-reviews.md)
+- **Status:** Accepted, amended by [0243](0243-audit-records-and-crate-reviews.md), [0285](0285-trusted-publishers.md) and [0287](0287-trusted-crate-updates.md)
 - **Date:** 2026-10-18
 
 ## Context

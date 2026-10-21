@@ -1,6 +1,6 @@
 # 0226. Topics no record decides are designed at the step that needs them
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0278](0278-design-pass-work-items.md)
 - **Date:** 2026-10-19
 
 ## Context

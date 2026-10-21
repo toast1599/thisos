@@ -1,6 +1,6 @@
 # 0017. Unsafe code: one closed, audited set for the kernel and the OS's own services
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0286](0286-unsafe-in-trusted-crates.md) and [0288](0288-rust-project-trusted.md)
 - **Date:** 2026-10-15
 
 ## Context

@@ -1,6 +1,6 @@
 # 0251. Later work stays unscheduled, and the first release states the gaps it leaves
 
-- **Status:** Accepted, amended by [0270](0270-offline-gap-stated.md)
+- **Status:** Accepted, amended by [0270](0270-offline-gap-stated.md) and [0290](0290-scope-moves-by-record.md)
 - **Date:** 2026-10-19
 
 ## Context

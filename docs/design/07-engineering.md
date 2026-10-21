@@ -17,15 +17,15 @@ The toolchain, the build system, the license, and the final review of the design
 Starting with the toolchain:
 
 - [0187](../decisions/0187-pinned-stable-toolchain.md) The toolchain is a pinned stable Rust release, and std's platform layer is a patch over its library
-- [0188](../decisions/0188-upgrade-every-second-release.md) The toolchain is upgraded every second stable release
+- [0188](../decisions/0188-upgrade-every-second-release.md) The toolchain is upgraded every second stable release (amended by [0288](../decisions/0288-rust-project-trusted.md))
 - [0189](../decisions/0189-kernel-none-targets.md) The kernel builds for the built-in `-none` targets
 
 The build:
 
 - [0190](../decisions/0190-cargo-and-build-tool.md) Cargo builds thisOS, driven by a build tool written in Rust
-- [0191](../decisions/0191-audited-list-and-wrapper.md) A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set
+- [0191](../decisions/0191-audited-list-and-wrapper.md) A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set (amended by [0286](../decisions/0286-unsafe-in-trusted-crates.md))
 - [0192](../decisions/0192-build-scripts-reviewed.md) Build scripts and procedural macros run only in reviewed crates, and never link native code
-- [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed (amended by [0243](../decisions/0243-audit-records-and-crate-reviews.md))
+- [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed (amended by [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0285](../decisions/0285-trusted-publishers.md) and [0287](../decisions/0287-trusted-crate-updates.md))
 - [0194](../decisions/0194-reproducible-builds.md) The system image and the boot loader build reproducibly
 - [0195](../decisions/0195-bindings-safe-output.md) The build tool generates the bindings, and the generated code contains no unsafe code
 - [0196](../decisions/0196-released-interface-copies.md) Released interface versions are kept in the repository, and every change is checked against them
@@ -41,6 +41,14 @@ The license, and how changes are made after the freeze:
 After the freeze, the audit of 2026-10-19 brought checked findings in as evidence:
 
 - [0256](../decisions/0256-audit-findings-as-evidence.md) Checked findings of the audit after the freeze count as evidence under 0201
+
+The roadmap's redesign of 2026-10-20 ([08-roadmap](08-roadmap.md)) changed how third-party crates and the toolchain are trusted:
+
+- [0285](../decisions/0285-trusted-publishers.md) Third-party crates come from trusted publishers, and their code isn't reviewed
+- [0286](../decisions/0286-unsafe-in-trusted-crates.md) A trusted crate may contain unsafe code, which is recorded but not audited
+- [0287](../decisions/0287-trusted-crate-updates.md) Trusted crates stay pinned, and move when an advisory or a fix calls for it
+- [0288](../decisions/0288-rust-project-trusted.md) The Rust project's releases are trusted, and an upgrade isn't an audit
+- [0289](../decisions/0289-forked-crates.md) A forked crate's upstream is trusted, and our changes to it are audited
 
 ## The final review
 

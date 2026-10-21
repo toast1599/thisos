@@ -1,6 +1,6 @@
 # 0223. thisOS is built and tested in QEMU, with a checkpoint on the development laptop at the end of each phase
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0274](0274-milestone-definition.md)
 - **Date:** 2026-10-19
 
 ## Context

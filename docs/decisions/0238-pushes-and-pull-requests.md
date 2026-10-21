@@ -1,6 +1,6 @@
 # 0238. Maintainers push to main after a local `ci` run, and others send pull requests
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0291](0291-tags-protected.md)
 - **Date:** 2026-10-19
 
 ## Context

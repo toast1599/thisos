@@ -13,7 +13,7 @@ This is about what the system has to trust, and how programs get built and check
 - [0012](../decisions/0012-no-memory-cap.md) No fixed limit on program memory
 - [0013](../decisions/0013-isolation-domains.md) Isolation domains: one shared system domain, one checked address space per program (superseded by [0014](../decisions/0014-microkernel.md), never accepted)
 - [0014](../decisions/0014-microkernel.md) Microkernel: a minimal, audited kernel in kernel mode; everything else in user mode (amended by [0082](../decisions/0082-corrections.md) and [0169](../decisions/0169-iommu-service.md))
-- [0017](../decisions/0017-unsafe-code-kernel-and-services.md) Unsafe code: one closed, audited set for the kernel and the OS's own services
+- [0017](../decisions/0017-unsafe-code-kernel-and-services.md) Unsafe code: one closed, audited set for the kernel and the OS's own services (amended by [0286](../decisions/0286-unsafe-in-trusted-crates.md) and [0288](../decisions/0288-rust-project-trusted.md))
 - [0037](../decisions/0037-kernel-toolchain.md) The kernel is built with one pinned, audited toolchain
 - [0038](../decisions/0038-elf-container.md) Programs ship as ELF, used only as a file container
 - [0039](../decisions/0039-native-per-arch.md) Programs ship as native code, built separately for each architecture
@@ -26,10 +26,10 @@ This is about what the system has to trust, and how programs get built and check
 On the toolchain and the build, from [07-engineering](07-engineering.md):
 
 - [0187](../decisions/0187-pinned-stable-toolchain.md) The toolchain is a pinned stable Rust release, and std's platform layer is a patch over its library
-- [0188](../decisions/0188-upgrade-every-second-release.md) The toolchain is upgraded every second stable release
-- [0191](../decisions/0191-audited-list-and-wrapper.md) A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set
+- [0188](../decisions/0188-upgrade-every-second-release.md) The toolchain is upgraded every second stable release (amended by [0288](../decisions/0288-rust-project-trusted.md))
+- [0191](../decisions/0191-audited-list-and-wrapper.md) A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set (amended by [0286](../decisions/0286-unsafe-in-trusted-crates.md))
 - [0192](../decisions/0192-build-scripts-reviewed.md) Build scripts and procedural macros run only in reviewed crates, and never link native code
-- [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed (amended by [0243](../decisions/0243-audit-records-and-crate-reviews.md))
+- [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed (amended by [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0285](../decisions/0285-trusted-publishers.md) and [0287](../decisions/0287-trusted-crate-updates.md))
 - [0194](../decisions/0194-reproducible-builds.md) The system image and the boot loader build reproducibly
 
 Signing and packages were settled in the final review:
@@ -50,9 +50,9 @@ Day 8 ([08-roadmap](08-roadmap.md)) brought the records on reviews, audits and t
 
 - [0235](../decisions/0235-kinds-of-tests.md) Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly (amended by [0263](../decisions/0263-arm64-host-tests.md) and [0264](../decisions/0264-performance-targets.md))
 - [0241](../decisions/0241-reproducibility-checks.md) The image and the boot loader are built twice in CI, and rebuilt elsewhere before signing
-- [0242](../decisions/0242-review-tiers.md) Changes are reviewed in three tiers, by role (amended by [0258](../decisions/0258-outside-input-tier-2.md))
-- [0243](../decisions/0243-audit-records-and-crate-reviews.md) Each audited crate has a record beside the list, and cargo-vet records crate reviews
-- [0244](../decisions/0244-imported-crate-reviews.md) Crate reviews may be imported from named organizations, outside the audited set
+- [0242](../decisions/0242-review-tiers.md) Changes are reviewed in three tiers, by role (amended by [0258](../decisions/0258-outside-input-tier-2.md), [0280](../decisions/0280-reviews-in-progress-log.md) and [0289](../decisions/0289-forked-crates.md))
+- [0243](../decisions/0243-audit-records-and-crate-reviews.md) Each audited crate has a record beside the list, and cargo-vet records crate reviews (amended by [0285](../decisions/0285-trusted-publishers.md) and [0286](../decisions/0286-unsafe-in-trusted-crates.md))
+- [0244](../decisions/0244-imported-crate-reviews.md) Crate reviews may be imported from named organizations, outside the audited set (superseded by [0285](../decisions/0285-trusted-publishers.md))
 
 After the freeze, the audit of 2026-10-19 ([0256](../decisions/0256-audit-findings-as-evidence.md)) changed review, tests and the offline gap:
 
@@ -61,6 +61,16 @@ After the freeze, the audit of 2026-10-19 ([0256](../decisions/0256-audit-findin
 - [0263](../decisions/0263-arm64-host-tests.md) Host tests also run on arm64, and lock-free code is model-checked
 - [0270](../decisions/0270-offline-gap-stated.md) The first release states the offline gap in full, and the machine-bound key needs measured boot or the owner's secret
 - [0271](../decisions/0271-corrections.md) Corrections to 0009, 0045, 0206 and 0227
+
+The roadmap's redesign of 2026-10-20 ([08-roadmap](08-roadmap.md)) checks the threat model at each milestone, and changed how third-party code in the trusted base is trusted:
+
+- [0276](../decisions/0276-milestone-security-pass.md) Each milestone passes a written security pass before it's tagged
+- [0284](../decisions/0284-development-images.md) Milestone images run only on test machines, and say they're development images
+- [0285](../decisions/0285-trusted-publishers.md) Third-party crates come from trusted publishers, and their code isn't reviewed
+- [0286](../decisions/0286-unsafe-in-trusted-crates.md) A trusted crate may contain unsafe code, which is recorded but not audited
+- [0287](../decisions/0287-trusted-crate-updates.md) Trusted crates stay pinned, and move when an advisory or a fix calls for it
+- [0288](../decisions/0288-rust-project-trusted.md) The Rust project's releases are trusted, and an upgrade isn't an audit
+- [0289](../decisions/0289-forked-crates.md) A forked crate's upstream is trusted, and our changes to it are audited
 
 ## Key finding: the Rust compiler is not itself a soundness proof
 

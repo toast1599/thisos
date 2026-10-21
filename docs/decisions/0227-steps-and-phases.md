@@ -1,6 +1,6 @@
 # 0227. The roadmap has 24 steps in 7 phases, each after the steps it needs
 
-- **Status:** Accepted, amended by [0271](0271-corrections.md)
+- **Status:** Accepted, amended by [0271](0271-corrections.md), [0275](0275-eight-milestones.md) and [0283](0283-boot-loader-check-at-step-2.md)
 - **Date:** 2026-10-19
 
 ## Context

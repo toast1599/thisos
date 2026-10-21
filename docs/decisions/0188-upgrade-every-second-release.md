@@ -1,6 +1,6 @@
 # 0188. The toolchain is upgraded every second stable release
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0288](0288-rust-project-trusted.md)
 - **Date:** 2026-10-18
 
 ## Context

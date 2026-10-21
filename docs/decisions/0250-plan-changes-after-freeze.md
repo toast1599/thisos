@@ -1,6 +1,6 @@
 # 0250. After the freeze, steps change only through a record that cites what building found
 
-- **Status:** Accepted, amended by [0256](0256-audit-findings-as-evidence.md)
+- **Status:** Accepted, amended by [0256](0256-audit-findings-as-evidence.md), [0272](0272-roadmap-reopened.md) and [0292](0292-roadmap-refreezes.md)
 - **Date:** 2026-10-19
 
 ## Context

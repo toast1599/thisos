@@ -1,6 +1,6 @@
 # 0222. The roadmap runs from an empty repository to a first release of the whole design
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0273](0273-whole-design-in-milestones.md) and [0290](0290-scope-moves-by-record.md)
 - **Date:** 2026-10-19
 
 ## Context

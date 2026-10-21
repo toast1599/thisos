@@ -1,6 +1,6 @@
 # 0244. Crate reviews may be imported from named organizations, outside the audited set
 
-- **Status:** Accepted
+- **Status:** Superseded by [0285](0285-trusted-publishers.md)
 - **Date:** 2026-10-19
 
 ## Context

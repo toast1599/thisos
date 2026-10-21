@@ -1,11 +1,11 @@
 # 08. Implementation roadmap, engineering practices and freeze
 
-- **Day:** 8 (Mon 2026-10-19)
-- **Status:** Frozen
+- **Day:** 8 (Mon 2026-10-19), redesigned on Day 9 (Tue 2026-10-20)
+- **Status:** Frozen, as roadmap-2
 
 ## Covers
 
-This is the exact plan for building thisOS. It sets the order in which every part of the design gets implemented, what each step delivers, how each step is tested, and when a step counts as done. It also settles the engineering practices that the whole build follows, from modularity and the repository layout to testing and CI, review, and the coding and documentation standards. This plan replaces the rough roadmap in the [README](../../README.md). The design and the roadmap froze together, with Day 8's commit ([0255](../decisions/0255-freeze.md)).
+This is the exact plan for building thisOS. It sets the order in which every part of the design gets implemented, what each step delivers, how each step is tested, and when a step counts as done. It also settles the engineering practices that the whole build follows, from modularity and the repository layout to testing and CI, review, and the coding and documentation standards. This plan replaces the rough roadmap in the [README](../../README.md). The design and the roadmap froze together, with Day 8's commit ([0255](../decisions/0255-freeze.md)). On 2026-10-20 the roadmap reopened on what step 1 found, while the rest of the design stayed frozen. It was redesigned with milestones, designed steps and small work items, a progress log, a risk register, and trusted crates, and froze again with the tag roadmap-2 ([0272](../decisions/0272-roadmap-reopened.md), [0292](../decisions/0292-roadmap-refreezes.md)).
 
 ## Decided
 
@@ -26,9 +26,9 @@ Some decisions from earlier days already fix part of the order or the practices:
 
 Day 7 ([07-engineering](07-engineering.md)) added these:
 
-- [0188](../decisions/0188-upgrade-every-second-release.md) The toolchain is upgraded every second stable release
-- [0191](../decisions/0191-audited-list-and-wrapper.md) A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set
-- [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed (amended by [0243](../decisions/0243-audit-records-and-crate-reviews.md))
+- [0188](../decisions/0188-upgrade-every-second-release.md) The toolchain is upgraded every second stable release (amended by [0288](../decisions/0288-rust-project-trusted.md))
+- [0191](../decisions/0191-audited-list-and-wrapper.md) A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set (amended by [0286](../decisions/0286-unsafe-in-trusted-crates.md))
+- [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed (amended by [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0285](../decisions/0285-trusted-publishers.md) and [0287](../decisions/0287-trusted-crate-updates.md))
 - [0194](../decisions/0194-reproducible-builds.md) The system image and the boot loader build reproducibly
 - [0197](../decisions/0197-architecture-check.md) Crates are marked by architecture, and the build rejects architecture-specific code in generic crates (amended by [0232](../decisions/0232-traits-and-specific-crates.md))
 - [0201](../decisions/0201-changes-after-freeze.md) After the freeze, a decision changes only through a new record that cites what building found (amended by [0256](../decisions/0256-audit-findings-as-evidence.md))
@@ -37,16 +37,16 @@ Day 7 ([07-engineering](07-engineering.md)) added these:
 
 Day 8 settled the scope, the machines and how open topics are handled:
 
-- [0222](../decisions/0222-roadmap-to-first-release.md) The roadmap runs from an empty repository to a first release of the whole design
-- [0223](../decisions/0223-qemu-and-laptop-checkpoints.md) thisOS is built and tested in QEMU, with a checkpoint on the development laptop at the end of each phase
+- [0222](../decisions/0222-roadmap-to-first-release.md) The roadmap runs from an empty repository to a first release of the whole design (amended by [0273](../decisions/0273-whole-design-in-milestones.md) and [0290](../decisions/0290-scope-moves-by-record.md))
+- [0223](../decisions/0223-qemu-and-laptop-checkpoints.md) thisOS is built and tested in QEMU, with a checkpoint on the development laptop at the end of each phase (amended by [0274](../decisions/0274-milestone-definition.md))
 - [0224](../decisions/0224-laptop-usb-storage.md) On the laptop, thisOS keeps its storage on a USB disk, and never opens the internal disk
 - [0225](../decisions/0225-framebuffer-log-at-failures.md) The kernel shows its log on the framebuffer when it fails, and while bring-up images start
-- [0226](../decisions/0226-open-topics-at-their-step.md) Topics no record decides are designed at the step that needs them
+- [0226](../decisions/0226-open-topics-at-their-step.md) Topics no record decides are designed at the step that needs them (amended by [0278](../decisions/0278-design-pass-work-items.md))
 
 Then the steps themselves:
 
-- [0227](../decisions/0227-steps-and-phases.md) The roadmap has 24 steps in 7 phases, each after the steps it needs (amended by [0271](../decisions/0271-corrections.md))
-- [0228](../decisions/0228-step-start-and-done.md) A step starts once the steps it needs are done, and is done when it's tested, reviewed and mapped
+- [0227](../decisions/0227-steps-and-phases.md) The roadmap has 24 steps in 7 phases, each after the steps it needs (amended by [0271](../decisions/0271-corrections.md), [0275](../decisions/0275-eight-milestones.md) and [0283](../decisions/0283-boot-loader-check-at-step-2.md))
+- [0228](../decisions/0228-step-start-and-done.md) A step starts once the steps it needs are done, and is done when it's tested, reviewed and mapped (amended by [0278](../decisions/0278-design-pass-work-items.md) and [0281](../decisions/0281-step-statuses.md))
 - [0229](../decisions/0229-std-stages.md) std comes in four stages, each done when upstream's tests for it pass
 - [0230](../decisions/0230-interfaces-released-with-sdk.md) Interfaces that third-party programs reach are released with the SDK
 
@@ -62,16 +62,16 @@ For testing and CI:
 - [0235](../decisions/0235-kinds-of-tests.md) Every change runs host, QEMU, check and attack tests, and Miri runs on a test-only nightly (amended by [0263](../decisions/0263-arm64-host-tests.md) and [0264](../decisions/0264-performance-targets.md))
 - [0236](../decisions/0236-program-output-second-serial.md) Programs write to a second serial port until the log service takes it, and test runs end through the power capability
 - [0237](../decisions/0237-public-repository-and-ci.md) thisOS is public on GitHub, where CI runs the build tool's `ci` command for every change (amended by [0263](../decisions/0263-arm64-host-tests.md))
-- [0238](../decisions/0238-pushes-and-pull-requests.md) Maintainers push to main after a local `ci` run, and others send pull requests
+- [0238](../decisions/0238-pushes-and-pull-requests.md) Maintainers push to main after a local `ci` run, and others send pull requests (amended by [0291](../decisions/0291-tags-protected.md))
 - [0239](../decisions/0239-security-reports.md) Security problems are reported privately, through GitHub
 - [0240](../decisions/0240-timing-on-laptop.md) Benchmarks and time budgets run on the development laptop
 - [0241](../decisions/0241-reproducibility-checks.md) The image and the boot loader are built twice in CI, and rebuilt elsewhere before signing
 
 Review and kernel assurance:
 
-- [0242](../decisions/0242-review-tiers.md) Changes are reviewed in three tiers, by role (amended by [0258](../decisions/0258-outside-input-tier-2.md))
-- [0243](../decisions/0243-audit-records-and-crate-reviews.md) Each audited crate has a record beside the list, and cargo-vet records crate reviews
-- [0244](../decisions/0244-imported-crate-reviews.md) Crate reviews may be imported from named organizations, outside the audited set
+- [0242](../decisions/0242-review-tiers.md) Changes are reviewed in three tiers, by role (amended by [0258](../decisions/0258-outside-input-tier-2.md), [0280](../decisions/0280-reviews-in-progress-log.md) and [0289](../decisions/0289-forked-crates.md))
+- [0243](../decisions/0243-audit-records-and-crate-reviews.md) Each audited crate has a record beside the list, and cargo-vet records crate reviews (amended by [0285](../decisions/0285-trusted-publishers.md) and [0286](../decisions/0286-unsafe-in-trusted-crates.md))
+- [0244](../decisions/0244-imported-crate-reviews.md) Crate reviews may be imported from named organizations, outside the audited set (superseded by [0285](../decisions/0285-trusted-publishers.md))
 - [0245](../decisions/0245-coverage-and-fuzzing.md) Host tests cover every line of the generic kernel, and system calls are fuzzed from step 4 (amended by [0259](../decisions/0259-outside-input-fuzzed.md))
 - [0246](../decisions/0246-interruption-stretch-limit.md) Work between interruption points is limited in code, and no stretch may take more than 20 µs
 - [0247](../decisions/0247-kernel-size-ratchet.md) A record rule and a size ratchet keep the kernel small
@@ -79,9 +79,9 @@ Review and kernel assurance:
 The standards, the estimates, changes to the plan and later work:
 
 - [0248](../decisions/0248-coding-and-doc-standards.md) The code follows one set of coding and documentation standards
-- [0249](../decisions/0249-estimates-and-checkpoints.md) Steps are estimated by the code they add, and calibrated at each phase's checkpoint (amended by [0264](../decisions/0264-performance-targets.md))
-- [0250](../decisions/0250-plan-changes-after-freeze.md) After the freeze, steps change only through a record that cites what building found (amended by [0256](../decisions/0256-audit-findings-as-evidence.md))
-- [0251](../decisions/0251-later-work.md) Later work stays unscheduled, and the first release states the gaps it leaves (amended by [0270](../decisions/0270-offline-gap-stated.md))
+- [0249](../decisions/0249-estimates-and-checkpoints.md) Steps are estimated by the code they add, and calibrated at each phase's checkpoint (amended by [0264](../decisions/0264-performance-targets.md), [0274](../decisions/0274-milestone-definition.md) and [0277](../decisions/0277-sized-work-no-dates.md))
+- [0250](../decisions/0250-plan-changes-after-freeze.md) After the freeze, steps change only through a record that cites what building found (amended by [0256](../decisions/0256-audit-findings-as-evidence.md), [0272](../decisions/0272-roadmap-reopened.md) and [0292](../decisions/0292-roadmap-refreezes.md))
+- [0251](../decisions/0251-later-work.md) Later work stays unscheduled, and the first release states the gaps it leaves (amended by [0270](../decisions/0270-offline-gap-stated.md) and [0290](../decisions/0290-scope-moves-by-record.md))
 
 Placing the steps turned up gaps, and a slip in an earlier record:
 
@@ -91,7 +91,7 @@ Placing the steps turned up gaps, and a slip in an earlier record:
 
 And the freeze itself:
 
-- [0255](../decisions/0255-freeze.md) The design and the roadmap freeze with Day 8's commit, on 2026-10-19
+- [0255](../decisions/0255-freeze.md) The design and the roadmap freeze with Day 8's commit, on 2026-10-19 (amended by [0272](../decisions/0272-roadmap-reopened.md) and [0292](../decisions/0292-roadmap-refreezes.md))
 
 After the freeze, the audit of 2026-10-19 brought these records. Its checked findings count as evidence under [0201](../decisions/0201-changes-after-freeze.md):
 
@@ -103,7 +103,7 @@ After the freeze, the audit of 2026-10-19 brought these records. Its checked fin
 - [0261](../decisions/0261-bus-mastering-off-at-boot.md) The boot loader turns off bus mastering before it starts the kernel
 - [0262](../decisions/0262-interrupt-source-check.md) Interrupt entries check their source, and the configuration ports are never granted
 - [0263](../decisions/0263-arm64-host-tests.md) Host tests also run on arm64, and lock-free code is model-checked
-- [0264](../decisions/0264-performance-targets.md) Checkpoints set performance targets, and a missed target becomes a record
+- [0264](../decisions/0264-performance-targets.md) Checkpoints set performance targets, and a missed target becomes a record (amended by [0274](../decisions/0274-milestone-definition.md))
 - [0265](../decisions/0265-lent-memory-library.md) Memory lent by clients goes through one library, measured at checkpoint 4
 - [0266](../decisions/0266-connect-endpoints.md) Services spread their callers through a connect endpoint
 - [0267](../decisions/0267-supervisor-keeps-connect.md) A restartable service's supervisor keeps its connect endpoint
@@ -112,11 +112,44 @@ After the freeze, the audit of 2026-10-19 brought these records. Its checked fin
 - [0270](../decisions/0270-offline-gap-stated.md) The first release states the offline gap in full, and the machine-bound key needs measured boot or the owner's secret
 - [0271](../decisions/0271-corrections.md) Corrections to 0009, 0045, 0206 and 0227
 
+On 2026-10-20 the roadmap reopened on what step 1 found:
+
+- [0272](../decisions/0272-roadmap-reopened.md) The roadmap reopens on what step 1 found, and the rest of the design stays frozen
+
+Its redesign settled the milestones, the steps' design passes and work items, progress, risks and the boot loader's check:
+
+- [0273](../decisions/0273-whole-design-in-milestones.md) The roadmap reaches the whole design through milestones
+- [0274](../decisions/0274-milestone-definition.md) A milestone is a working image that's reviewed, passes a security pass and is tagged
+- [0275](../decisions/0275-eight-milestones.md) Eight milestones follow the seven phases
+- [0276](../decisions/0276-milestone-security-pass.md) Each milestone passes a written security pass before it's tagged
+- [0277](../decisions/0277-sized-work-no-dates.md) The roadmap sizes the work and promises no dates
+- [0278](../decisions/0278-design-pass-work-items.md) Each step opens with a design pass, and its code lands as small work items
+- [0279](../decisions/0279-progress-log.md) Progress lives in a dated log, in docs/progress.md
+- [0280](../decisions/0280-reviews-in-progress-log.md) Reviews are recorded in the progress log
+- [0281](../decisions/0281-step-statuses.md) A step's status is Not started, In progress or Done
+- [0282](../decisions/0282-spikes-and-risks.md) The first milestone opens with two spikes, and 08-roadmap keeps a risk register
+- [0283](../decisions/0283-boot-loader-check-at-step-2.md) The boot loader checks the image's signature from step 2
+- [0284](../decisions/0284-development-images.md) Milestone images run only on test machines, and say they're development images
+
+It settled how third-party code and the toolchain are trusted, which amends the supply-chain records under 0201:
+
+- [0285](../decisions/0285-trusted-publishers.md) Third-party crates come from trusted publishers, and their code isn't reviewed
+- [0286](../decisions/0286-unsafe-in-trusted-crates.md) A trusted crate may contain unsafe code, which is recorded but not audited
+- [0287](../decisions/0287-trusted-crate-updates.md) Trusted crates stay pinned, and move when an advisory or a fix calls for it
+- [0288](../decisions/0288-rust-project-trusted.md) The Rust project's releases are trusted, and an upgrade isn't an audit
+- [0289](../decisions/0289-forked-crates.md) A forked crate's upstream is trusted, and our changes to it are audited
+
+And how the plan bends, how its tags are kept, and how it froze again:
+
+- [0290](../decisions/0290-scope-moves-by-record.md) If the measured pace shows the plan far off, scope moves to later work by record
+- [0291](../decisions/0291-tags-protected.md) The tag ruleset protects the freeze, roadmap-2 and the milestone tags
+- [0292](../decisions/0292-roadmap-refreezes.md) The redesigned roadmap freezes with the tag roadmap-2
+
 ## The roadmap
 
-The roadmap starts from an empty repository and ends at a first release of the whole design ([0222](../decisions/0222-roadmap-to-first-release.md)). Everything that isn't on the list of later work gets built, and tested on both architectures. What the first release publishes is a signed system image and boot loader, the SDK, and version 1 of the interfaces that third-party programs reach ([0230](../decisions/0230-interfaces-released-with-sdk.md)).
+The roadmap starts from an empty repository and ends at a first release of the whole design ([0222](../decisions/0222-roadmap-to-first-release.md)). Everything that isn't on the list of later work gets built, and tested on both architectures. What the first release publishes is a signed system image and boot loader, the SDK, and version 1 of the interfaces that third-party programs reach ([0230](../decisions/0230-interfaces-released-with-sdk.md)). On the way, it reaches eight milestones, each a working system that's reviewed, passes a security pass and is tagged ([0273](../decisions/0273-whole-design-in-milestones.md), [0274](../decisions/0274-milestone-definition.md), [0275](../decisions/0275-eight-milestones.md)). Milestone images run only on test machines, and say they're development images; the first release is the first image meant for use ([0284](../decisions/0284-development-images.md)).
 
-We build and test every step in QEMU. x86_64 runs on q35 with OVMF under KVM, AArch64 runs on virt with AAVMF under emulation, and each runs both with and without an IOMMU ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md)). The development laptop comes in at the end of each phase: it boots that phase's image from a USB stick and runs it as far as its devices allow.
+We build and test every step in QEMU. x86_64 runs on q35 with OVMF under KVM, AArch64 runs on virt with AAVMF under emulation, and each runs both with and without an IOMMU ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md)). The development laptop comes in at each milestone: it boots that milestone's image from a USB stick and runs it as far as its devices allow ([0274](../decisions/0274-milestone-definition.md)).
 
 The work splits into 24 steps, in 7 phases ([0227](../decisions/0227-steps-and-phases.md)). A step starts once the steps it needs are done ([0228](../decisions/0228-step-start-and-done.md)), and it counts as done when all of this holds:
 
@@ -125,6 +158,8 @@ The work splits into 24 steps, in 7 phases ([0227](../decisions/0227-steps-and-p
 - its review is finished ([0242](../decisions/0242-review-tiers.md));
 - every decision it implements has its tests in the coverage map ([0234](../decisions/0234-tests-cite-records.md));
 - its documents are up to date, and the table below marks it done.
+
+Each step opens with a design pass, which settles its open topics and the questions its building may raise in records, before its code. Its code then lands as work items, each small enough to review in one sitting ([0278](../decisions/0278-design-pass-work-items.md)). A step's status is Not started, In progress or Done ([0281](../decisions/0281-step-statuses.md)), and the progress log in [docs/progress.md](../progress.md) records, day by day, what was designed, added and done, with the evidence for each Done ([0279](../decisions/0279-progress-log.md), [0280](../decisions/0280-reviews-in-progress-log.md)).
 
 | # | Step | Needs | Status |
 |---|---|---|---|
@@ -147,7 +182,7 @@ The work splits into 24 steps, in 7 phases ([0227](../decisions/0227-steps-and-p
 | 17 | NVMe, block storage and the filesystem | 16 | Not started |
 | 18 | USB and USB storage | 16 | Not started |
 | 19 | Packages, and std's third stage | 17 | Not started |
-| 20 | Verified boot and updates | 19 | Not started |
+| 20 | Updates, fallback and Secure Boot | 19 | Not started |
 | 21 | The console, login and the shell | 18, 19 | Not started |
 | 22 | The network, and std's fourth stage | 19 | Not started |
 | 23 | Third-party programs | 20, 21, 22 | Not started |
@@ -155,31 +190,40 @@ The work splits into 24 steps, in 7 phases ([0227](../decisions/0227-steps-and-p
 
 ## The steps
 
-For each step below you'll find the steps it needs, what it builds, the decisions it implements, the open topics it designs, and the tests it adds on top of the standard kinds ([0235](../decisions/0235-kinds-of-tests.md)). A checkpoint closes each phase ([0249](../decisions/0249-estimates-and-checkpoints.md)). The estimates have a section of their own, under [Estimates](#estimates).
+For each step below you'll find the steps it needs, what it builds, the decisions it implements, the open topics it designs, and the tests it adds on top of the standard kinds ([0235](../decisions/0235-kinds-of-tests.md)). Milestones close the phases: one each for phases 1 to 6, and two for phase 7, whose first release is a milestone of its own ([0274](../decisions/0274-milestone-definition.md), [0275](../decisions/0275-eight-milestones.md)). The estimates have a section of their own, under [Estimates](#estimates).
 
-### Phase 1. Foundations, on x86_64
+### Phase 1. Foundations, on x86_64: milestone m1
+
+#### The two spikes
+
+m1 opens with two spikes, beside step 1 ([0282](../decisions/0282-spikes-and-risks.md)). Each is a throwaway prototype: it's never merged, so it's never reviewed. It ends in a written result in the progress log, and in a record wherever the result changes the plan.
+
+- **std as a patch.** std is built from the pinned release's sources, patched for a thisOS target spec, with `-Zbuild-std`, against a stub system library. It tries the route that step 10 takes ([0187](../decisions/0187-pinned-stable-toolchain.md)).
+- **A user-mode IOMMU.** A small bare-metal program sets up VT-d's tables in QEMU with an emulated IOMMU, from outside the kernel's core, and confines the edu device's DMA. It tries the route that step 16 takes ([0169](../decisions/0169-iommu-service.md)).
 
 #### 1. The repository, the build tool and its checks
 
 Nothing comes before this step.
 
-It lays down the repository's workspaces ([0231](../decisions/0231-repository-layout.md)) and the pinned toolchain ([0187](../decisions/0187-pinned-stable-toolchain.md)). It also brings the build tool ([0190](../decisions/0190-cargo-and-build-tool.md)), along with the compiler wrapper ([0191](../decisions/0191-audited-list-and-wrapper.md), [0192](../decisions/0192-build-scripts-reviewed.md)), the architecture and dependency checks ([0197](../decisions/0197-architecture-check.md), [0232](../decisions/0232-traits-and-specific-crates.md)), the offline sandbox ([0192](../decisions/0192-build-scripts-reviewed.md)), the count of the kernel's size ([0247](../decisions/0247-kernel-size-ratchet.md)) and the map of records to tests ([0234](../decisions/0234-tests-cite-records.md)). Vendoring is set up too, with cargo-vet, imported reviews and cargo-deny ([0193](../decisions/0193-vendored-reviewed-crates.md), [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0244](../decisions/0244-imported-crate-reviews.md)). And the project gets the `ci` command and GitHub's workflows ([0237](../decisions/0237-public-repository-and-ci.md)), the ruleset on main ([0238](../decisions/0238-pushes-and-pull-requests.md)), and `SECURITY.md` ([0239](../decisions/0239-security-reports.md)).
+It lays down the repository's workspaces ([0231](../decisions/0231-repository-layout.md)) and the pinned toolchain ([0187](../decisions/0187-pinned-stable-toolchain.md)). It also brings the build tool ([0190](../decisions/0190-cargo-and-build-tool.md)), along with the compiler wrapper ([0191](../decisions/0191-audited-list-and-wrapper.md), [0192](../decisions/0192-build-scripts-reviewed.md)), the architecture and dependency checks ([0197](../decisions/0197-architecture-check.md), [0232](../decisions/0232-traits-and-specific-crates.md)), the offline sandbox ([0192](../decisions/0192-build-scripts-reviewed.md)), the count of the kernel's size ([0247](../decisions/0247-kernel-size-ratchet.md)) and the map of records to tests ([0234](../decisions/0234-tests-cite-records.md)). Vendoring is set up too, with the list of trusted publishers, the trusted crates' records, and the advisory and license checks ([0193](../decisions/0193-vendored-reviewed-crates.md), [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0285](../decisions/0285-trusted-publishers.md), [0286](../decisions/0286-unsafe-in-trusted-crates.md), [0287](../decisions/0287-trusted-crate-updates.md)). And the project gets the `ci` command and GitHub's workflows ([0237](../decisions/0237-public-repository-and-ci.md)), the rulesets on main and on the tags ([0238](../decisions/0238-pushes-and-pull-requests.md), [0291](../decisions/0291-tags-protected.md)), `SECURITY.md` ([0239](../decisions/0239-security-reports.md)), and the progress log ([docs/progress.md](../progress.md), [0279](../decisions/0279-progress-log.md)).
 
-- **Implements:** [0008](../decisions/0008-architecture-neutral-design.md), [0010](../decisions/0010-64-bit-only.md), [0017](../decisions/0017-unsafe-code-kernel-and-services.md), [0018](../decisions/0018-kernel-assurance.md), [0019](../decisions/0019-kernel-minimality.md), [0037](../decisions/0037-kernel-toolchain.md), [0044](../decisions/0044-system-image-is-os-shipped.md), [0046](../decisions/0046-scope-of-0008.md), [0187](../decisions/0187-pinned-stable-toolchain.md), [0190](../decisions/0190-cargo-and-build-tool.md), [0191](../decisions/0191-audited-list-and-wrapper.md), [0192](../decisions/0192-build-scripts-reviewed.md), [0193](../decisions/0193-vendored-reviewed-crates.md), [0197](../decisions/0197-architecture-check.md), [0199](../decisions/0199-license.md), [0200](../decisions/0200-contributions.md), [0231](../decisions/0231-repository-layout.md), [0232](../decisions/0232-traits-and-specific-crates.md), [0234](../decisions/0234-tests-cite-records.md), [0237](../decisions/0237-public-repository-and-ci.md), [0238](../decisions/0238-pushes-and-pull-requests.md), [0239](../decisions/0239-security-reports.md), [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0244](../decisions/0244-imported-crate-reviews.md), [0247](../decisions/0247-kernel-size-ratchet.md), [0248](../decisions/0248-coding-and-doc-standards.md), [0263](../decisions/0263-arm64-host-tests.md).
+- **Implements:** [0008](../decisions/0008-architecture-neutral-design.md), [0010](../decisions/0010-64-bit-only.md), [0017](../decisions/0017-unsafe-code-kernel-and-services.md), [0018](../decisions/0018-kernel-assurance.md), [0019](../decisions/0019-kernel-minimality.md), [0037](../decisions/0037-kernel-toolchain.md), [0044](../decisions/0044-system-image-is-os-shipped.md), [0046](../decisions/0046-scope-of-0008.md), [0187](../decisions/0187-pinned-stable-toolchain.md), [0190](../decisions/0190-cargo-and-build-tool.md), [0191](../decisions/0191-audited-list-and-wrapper.md), [0192](../decisions/0192-build-scripts-reviewed.md), [0193](../decisions/0193-vendored-reviewed-crates.md), [0197](../decisions/0197-architecture-check.md), [0199](../decisions/0199-license.md), [0200](../decisions/0200-contributions.md), [0231](../decisions/0231-repository-layout.md), [0232](../decisions/0232-traits-and-specific-crates.md), [0234](../decisions/0234-tests-cite-records.md), [0237](../decisions/0237-public-repository-and-ci.md), [0238](../decisions/0238-pushes-and-pull-requests.md), [0239](../decisions/0239-security-reports.md), [0243](../decisions/0243-audit-records-and-crate-reviews.md), [0247](../decisions/0247-kernel-size-ratchet.md), [0248](../decisions/0248-coding-and-doc-standards.md), [0263](../decisions/0263-arm64-host-tests.md), [0285](../decisions/0285-trusted-publishers.md), [0286](../decisions/0286-unsafe-in-trusted-crates.md), [0287](../decisions/0287-trusted-crate-updates.md), [0291](../decisions/0291-tags-protected.md).
 - **Designs:** how tests name the records they check ([0234](../decisions/0234-tests-cite-records.md)), the project's set of lints ([0248](../decisions/0248-coding-and-doc-standards.md)), and the CI workflows and the nightly runs, with host tests on GitHub's arm64 runners and loom ([0237](../decisions/0237-public-repository-and-ci.md), [0263](../decisions/0263-arm64-host-tests.md)).
-- **Tests:** each check rejects planted violations. We plant unsafe code or a feature gate in a crate that isn't on the list, a build script that links native code, architecture code in a generic crate, a generic crate that depends on a specific one, a crate with a known advisory or a refused license, and a crate with no review. A planted ordering bug in lock-free test code fails under loom, and the host tests pass on arm64 ([0263](../decisions/0263-arm64-host-tests.md)).
+- **Tests:** each check rejects planted violations. We plant unsafe code or a feature gate in a crate that isn't on the list, a build script that links native code, architecture code in a generic crate, a generic crate that depends on a specific one, a crate with a known advisory or a refused license, and a crate from a publisher the repository doesn't name ([0285](../decisions/0285-trusted-publishers.md)). A trusted crate with unsafe code compiles, and the same crate off the list doesn't ([0286](../decisions/0286-unsafe-in-trusted-crates.md)). A planted ordering bug in lock-free test code fails under loom, and the host tests pass on arm64 ([0263](../decisions/0263-arm64-host-tests.md)).
 
 #### 2. Booting the kernel
 
 Step 2 needs step 1.
 
-Our fork of the `bootloader` crate is vendored here, and the build tool builds its UEFI stage ([0149](../decisions/0149-bootloader-crate-uefi.md), [0190](../decisions/0190-cargo-and-build-tool.md)). The image builder makes a GPT disk image with a FAT boot partition, and a ramdisk whose header carries the boot settings and the image's version ([0153](../decisions/0153-build-unpacks-ramdisk.md), [0157](../decisions/0157-boot-settings-in-ramdisk.md), [0194](../decisions/0194-reproducible-builds.md), [0209](../decisions/0209-no-rollback-protection.md)). The kernel crates are built for `x86_64-unknown-none` with `core` from source ([0189](../decisions/0189-kernel-none-targets.md)), and they start from the boot information ([0151](../decisions/0151-boot-info-from-crate.md)).
+Our fork of the `bootloader` crate is vendored here, its upstream trusted and our changes to it audited ([0289](../decisions/0289-forked-crates.md)), and the build tool builds its UEFI stage ([0149](../decisions/0149-bootloader-crate-uefi.md), [0190](../decisions/0190-cargo-and-build-tool.md)). The image builder makes a GPT disk image with a FAT boot partition, and a ramdisk whose header carries the boot settings and the image's version ([0153](../decisions/0153-build-unpacks-ramdisk.md), [0157](../decisions/0157-boot-settings-in-ramdisk.md), [0194](../decisions/0194-reproducible-builds.md), [0209](../decisions/0209-no-rollback-protection.md)). The kernel crates are built for `x86_64-unknown-none` with `core` from source ([0189](../decisions/0189-kernel-none-targets.md)), and they start from the boot information ([0151](../decisions/0151-boot-info-from-crate.md)).
 
 The kernel's log lives in its ring buffer and goes out on COM1 ([0152](../decisions/0152-kernel-log-and-reset.md)). It's also drawn on the framebuffer at failures and in bring-up images ([0225](../decisions/0225-framebuffer-log-at-failures.md)). Panics halt or reboot, by the boot setting ([0110](../decisions/0110-kernel-panic.md)), and the reset comes in as well ([0152](../decisions/0152-kernel-log-and-reset.md)). Rounding the step out are the stack checker ([0198](../decisions/0198-stack-depth-checker.md)), the QEMU runner, the kernel's test build and the reproducibility check ([0241](../decisions/0241-reproducibility-checks.md)).
 
-- **Implements:** [0009](../decisions/0009-x86-64-first.md), [0060](../decisions/0060-kernel-stack-per-core.md), [0068](../decisions/0068-no-kernel-heap.md), [0110](../decisions/0110-kernel-panic.md), [0149](../decisions/0149-bootloader-crate-uefi.md), [0151](../decisions/0151-boot-info-from-crate.md), [0152](../decisions/0152-kernel-log-and-reset.md), [0153](../decisions/0153-build-unpacks-ramdisk.md), [0157](../decisions/0157-boot-settings-in-ramdisk.md), [0189](../decisions/0189-kernel-none-targets.md), [0190](../decisions/0190-cargo-and-build-tool.md), [0194](../decisions/0194-reproducible-builds.md), [0198](../decisions/0198-stack-depth-checker.md), [0209](../decisions/0209-no-rollback-protection.md), [0225](../decisions/0225-framebuffer-log-at-failures.md), [0241](../decisions/0241-reproducibility-checks.md).
-- **Designs:** the image's version numbers ([0209](../decisions/0209-no-rollback-protection.md)).
-- **Tests:** the log reaches COM1 and the ring buffer. A forced panic halts or reboots by the setting and draws its log on the framebuffer, while a bring-up image draws its log as it's written. The stack checker rejects planted recursion, and an indirect call it can't resolve. Finally, two varied builds come out as the same bytes.
+The boot loader's check comes here too ([0283](../decisions/0283-boot-loader-check-at-step-2.md)). The fork checks the kernel and the ramdisk against the image's signature ([0156](../decisions/0156-boot-loader-checks-image.md)), which pairs Ed25519 with ML-DSA-65 ([0204](../decisions/0204-hybrid-signatures.md)), through the statements of a test root key ([0205](../decisions/0205-root-and-working-keys.md)). The signing tools sign every image with test keys. Each image says it's a development image, on its console at boot and in its version ([0284](../decisions/0284-development-images.md)).
+
+- **Implements:** [0009](../decisions/0009-x86-64-first.md), [0060](../decisions/0060-kernel-stack-per-core.md), [0068](../decisions/0068-no-kernel-heap.md), [0110](../decisions/0110-kernel-panic.md), [0149](../decisions/0149-bootloader-crate-uefi.md), [0151](../decisions/0151-boot-info-from-crate.md), [0152](../decisions/0152-kernel-log-and-reset.md), [0153](../decisions/0153-build-unpacks-ramdisk.md), [0156](../decisions/0156-boot-loader-checks-image.md), [0157](../decisions/0157-boot-settings-in-ramdisk.md), [0189](../decisions/0189-kernel-none-targets.md), [0190](../decisions/0190-cargo-and-build-tool.md), [0194](../decisions/0194-reproducible-builds.md), [0198](../decisions/0198-stack-depth-checker.md), [0202](../decisions/0202-offline-attackers.md), [0204](../decisions/0204-hybrid-signatures.md), [0205](../decisions/0205-root-and-working-keys.md), [0209](../decisions/0209-no-rollback-protection.md), [0225](../decisions/0225-framebuffer-log-at-failures.md), [0241](../decisions/0241-reproducibility-checks.md), [0283](../decisions/0283-boot-loader-check-at-step-2.md), [0284](../decisions/0284-development-images.md), [0289](../decisions/0289-forked-crates.md).
+- **Designs:** the image's version numbers, which mark development images ([0209](../decisions/0209-no-rollback-protection.md), [0284](../decisions/0284-development-images.md)).
+- **Tests:** the log reaches COM1 and the ring buffer. A forced panic halts or reboots by the setting and draws its log on the framebuffer, while a bring-up image draws its log as it's written. The stack checker rejects planted recursion, and an indirect call it can't resolve. In the attacks, a tampered kernel, ramdisk or statement is refused ([0156](../decisions/0156-boot-loader-checks-image.md), [0205](../decisions/0205-root-and-working-keys.md)), and an older signed image still boots ([0209](../decisions/0209-no-rollback-protection.md)). Finally, two varied builds come out as the same bytes.
 
 #### 3. The kernel's base
 
@@ -192,9 +236,9 @@ On the protection side there are the guards against touching or running program 
 It implements [0032](../decisions/0032-minimal-hardware-discovery.md), [0047](../decisions/0047-kernel-mapping.md), [0055](../decisions/0055-kernel-maps-only-objects.md), [0060](../decisions/0060-kernel-stack-per-core.md), [0063](../decisions/0063-widest-addressing.md), [0066](../decisions/0066-kernel-upper-half.md), [0067](../decisions/0067-object-window-offset.md), [0073](../decisions/0073-kernel-layout-in-implementation.md), [0075](../decisions/0075-user-guards-always-on.md), [0079](../decisions/0079-pointer-tagging-off.md), [0089](../decisions/0089-interrupts-off-in-kernel.md), [0094](../decisions/0094-one-deadline-per-core.md), [0095](../decisions/0095-one-kernel-lock.md), [0100](../decisions/0100-cpu-flaw-mitigations.md), [0113](../decisions/0113-counter-capability.md), [0151](../decisions/0151-boot-info-from-crate.md), [0152](../decisions/0152-kernel-log-and-reset.md), [0213](../decisions/0213-power-capability.md).
 The tests plant accesses, and the guards fault on them. QEMU's CPU models show that mitigations are chosen per CPU model, and a test build forces the unmapped kernel ([0047](../decisions/0047-kernel-mapping.md)). Paging works with 4 and with 5 levels. A fault on a guard page lands on a fault stack, and pointer tagging stays off ([0079](../decisions/0079-pointer-tagging-off.md)).
 
-Checkpoint 1 ends the phase. The laptop boots the image from a USB stick, shows the bring-up log, and draws the log of a forced panic ([0225](../decisions/0225-framebuffer-log-at-failures.md)).
+Milestone m1 ends the phase. The laptop boots the signed image from a USB stick, shows the bring-up log, and draws the log of a forced panic ([0225](../decisions/0225-framebuffer-log-at-failures.md)).
 
-### Phase 2. The kernel's objects, on x86_64
+### Phase 2. The kernel's objects, on x86_64: milestone m2
 
 #### 4. Memory, capabilities and revoke
 
@@ -224,9 +268,9 @@ Next comes the IDL compiler, with the fixed-layout types, the entry table and th
 - **Interfaces:** the system library's, the startup data's and the boot information's. They're defined here but not released ([0230](../decisions/0230-interfaces-released-with-sdk.md)). The IDL compiler also builds the connect pattern, through which services spread their callers, and supervisors keep the connect endpoints of the services they restart ([0266](../decisions/0266-connect-endpoints.md), [0267](../decisions/0267-supervisor-keeps-connect.md)).
 - **Tests:** a return address outside the program half never reaches `sysret` ([0125](../decisions/0125-sysret-guard.md)), and system calls from outside the library are refused ([0117](../decisions/0117-system-library.md)). Against test copies, the checker rejects planted incompatible changes ([0196](../decisions/0196-released-interface-copies.md)). Callers that connect to a service get endpoints of their own ([0266](../decisions/0266-connect-endpoints.md)).
 
-Checkpoint 2: the laptop runs the kernel's test build, and the results appear on the framebuffer ([0225](../decisions/0225-framebuffer-log-at-failures.md)).
+Milestone m2: the laptop runs the kernel's test build, and the results appear on the framebuffer ([0225](../decisions/0225-framebuffer-log-at-failures.md)).
 
-### Phase 3. User mode on both architectures
+### Phase 3. User mode on both architectures: milestone m3
 
 #### 7. The boot loader for AArch64
 
@@ -254,9 +298,9 @@ Faults are the second half. Page faults go to pagers ([0081](../decisions/0081-p
 - **Implements:** [0018](../decisions/0018-kernel-assurance.md), [0019](../decisions/0019-kernel-minimality.md), [0021](../decisions/0021-ipc-simple-upgradable.md), [0027](../decisions/0027-user-mode-pagers.md), [0036](../decisions/0036-ipc-message-max.md), [0058](../decisions/0058-shared-and-handed-over.md), [0072](../decisions/0072-registers-only.md), [0081](../decisions/0081-pager-per-thread.md), [0085](../decisions/0085-clients-pay-cpu-time.md), [0091](../decisions/0091-direct-switch-on-calls.md), [0092](../decisions/0092-scheduler-keeps-time.md), [0102](../decisions/0102-exception-handler.md), [0103](../decisions/0103-fault-without-handler.md), [0106](../decisions/0106-pager-passes-on-faults.md), [0118](../decisions/0118-calls-and-notifications.md), [0119](../decisions/0119-message-eight-words.md), [0120](../decisions/0120-reply-objects.md), [0121](../decisions/0121-callers-help-busy-services.md), [0122](../decisions/0122-bound-notifications.md), [0123](../decisions/0123-capabilities-in-messages.md), [0124](../decisions/0124-large-calls-split.md), [0130](../decisions/0130-handlers-changeable.md), [0132](../decisions/0132-events-notify-then-call.md), [0133](../decisions/0133-recovery-point-in-register.md), [0134](../decisions/0134-scheduler-interface.md), [0165](../decisions/0165-core-objects.md), [0167](../decisions/0167-interrupts-as-notifications.md), [0219](../decisions/0219-wakeup-preemption.md), [0220](../decisions/0220-endpoint-priority-order.md), [0245](../decisions/0245-coverage-and-fuzzing.md), [0247](../decisions/0247-kernel-size-ratchet.md), [0264](../decisions/0264-performance-targets.md).
 - **Tests:** fuzzing on both architectures, plus attacks: inversion through a busy service ([0121](../decisions/0121-callers-help-busy-services.md)), and wakeup storms on a busy core ([0219](../decisions/0219-wakeup-preemption.md)). Once the step is done, the kernel's size counts become its budget ([0247](../decisions/0247-kernel-size-ratchet.md)).
 
-Checkpoint 3: the laptop runs the stub's tests. It powers off when they pass and shows the failure on the framebuffer when one fails ([0225](../decisions/0225-framebuffer-log-at-failures.md)). The checkpoint also sets the first performance targets, for the IPC round trip and a page fault ([0264](../decisions/0264-performance-targets.md)).
+Milestone m3: the laptop runs the stub's tests. It powers off when they pass and shows the failure on the framebuffer when one fails ([0225](../decisions/0225-framebuffer-log-at-failures.md)). The milestone also sets the first performance targets, for the IPC round trip and a page fault ([0264](../decisions/0264-performance-targets.md)).
 
-### Phase 4. The core services
+### Phase 4. The core services: milestone m4
 
 #### 10. std's first stage, the page-table library and the root task
 
@@ -307,9 +351,9 @@ std's second stage covers threads, parking and locks ([0177](../decisions/0177-l
 - **Designs:** the log service ([0226](../decisions/0226-open-topics-at-their-step.md)).
 - **Tests:** upstream's std tests for stage 2, and programs without `svc/time` or `svc/random` behaving as [0173](../decisions/0173-time-service-entry.md) and [0174](../decisions/0174-random-service-and-seed.md) say. `Mutex` and `Condvar` pass loom ([0263](../decisions/0263-arm64-host-tests.md), [0269](../decisions/0269-std-mutex-condvar.md)), and `Instant::now` works with the counter and without it ([0268](../decisions/0268-counter-by-default.md)).
 
-Checkpoint 4: the laptop runs the core services, and the log service shows their logs on the framebuffer. The checkpoint sets targets for a time read and for lent memory, and revises the estimates of steps 11 to 13 ([0264](../decisions/0264-performance-targets.md), [0265](../decisions/0265-lent-memory-library.md)).
+Milestone m4: the laptop runs the core services, and the log service shows their logs on the framebuffer. The milestone sets targets for a time read and for lent memory, and revises the estimates of steps 11 to 13 ([0264](../decisions/0264-performance-targets.md), [0265](../decisions/0265-lent-memory-library.md)).
 
-### Phase 5. Multicore and devices
+### Phase 5. Multicore and devices: milestone m5
 
 #### 15. Hardware discovery and multicore
 
@@ -333,9 +377,9 @@ Our fork of the boot loader turns off bus mastering on every PCI device but the 
 - **Designs:** the device manager's matching, and the drivers' protocols; the regions that the firmware reserves for devices, such as VT-d's RMRR ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md), [0226](../decisions/0226-open-topics-at-their-step.md)); whether the IOMMU blocks DMA from the boot loader's handoff ([0261](../decisions/0261-bus-mastering-off-at-boot.md)).
 - **Tests:** the attacks are edu's DMA outside its mapping, which is refused, and its MSI, which reaches only its own interrupt ([0169](../decisions/0169-iommu-service.md), [0214](../decisions/0214-interrupt-remapping.md)). Configuration writes that move a device's ranges or turn on ATS are refused ([0215](../decisions/0215-pci-bus-driver-config.md)). Memory mapped for a device is held back after a revoke until the IOMMU service releases it ([0170](../decisions/0170-dma-quarantine.md)), and images run without an IOMMU ([0171](../decisions/0171-no-iommu-trusted-drivers.md)). So are edu writing another device's remapping entry, and a driver that asks for ports 0xCF8 to 0xCFF ([0262](../decisions/0262-interrupt-source-check.md)). Devices start with bus mastering off ([0261](../decisions/0261-bus-mastering-off-at-boot.md)).
 
-Checkpoint 5: the laptop runs on all its cores, with VT-d confining its devices, and lists its PCI devices. The checkpoint sets targets for the IPC, fault and time paths across cores ([0264](../decisions/0264-performance-targets.md)).
+Milestone m5: the laptop runs on all its cores, with VT-d confining its devices, and lists its PCI devices. The milestone sets targets for the IPC, fault and time paths across cores ([0264](../decisions/0264-performance-targets.md)).
 
-### Phase 6. Storage, packages and verified boot
+### Phase 6. Storage, packages and updates: milestone m6
 
 #### 17. NVMe, block storage and the filesystem
 
@@ -363,19 +407,19 @@ std's third stage brings files, paths and the current directory ([0176](../decis
 - **Designs:** where the package store keeps packages ([0226](../decisions/0226-open-topics-at-their-step.md)).
 - **Tests:** upstream's std tests for stage 3, and attacks, in which a tampered block or manifest is caught ([0203](../decisions/0203-package-format.md), [0207](../decisions/0207-install-and-start-checks.md)).
 
-#### 20. Verified boot and updates
+#### 20. Updates, fallback and Secure Boot
 
-Needs step 19. The work starts in our fork of the boot loader, which checks the kernel and the ramdisk against the image's signature ([0156](../decisions/0156-boot-loader-checks-image.md)), reads the root key's statements ([0205](../decisions/0205-root-and-working-keys.md)), and selects an image with tries and fallback ([0158](../decisions/0158-image-try-count.md)). On removable media it leaves the firmware's boot entries alone ([0208](../decisions/0208-boot-loader-beside-old.md), [0223](../decisions/0223-qemu-and-laptop-checkpoints.md)).
+Needs step 19. The work starts in our fork of the boot loader, which has checked each image since step 2 ([0283](../decisions/0283-boot-loader-check-at-step-2.md)). Now it selects an image with tries and fallback ([0158](../decisions/0158-image-try-count.md)), and a newer boot loader refuses a working key that the root key's statements revoke ([0205](../decisions/0205-root-and-working-keys.md)). On removable media it leaves the firmware's boot entries alone ([0208](../decisions/0208-boot-loader-beside-old.md), [0223](../decisions/0223-qemu-and-laptop-checkpoints.md)).
 
-The update service installs images and marks them good, and installs boot loaders beside the old one ([0042](../decisions/0042-updates.md), [0158](../decisions/0158-image-try-count.md), [0208](../decisions/0208-boot-loader-beside-old.md)). The step also brings the signing tools and test keys, and Secure Boot in QEMU with an enrolled key ([0205](../decisions/0205-root-and-working-keys.md)).
+The update service installs images and marks them good, and installs boot loaders beside the old one ([0042](../decisions/0042-updates.md), [0158](../decisions/0158-image-try-count.md), [0208](../decisions/0208-boot-loader-beside-old.md)). The step also brings Secure Boot in QEMU, with an enrolled key ([0205](../decisions/0205-root-and-working-keys.md)).
 
-- **Implements:** [0042](../decisions/0042-updates.md), [0156](../decisions/0156-boot-loader-checks-image.md), [0158](../decisions/0158-image-try-count.md), [0202](../decisions/0202-offline-attackers.md), [0204](../decisions/0204-hybrid-signatures.md), [0205](../decisions/0205-root-and-working-keys.md), [0208](../decisions/0208-boot-loader-beside-old.md), [0209](../decisions/0209-no-rollback-protection.md).
+- **Implements:** [0042](../decisions/0042-updates.md), [0158](../decisions/0158-image-try-count.md), [0202](../decisions/0202-offline-attackers.md), [0204](../decisions/0204-hybrid-signatures.md), [0205](../decisions/0205-root-and-working-keys.md), [0208](../decisions/0208-boot-loader-beside-old.md), [0209](../decisions/0209-no-rollback-protection.md).
 - **Designs:** where updates come from, and how the boot loader tells removable media apart ([0226](../decisions/0226-open-topics-at-their-step.md)).
-- **Tests:** in the attacks, a tampered kernel, ramdisk or statement is refused ([0156](../decisions/0156-boot-loader-checks-image.md), [0205](../decisions/0205-root-and-working-keys.md)), and so is a revoked working key, by a newer boot loader ([0205](../decisions/0205-root-and-working-keys.md)). A bad image falls back after its tries ([0158](../decisions/0158-image-try-count.md)), and an older signed image still boots ([0209](../decisions/0209-no-rollback-protection.md)).
+- **Tests:** in the attacks, a revoked working key is refused by a newer boot loader ([0205](../decisions/0205-root-and-working-keys.md)). A bad image falls back after its tries ([0158](../decisions/0158-image-try-count.md)), and an older signed image still boots after an update ([0209](../decisions/0209-no-rollback-protection.md)).
 
-Checkpoint 6: the laptop boots from a USB stick, with its storage on a USB disk ([0224](../decisions/0224-laptop-usb-storage.md)).
+Milestone m6: the laptop boots from a USB stick, with its storage on a USB disk ([0224](../decisions/0224-laptop-usb-storage.md)).
 
-### Phase 7. Users, the network and the first release
+### Phase 7. Users, the network and the first release: milestones m7 and m8
 
 #### 21. The console, login and the shell
 
@@ -408,7 +452,7 @@ Needs step 23. The project's root key and working keys are made offline ([0205](
 - **Implements:** [0194](../decisions/0194-reproducible-builds.md), [0205](../decisions/0205-root-and-working-keys.md), [0241](../decisions/0241-reproducibility-checks.md), [0251](../decisions/0251-later-work.md), [0270](../decisions/0270-offline-gap-stated.md).
 - **Designs:** how the root key is made and kept ([0226](../decisions/0226-open-topics-at-their-step.md)).
 - **Tests:** the full suite on both architectures, with and without an IOMMU.
-Checkpoint 7: the laptop runs the whole system, apart from its network.
+Milestone m8: the laptop runs the first release's image: the whole system, apart from its network.
 
 ## Open topics
 
@@ -458,7 +502,7 @@ Output and results follow [0236](../decisions/0236-program-output-second-serial.
 
 CI ([0237](../decisions/0237-public-repository-and-ci.md)) means GitHub Actions running the build tool's `ci` command for every change, on both architectures, with x86_64 under KVM and AArch64 emulated. Long fuzzing and stress runs are nightly. Maintainers run the `ci` command locally before they push to main, and contributors send pull requests ([0238](../decisions/0238-pushes-and-pull-requests.md)).
 
-Benchmarks and time budgets run on the development laptop under KVM, at checkpoints and for kernel changes that may affect them ([0240](../decisions/0240-timing-on-laptop.md)).
+Benchmarks and time budgets run on the development laptop under KVM, at milestones and for kernel changes that may affect them ([0240](../decisions/0240-timing-on-laptop.md)).
 
 For reproducibility ([0241](../decisions/0241-reproducibility-checks.md)), every CI run builds the image and the boot loader twice, under varied conditions, and compares the bytes. A second machine rebuilds a release before it's signed.
 
@@ -466,9 +510,9 @@ To cover the design ([0234](../decisions/0234-tests-cite-records.md)), tests nam
 
 ## Review and kernel assurance
 
-Review has three tiers, by role ([0242](../decisions/0242-review-tiers.md)). Tier 1 is reviewed line by line against a checklist, and covers the kernel, our fork of the boot loader, the audited set, and the build checks that enforce safety. Tier 2 gets a full review against the threat model: the trusted-base services, the random service, the image builder and the signing tools. It also covers the code that parses outside input or carries what users type: the network service, the USB stack, the console and the keyboard drivers ([0258](../decisions/0258-outside-input-tier-2.md)). Tier 3, which is everything else, gets a normal review. No change is approved by its own author.
+Review has three tiers, by role ([0242](../decisions/0242-review-tiers.md)). Tier 1 is reviewed line by line against a checklist, and covers the kernel, our changes to the fork of the boot loader ([0289](../decisions/0289-forked-crates.md)), the audited set, and the build checks that enforce safety. Tier 2 gets a full review against the threat model: the trusted-base services, the random service, the image builder and the signing tools. It also covers the code that parses outside input or carries what users type: the network service, the USB stack, the console and the keyboard drivers ([0258](../decisions/0258-outside-input-tier-2.md)). Tier 3, which is everything else, gets a normal review. No change is approved by its own author.
 
-The audit records ([0243](../decisions/0243-audit-records-and-crate-reviews.md)) start from the list of audited crates, in TOML, with one Markdown record for each crate: its safety arguments, the tests and fuzzing that cover it, and a log of its audits. cargo-vet records the review of every vendored crate, and cargo-deny reads a snapshot of the advisory database. Reviews may be imported from named organizations, except for the audited set ([0244](../decisions/0244-imported-crate-reviews.md)).
+The audit records ([0243](../decisions/0243-audit-records-and-crate-reviews.md)) start from the list of audited crates, in TOML, with one Markdown record for each crate of our own: its safety arguments, the tests and fuzzing that cover it, and a log of its audits. Third-party crates come from trusted publishers, which the repository names, and their code isn't reviewed ([0285](../decisions/0285-trusted-publishers.md)). A trusted crate with unsafe code joins the list as trusted, with a short record ([0286](../decisions/0286-unsafe-in-trusted-crates.md)), and so does the toolchain's library ([0288](../decisions/0288-rust-project-trusted.md)). Trusted crates stay pinned, and move when an advisory or a needed fix calls for it ([0287](../decisions/0287-trusted-crate-updates.md)). A forked crate's upstream is trusted, and our changes to it are audited ([0289](../decisions/0289-forked-crates.md)). The advisory check reads a snapshot of RustSec's database on every change, and its live database nightly. Every review is recorded in the progress log, with its commits, tier and reviewer ([0280](../decisions/0280-reviews-in-progress-log.md)).
 
 On coverage and fuzzing ([0245](../decisions/0245-coverage-and-fuzzing.md)), every line of the generic kernel is measured on the simulated machine, and every function of the architecture and platform code is reached in QEMU. System calls get coverage-guided fuzzing from step 4, and in QEMU from step 9. Each trusted-base service's protocol is fuzzed through its bindings. Outside input is fuzzed too: disk images from step 17, USB input from step 18 and network packets from step 22 ([0259](../decisions/0259-outside-input-fuzzed.md)).
 
@@ -488,61 +532,98 @@ For documentation, each crate opens with what it is, the records it implements a
 
 ## Estimates
 
-A step's estimate is the code it adds, split by review tier, and the review time that code needs ([0249](../decisions/0249-estimates-and-checkpoints.md)). The rates are a first guess: 150 lines an hour in tier 1, 300 in tier 2, and 600 in tier 3. Vendored code that needs our own audit or review is estimated separately. From checkpoint 1 on, the pace we measure on earlier steps replaces these rates, and calendar dates follow from it.
+A step's size is the code it adds, split by review tier, and the review time that code needs ([0249](../decisions/0249-estimates-and-checkpoints.md), [0277](../decisions/0277-sized-work-no-dates.md)). The rates are a first guess: 150 lines an hour in tier 1, 300 in tier 2, and 600 in tier 3. Trusted crates aren't reviewed ([0285](../decisions/0285-trusted-publishers.md)), so the sizes count our own code only, and leave out each trusted crate's short record ([0286](../decisions/0286-unsafe-in-trusted-crates.md)). The spikes aren't reviewed either ([0282](../decisions/0282-spikes-and-risks.md)).
 
-| Step | Tier 1 | Tier 2 | Tier 3 | Vendored code we audit or review | Review hours |
+No date is set ([0277](../decisions/0277-sized-work-no-dates.md)). Each milestone records the review hours it took and the lines it reviewed, by tier. From that pace, this section gives the remaining work as a range of review hours and of time, which is a forecast and never a commitment. Sizes and the forecast are revised at each milestone, without records.
+
+| Step | Tier 1 | Tier 2 | Tier 3 | Trusted crates it takes | Review hours |
 |---|---|---|---|---|---|
-| 1 | 2.3k | — | 6.3k | The tools' crates, mostly through imported reviews | 35 |
-| 2 | 4.5k | 3.0k | 4.5k | The `bootloader` crate and its dependencies, about 40,000 lines, audited | 315 |
-| 3 | 5.0k | — | 2.0k | — | 35 |
-| 4 | 4.0k | — | 7.3k | The fuzzing tools' crates | 50 |
+| 1 | 2.3k | — | 6.3k | The tools' crates | 26 |
+| 2 | 5.5k | 4.5k | 4.5k | The `bootloader` crate and its dependencies, such as uefi; the signature and hash crates | 59 |
+| 3 | 5.0k | — | 2.0k | — | 37 |
+| 4 | 4.0k | — | 7.3k | The fuzzing tools' crates | 39 |
 | 5 | 4.5k | — | 3.0k | — | 35 |
-| 6 | 6.0k | — | 9.0k | A parser for the IDL compiler | 65 |
-| 7 | 3.0k | — | 0.5k | — | 20 |
+| 6 | 6.0k | — | 9.0k | A parser for the IDL compiler | 55 |
+| 7 | 3.0k | — | 0.5k | — | 21 |
 | 8 | 7.5k | 0.5k | 2.0k | — | 55 |
-| 9 | 7.0k | — | 6.5k | — | 60 |
-| 10 | 4.0k | 6.5k | 3.5k | — | 55 |
-| 11 | 1.5k | 4.0k | 2.5k | — | 30 |
-| 12 | — | 5.0k | 3.0k | — | 20 |
-| 13 | 0.6k | 9.0k | 7.0k | — | 45 |
-| 14 | 5.3k | 1.0k | 6.5k | An unwinder and a random-number generator, about 7,000 lines | 67 |
-| 15 | 2.5k | 2.0k | 7.0k | ACPI and device-tree parsers, about 17,000 lines | 60 |
-| 16 | 2.0k | 13.0k | 5.6k | — | 65 |
-| 17 | — | 10.0k | 10.5k | — | 50 |
+| 9 | 7.0k | — | 6.5k | — | 58 |
+| 10 | 4.0k | 6.5k | 3.5k | — | 54 |
+| 11 | 1.5k | 4.0k | 2.5k | — | 28 |
+| 12 | — | 5.0k | 3.0k | — | 22 |
+| 13 | 0.6k | 9.0k | 7.0k | — | 46 |
+| 14 | 5.3k | 1.0k | 6.5k | An unwinder and a random-number generator | 50 |
+| 15 | 2.5k | 2.0k | 7.0k | ACPI and device-tree parsers | 35 |
+| 16 | 2.0k | 13.0k | 5.6k | — | 66 |
+| 17 | — | 10.0k | 10.5k | — | 51 |
 | 18 | — | 12.0k | — | — | 40 |
-| 19 | 6.0k | 7.3k | 6.0k | Signature and hash crates, about 25,000 lines, audited | 241 |
-| 20 | 2.0k | 5.5k | 4.0k | — | 40 |
-| 21 | — | 7.0k | 7.6k | A password-hashing crate, if login uses passwords | 40 |
-| 22 | 2.0k | 7.0k | 1.5k | A TCP/IP stack, about 30,000 lines | 72 |
-| 23 | 0.5k | 1.0k | 4.5k | — | 15 |
-| 24 | — | 0.5k | 1.0k | — | 5 |
-| **All** | **70k** | **94k** | **111k** | | **1,515** |
+| 19 | 6.0k | 7.3k | 6.0k | — | 74 |
+| 20 | 1.0k | 4.0k | 4.0k | — | 27 |
+| 21 | — | 7.0k | 7.6k | A password-hashing crate, if login uses passwords | 36 |
+| 22 | 2.0k | 7.0k | 1.5k | A TCP/IP stack | 39 |
+| 23 | 0.5k | 1.0k | 4.5k | — | 14 |
+| 24 | — | 0.5k | 1.0k | — | 3 |
+| **All** | **70k** | **94k** | **111k** | | **970** |
 
-Vendored code that needs our own audit, because it's in the audited set ([0244](../decisions/0244-imported-crate-reviews.md)), is estimated at tier 1's rate. The estimates count review only. Designing the open topics, rework, debugging and toolchain upgrades come on top. The audit after the freeze corrected the table before step 1: its sum, the audited crates' rate, and the parts that moved to tier 2 ([0256](../decisions/0256-audit-findings-as-evidence.md), [0258](../decisions/0258-outside-input-tier-2.md), [0265](../decisions/0265-lent-memory-library.md), [0269](../decisions/0269-std-mutex-condvar.md)).
+By milestone:
 
-Toolchain upgrades are recurring work that runs beside the steps ([0188](../decisions/0188-upgrade-every-second-release.md)). Each upgrade audits the changes to unsafe code in `core`, `alloc` and std, moves std's patch to the new release, rebuilds our fork of the boot loader, and passes the full tests. The first one falls due with Rust 1.101.
+| Milestone | Steps | Review hours |
+|---|---|---|
+| m1 | 1 to 3, and the spikes | 122 |
+| m2 | 4 to 6 | 129 |
+| m3 | 7 to 9 | 134 |
+| m4 | 10 to 14 | 200 |
+| m5 | 15 and 16 | 101 |
+| m6 | 17 to 20 | 192 |
+| m7 | 21 and 22 | 75 |
+| m8 | 23 and 24 | 17 |
 
-## Checkpoints
+**Forecast:** none yet. The first comes with m1's measured pace.
 
-A checkpoint closes each phase ([0249](../decisions/0249-estimates-and-checkpoints.md)). At one, we compare the actual sizes and times with the estimates and re-estimate the remaining steps, the laptop runs that phase's image ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md)), and the kernel's size counts get reviewed ([0247](../decisions/0247-kernel-size-ratchet.md)). The results are recorded here. From checkpoint 3 on, each checkpoint also sets performance targets for the paths it can measure, and checks the targets set before. A missed target becomes a record under 0201, which reopens the decisions it names or raises the target with a reason ([0264](../decisions/0264-performance-targets.md)).
+The redesign of 2026-10-20 re-sized the table. The audits and reviews of vendored code left it, since those crates are trusted ([0285](../decisions/0285-trusted-publishers.md)). The boot loader's check and the signing tools moved from step 20 to step 2 ([0283](../decisions/0283-boot-loader-check-at-step-2.md)), about 1,000 lines of tier 1 and 1,500 of tier 2. Each step's hours now follow from its lines at the rates above. The estimates count review only: design passes, spikes, rework, debugging and toolchain upgrades come on top.
 
-| Checkpoint | After step | On the laptop | Result |
-|---|---|---|---|
-| 1 | 3 | The kernel boots from a USB stick and shows its log | Not yet |
-| 2 | 6 | The kernel's tests run | Not yet |
-| 3 | 9 | The first user-mode program runs its tests | Not yet |
-| 4 | 14 | The core services run, with their logs on the framebuffer | Not yet |
-| 5 | 16 | Every core runs, with VT-d confining the devices | Not yet |
-| 6 | 20 | The system boots with its storage on a USB disk | Not yet |
-| 7 | 24 | The whole system runs, apart from its network | Not yet |
+Toolchain upgrades are recurring work that runs beside the steps ([0188](../decisions/0188-upgrade-every-second-release.md)). Each upgrade checks the Rust project's security advisories for the old and new releases, moves std's patch to the new release, rebuilds our fork of the boot loader, and passes the full tests ([0288](../decisions/0288-rust-project-trusted.md)). The first one falls due with Rust 1.101.
+
+## Milestones
+
+Milestones close the phases: one each for phases 1 to 6, and two for phase 7, whose first release is a milestone of its own ([0274](../decisions/0274-milestone-definition.md), [0275](../decisions/0275-eight-milestones.md)). It's done when its image boots in QEMU on each architecture its steps support, with and without an IOMMU once one is built, and on the laptop from a USB stick as far as its devices allow ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md), [0224](../decisions/0224-laptop-usb-storage.md)); when every step it holds is done, CI passes on the commit it tags, its security pass is written and its gaps are settled, and its results are recorded. Its commit is then tagged `m1` to `m8` ([0291](../decisions/0291-tags-protected.md)). Milestone images run only on test machines ([0284](../decisions/0284-development-images.md)).
+
+At each milestone, we compare the actual sizes and review hours with the estimates, re-size the remaining steps, give the forecast ([0277](../decisions/0277-sized-work-no-dates.md)), and review the kernel's size counts ([0247](../decisions/0247-kernel-size-ratchet.md)). From m3 on, each milestone also sets performance targets for the paths it can measure, and checks the targets set before. A missed target becomes a record under 0201, which reopens the decisions it names or raises the target with a reason ([0264](../decisions/0264-performance-targets.md)).
+
+The security pass is written in the milestone's section of the progress log ([0276](../decisions/0276-milestone-security-pass.md)). It walks each in-scope threat against what the milestone adds: speculation, denial of service, devices with their DMA and interrupts, failures of trusted services, input from outside, and attackers with the machine off. It confirms that each defence the milestone builds has its attack test. Each gap becomes a record, which fixes it or accepts it with a reason, before the tag.
+
+| Milestone | Steps | On the laptop | Status | Result |
+|---|---|---|---|---|
+| m1 | 1 to 3, and the spikes | The kernel boots from a signed image on a USB stick, and shows its log | Not started | Not yet |
+| m2 | 4 to 6 | The kernel's tests run | Not started | Not yet |
+| m3 | 7 to 9 | The first user-mode program runs its tests | Not started | Not yet |
+| m4 | 10 to 14 | The core services run, with their logs on the framebuffer | Not started | Not yet |
+| m5 | 15 and 16 | Every core runs, with VT-d confining the devices | Not started | Not yet |
+| m6 | 17 to 20 | The system boots, with its storage on a USB disk | Not started | Not yet |
+| m7 | 21 and 22 | Users log in at the console and run the shell, apart from the network | Not started | Not yet |
+| m8 | 23 and 24 | The first release's image runs the whole system, apart from its network | Not started | Not yet |
+
+## Risk register
+
+Each major risk the plan rests on, where the plan meets it, and what happened ([0282](../decisions/0282-spikes-and-risks.md)). A design pass or a security pass that finds a new one adds it here.
+
+| Risk | Where the plan meets it | Result |
+|---|---|---|
+| std's platform layer doesn't work as a patch over the pinned release's sources ([0187](../decisions/0187-pinned-stable-toolchain.md)) | The std spike, in m1, before step 10 | Not yet |
+| A user-mode IOMMU service isn't practical ([0169](../decisions/0169-iommu-service.md)) | The IOMMU spike, in m1, before step 16 | Not yet |
+| The bootloader crate can't be made to work on AArch64 ([0150](../decisions/0150-bootloader-aarch64.md)) | Step 7 | Not yet |
+| The laptop's devices don't behave as QEMU's do ([0223](../decisions/0223-qemu-and-laptop-checkpoints.md)) | Each milestone's laptop run | Not yet |
+
+## Progress
+
+The progress log is [docs/progress.md](../progress.md). It has a dated section for each working day, with what was designed, what was added, what was done and what's next ([0279](../decisions/0279-progress-log.md)). Each Done names its evidence: the CI runs, the reviews with their commits, tiers and reviewers, tier 1's checklist item by item, and the test counts ([0280](../decisions/0280-reviews-in-progress-log.md)). A step or a milestone is Not started, In progress or Done, and the log says what an In progress step is doing ([0281](../decisions/0281-step-statuses.md)). The step table and the milestone table link to the log as work gets done.
 
 ## Changing the plan
 
-Once the design is frozen, a frozen decision changes only through a record that cites what building found, and names the step it affects ([0201](../decisions/0201-changes-after-freeze.md)). The same holds for adding, removing, splitting, merging or reordering steps, and for moving a decision to another step ([0250](../decisions/0250-plan-changes-after-freeze.md)). Estimates, progress and the dates of checkpoints are the exception: they change at checkpoints, without records ([0249](../decisions/0249-estimates-and-checkpoints.md)). Open topics get ordinary records at their steps ([0226](../decisions/0226-open-topics-at-their-step.md)), and later work gets one when a checkpoint schedules it ([0251](../decisions/0251-later-work.md)).
+The design is frozen, and a frozen decision changes only through a record that cites what building found, and names the step it affects ([0201](../decisions/0201-changes-after-freeze.md)). The roadmap reopened once, on what step 1 found ([0272](../decisions/0272-roadmap-reopened.md)), and froze again with the tag roadmap-2 ([0292](../decisions/0292-roadmap-refreezes.md)). From then on, adding, removing, splitting, merging or reordering steps or milestones, and moving a decision to another step, takes a record that cites what building found ([0250](../decisions/0250-plan-changes-after-freeze.md)). Sizes, progress, the measured pace and the forecast change at milestones, without records ([0277](../decisions/0277-sized-work-no-dates.md)). Open topics get ordinary records at their steps' design passes ([0226](../decisions/0226-open-topics-at-their-step.md), [0278](../decisions/0278-design-pass-work-items.md)), and later work gets one when a milestone schedules it ([0251](../decisions/0251-later-work.md)). If the measured pace shows the plan far off, a record at a milestone may move parts of it to later work; in-scope security defences, and anything a remaining part needs, can't move ([0290](../decisions/0290-scope-moves-by-record.md)).
 
 ## Later work
 
-Nothing here is scheduled ([0251](../decisions/0251-later-work.md)), though a checkpoint may schedule an item through an ordinary record. The first release states the gaps that later work closes. Two examples are stored data kept in the clear ([0202](../decisions/0202-offline-attackers.md)) and older signed images that still boot ([0209](../decisions/0209-no-rollback-protection.md)). The notes also state the offline gap in full: an attacker with the disk can make the system run a program of their choosing, as a user ([0270](../decisions/0270-offline-gap-stated.md)).
+Nothing here is scheduled ([0251](../decisions/0251-later-work.md)), though a milestone may schedule an item through an ordinary record, and a milestone's record may move parts of the plan here when the measured pace shows it far off ([0290](../decisions/0290-scope-moves-by-record.md)). The first release states the gaps that later work closes. Two examples are stored data kept in the clear ([0202](../decisions/0202-offline-attackers.md)) and older signed images that still boot ([0209](../decisions/0209-no-rollback-protection.md)). The notes also state the offline gap in full: an attacker with the disk can make the system run a program of their choosing, as a user ([0270](../decisions/0270-offline-gap-stated.md)).
 
 | Item | Records | Needs first | Earliest after step |
 |---|---|---|---|
@@ -723,7 +804,7 @@ This table lists every Accepted record, the steps that build it and what checks 
 | [0153](../decisions/0153-build-unpacks-ramdisk.md) The build unpacks the root task and the system library into the ramdisk | 2, 8, 10 | QEMU tests |
 | [0154](../decisions/0154-library-entry-table.md) Programs call the system library through a table of entry points | 6 | QEMU tests |
 | [0155](../decisions/0155-ramdisk-reaches-storage.md) The ramdisk holds the programs needed to reach storage | 13, 17, 19 | Image tests |
-| [0156](../decisions/0156-boot-loader-checks-image.md) The boot loader checks the kernel and the ramdisk against the system image's signature | 20 | Attack test: a tampered kernel or ramdisk |
+| [0156](../decisions/0156-boot-loader-checks-image.md) The boot loader checks the kernel and the ramdisk against the system image's signature | 2 | Attack test: a tampered kernel or ramdisk |
 | [0157](../decisions/0157-boot-settings-in-ramdisk.md) Boot settings live in the ramdisk's header | 2 | Kernel tests |
 | [0158](../decisions/0158-image-try-count.md) A new system image is tried a limited number of times, then the boot loader falls back | 20 | QEMU tests: fallback |
 | [0159](../decisions/0159-root-task-boot-information.md) The root task receives the usual startup data, with a block of boot information | 6, 8, 10 | QEMU tests |
@@ -760,7 +841,7 @@ This table lists every Accepted record, the steps that build it and what checks 
 | [0190](../decisions/0190-cargo-and-build-tool.md) Cargo builds thisOS, driven by a build tool written in Rust | 1, 2 | The build tool's tests |
 | [0191](../decisions/0191-audited-list-and-wrapper.md) A list of audited crates, enforced by a compiler wrapper, keeps unsafe code in the audited set | 1 | Build check: the compiler wrapper |
 | [0192](../decisions/0192-build-scripts-reviewed.md) Build scripts and procedural macros run only in reviewed crates, and never link native code | 1 | Build check: the compiler wrapper and the sandbox |
-| [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed | 1 | Build check: cargo-vet and cargo-deny |
+| [0193](../decisions/0193-vendored-reviewed-crates.md) Third-party crates in the OS's own code are vendored and reviewed | 1 | Build check: the trust, advisory and license checks ([0285](../decisions/0285-trusted-publishers.md)) |
 | [0194](../decisions/0194-reproducible-builds.md) The system image and the boot loader build reproducibly | 2, 24 | The reproducibility check |
 | [0195](../decisions/0195-bindings-safe-output.md) The build tool generates the bindings, and the generated code contains no unsafe code | 6, 13, 23 | Build check: the compiler wrapper on generated code |
 | [0196](../decisions/0196-released-interface-copies.md) Released interface versions are kept in the repository, and every change is checked against them | 6, 23 | Build check: the compatibility checker |
@@ -769,10 +850,10 @@ This table lists every Accepted record, the steps that build it and what checks 
 | [0199](../decisions/0199-license.md) thisOS is licensed under MIT OR Apache-2.0 | 1 | Build check: cargo-deny's license check |
 | [0200](../decisions/0200-contributions.md) Contributions come in under the project's license, with no sign-off | 1 | Not testable: a contribution policy |
 | [0201](../decisions/0201-changes-after-freeze.md) After the freeze, a decision changes only through a new record that cites what building found | — | Not testable: a process |
-| [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope | 20, later | Attack tests: tampered images and packages |
+| [0202](../decisions/0202-offline-attackers.md) Attackers who get the machine while it's off are in scope | 2, 20, later | Attack tests: tampered images and packages |
 | [0203](../decisions/0203-package-format.md) A package is a signed manifest and files named by SHA-256 Merkle roots | 19 | Attack test: a tampered block |
-| [0204](../decisions/0204-hybrid-signatures.md) Signatures pair Ed25519 with ML-DSA-65 | 19, 20 | QEMU tests |
-| [0205](../decisions/0205-root-and-working-keys.md) An offline root key names the working keys, and the boot loader carries only the root | 20, 24 | Attack test: a revoked working key |
+| [0204](../decisions/0204-hybrid-signatures.md) Signatures pair Ed25519 with ML-DSA-65 | 2, 19, 20 | QEMU tests |
+| [0205](../decisions/0205-root-and-working-keys.md) An offline root key names the working keys, and the boot loader carries only the root | 2, 20, 24 | Attack test: a revoked working key |
 | [0206](../decisions/0206-owner-approves-signers.md) A program runs if the system image's signer or a signer the owner approved signed it | 19, 21, 23 | QEMU tests |
 | [0207](../decisions/0207-install-and-start-checks.md) The package store checks packages at install and after each boot, and the loader checks the policy at each start | 19, 23 | Attack test: a tampered manifest |
 | [0208](../decisions/0208-boot-loader-beside-old.md) A new boot loader is installed beside the previous one, which the firmware falls back to | 20 | QEMU tests |
@@ -811,7 +892,6 @@ This table lists every Accepted record, the steps that build it and what checks 
 | [0241](../decisions/0241-reproducibility-checks.md) The image and the boot loader are built twice in CI, and rebuilt elsewhere before signing | 2, 24 | The reproducibility check |
 | [0242](../decisions/0242-review-tiers.md) Changes are reviewed in three tiers, by role | All | Not testable: a review process |
 | [0243](../decisions/0243-audit-records-and-crate-reviews.md) Each audited crate has a record beside the list, and cargo-vet records crate reviews | 1 | Build check: every listed crate has its record |
-| [0244](../decisions/0244-imported-crate-reviews.md) Crate reviews may be imported from named organizations, outside the audited set | 1 | Build check: cargo-vet |
 | [0245](../decisions/0245-coverage-and-fuzzing.md) Host tests cover every line of the generic kernel, and system calls are fuzzed from step 4 | 4, 9 | Coverage measured in CI |
 | [0246](../decisions/0246-interruption-stretch-limit.md) Work between interruption points is limited in code, and no stretch may take more than 20 µs | 4, 15 | The simulator's work counts, and timing on the laptop |
 | [0247](../decisions/0247-kernel-size-ratchet.md) A record rule and a size ratchet keep the kernel small | 1, 9 | Build check: the size count |
@@ -839,12 +919,35 @@ This table lists every Accepted record, the steps that build it and what checks 
 | [0269](../decisions/0269-std-mutex-condvar.md) std's `Mutex` and `Condvar` are built on parking | 14 | Std tests, and loom |
 | [0270](../decisions/0270-offline-gap-stated.md) The first release states the offline gap in full, and the machine-bound key needs measured boot or the owner's secret | 24 | Not testable: release notes |
 | [0271](../decisions/0271-corrections.md) Corrections to 0009, 0045, 0206 and 0227 | — | Not testable: corrections |
+| [0272](../decisions/0272-roadmap-reopened.md) The roadmap reopens on what step 1 found, and the rest of the design stays frozen | — | Not testable: a process |
+| [0273](../decisions/0273-whole-design-in-milestones.md) The roadmap reaches the whole design through milestones | — | Not testable: the roadmap's scope |
+| [0274](../decisions/0274-milestone-definition.md) A milestone is a working image that's reviewed, passes a security pass and is tagged | — | Not testable: a process |
+| [0275](../decisions/0275-eight-milestones.md) Eight milestones follow the seven phases | — | Not testable: the plan itself |
+| [0276](../decisions/0276-milestone-security-pass.md) Each milestone passes a written security pass before it's tagged | — | Not testable: a review process |
+| [0277](../decisions/0277-sized-work-no-dates.md) The roadmap sizes the work and promises no dates | — | Not testable: a process |
+| [0278](../decisions/0278-design-pass-work-items.md) Each step opens with a design pass, and its code lands as small work items | All | Not testable: a process |
+| [0279](../decisions/0279-progress-log.md) Progress lives in a dated log, in docs/progress.md | — | Not testable: a process |
+| [0280](../decisions/0280-reviews-in-progress-log.md) Reviews are recorded in the progress log | — | Not testable: a review process |
+| [0281](../decisions/0281-step-statuses.md) A step's status is Not started, In progress or Done | — | Not testable: a process |
+| [0282](../decisions/0282-spikes-and-risks.md) The first milestone opens with two spikes, and 08-roadmap keeps a risk register | — | Not testable: the plan itself |
+| [0283](../decisions/0283-boot-loader-check-at-step-2.md) The boot loader checks the image's signature from step 2 | 2 | Attack tests: a tampered kernel, ramdisk or statement |
+| [0284](../decisions/0284-development-images.md) Milestone images run only on test machines, and say they're development images | 2 | Kernel tests: the image says it's a development image |
+| [0285](../decisions/0285-trusted-publishers.md) Third-party crates come from trusted publishers, and their code isn't reviewed | 1 | Build check: a crate from a publisher the repository doesn't name |
+| [0286](../decisions/0286-unsafe-in-trusted-crates.md) A trusted crate may contain unsafe code, which is recorded but not audited | 1 | Build check: the compiler wrapper, with a trusted crate's unsafe code |
+| [0287](../decisions/0287-trusted-crate-updates.md) Trusted crates stay pinned, and move when an advisory or a fix calls for it | 1 | Build check: the advisory check, on every change and nightly |
+| [0288](../decisions/0288-rust-project-trusted.md) The Rust project's releases are trusted, and an upgrade isn't an audit | Recurring | Each upgrade's tests and advisory check |
+| [0289](../decisions/0289-forked-crates.md) A forked crate's upstream is trusted, and our changes to it are audited | 2 | Not testable: a review rule |
+| [0290](../decisions/0290-scope-moves-by-record.md) If the measured pace shows the plan far off, scope moves to later work by record | — | Not testable: a process |
+| [0291](../decisions/0291-tags-protected.md) The tag ruleset protects the freeze, roadmap-2 and the milestone tags | 1 | Not testable: a repository setting |
+| [0292](../decisions/0292-roadmap-refreezes.md) The redesigned roadmap freezes with the tag roadmap-2 | — | Not testable: a process |
 
 ## The freeze
 
 Day 8's commit, on 2026-10-19, froze the design and the roadmap ([0255](../decisions/0255-freeze.md)). Every design document's status is Frozen. New records from here on either follow [0201](../decisions/0201-changes-after-freeze.md) and [0250](../decisions/0250-plan-changes-after-freeze.md), or settle open topics and later work ([0226](../decisions/0226-open-topics-at-their-step.md), [0251](../decisions/0251-later-work.md)).
 
 After the freeze, the audit of 2026-10-19 brought records [0256](../decisions/0256-audit-findings-as-evidence.md) to [0271](../decisions/0271-corrections.md). Its findings count as evidence under 0201 only where a check confirmed them ([0256](../decisions/0256-audit-findings-as-evidence.md)).
+
+On 2026-10-20 the roadmap reopened on what step 1 found, while the rest of the design stayed frozen ([0272](../decisions/0272-roadmap-reopened.md)). Records 0273 to 0291 redesigned it, and it froze again with the commit tagged `roadmap-2` ([0292](../decisions/0292-roadmap-refreezes.md)). The `freeze` tag stays where it is, and marks the design.
 
 ## Open questions
 

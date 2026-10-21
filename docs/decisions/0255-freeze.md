@@ -1,6 +1,6 @@
 # 0255. The design and the roadmap freeze with Day 8's commit, on 2026-10-19
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0272](0272-roadmap-reopened.md) and [0292](0292-roadmap-refreezes.md)
 - **Date:** 2026-10-19
 
 ## Context

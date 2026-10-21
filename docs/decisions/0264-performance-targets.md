@@ -1,6 +1,6 @@
 # 0264. Checkpoints set performance targets, and a missed target becomes a record
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0274](0274-milestone-definition.md)
 - **Date:** 2026-10-19
 
 ## Context

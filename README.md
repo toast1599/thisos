@@ -8,6 +8,8 @@ It's called thisOS because this OS differs from the traditional ones: its system
 
 **Week 1 (2026-10-14 → 2026-10-19) was for design only.** On 2026-10-19, at the end of Day 8, the design and the roadmap froze together ([0255](docs/decisions/0255-freeze.md)). From here on, the only way to change a frozen decision is a new record that cites what building found ([0201](docs/decisions/0201-changes-after-freeze.md)). The design was audited on the same day, after the freeze, and its checked findings count as such evidence ([0256](docs/decisions/0256-audit-findings-as-evidence.md)). They brought records 0256 to 0271.
 
+On 2026-10-20, Day 9, building began with step 1, and what it found showed the roadmap needed a redesign. The roadmap reopened, while the rest of the design stayed frozen ([0272](docs/decisions/0272-roadmap-reopened.md)), and records 0273 to 0291 redesigned it. It froze again with the tag roadmap-2 ([0292](docs/decisions/0292-roadmap-refreezes.md)). Building resumes at step 1, and [docs/progress.md](docs/progress.md) records each working day: what was designed, added and done, with the evidence ([0279](docs/decisions/0279-progress-log.md)).
+
 Every decision is written down in the [decision log](docs/decisions/README.md), and only the ones marked **Accepted** are binding.
 
 ## Week 1 plan
@@ -25,19 +27,22 @@ Every decision is written down in the [decision log](docs/decisions/README.md), 
 
 ## Roadmap
 
-[08-roadmap](docs/design/08-roadmap.md) has the exact roadmap. It takes the project from an empty repository to a first release of the whole design, in 24 steps and 7 phases ([0222](docs/decisions/0222-roadmap-to-first-release.md), [0227](docs/decisions/0227-steps-and-phases.md)). Every step gets built and tested in QEMU on x86_64, and from step 8 on, on AArch64 as well. When a phase ends, the development laptop boots that phase's image ([0223](docs/decisions/0223-qemu-and-laptop-checkpoints.md)).
+[08-roadmap](docs/design/08-roadmap.md) has the exact roadmap. It takes the project from an empty repository to a first release of the whole design, in 24 steps, through eight milestones ([0222](docs/decisions/0222-roadmap-to-first-release.md), [0273](docs/decisions/0273-whole-design-in-milestones.md), [0275](docs/decisions/0275-eight-milestones.md)). Every step opens with a design pass, and its code lands as small work items, each reviewed on its own ([0278](docs/decisions/0278-design-pass-work-items.md)). Every step gets built and tested in QEMU on x86_64, and from step 8 on, on AArch64 as well.
 
-| Phase | Steps |
+Each milestone ends in a working image that's reviewed, passes a written security pass, and is tagged. The development laptop boots it from a USB stick ([0274](docs/decisions/0274-milestone-definition.md), [0276](docs/decisions/0276-milestone-security-pass.md)). Milestone images are development images, for test machines only ([0284](docs/decisions/0284-development-images.md)).
+
+| Milestone | Steps |
 |---|---|
-| 1. Foundations, on x86_64 | 1–3: the repository, the build tool and its checks; booting the kernel; the kernel's base |
-| 2. The kernel's objects, on x86_64 | 4–6: memory, capabilities and revoke; address spaces and threads; system calls, the IDL compiler and the system library |
-| 3. User mode on both architectures | 7–9: the boot loader for AArch64; the first user-mode program; IPC, faults and interrupts |
-| 4. The core services | 10–14: std's first stage and the root task; the scheduler; the memory service; the default pager, the loader and the boot manifest; the log, time and random services, with std's second stage |
-| 5. Multicore and devices | 15–16: hardware discovery and multicore; the device manager, the PCI bus driver and the IOMMU service |
-| 6. Storage, packages and verified boot | 17–20: NVMe, block storage and the filesystem; USB storage; packages, with std's third stage; verified boot and updates |
-| 7. Users, the network and the first release | 21–24: the console, login and the shell; the network, with std's fourth stage; third-party programs; the first release |
+| m1. Foundations, on x86_64 | Two spikes, std as a patch and a user-mode IOMMU; 1–3: the repository, the build tool and its checks; booting the kernel, from a signed image; the kernel's base |
+| m2. The kernel's objects, on x86_64 | 4–6: memory, capabilities and revoke; address spaces and threads; system calls, the IDL compiler and the system library |
+| m3. User mode on both architectures | 7–9: the boot loader for AArch64; the first user-mode program; IPC, faults and interrupts |
+| m4. The core services | 10–14: std's first stage and the root task; the scheduler; the memory service; the default pager, the loader and the boot manifest; the log, time and random services, with std's second stage |
+| m5. Multicore and devices | 15–16: hardware discovery and multicore; the device manager, the PCI bus driver and the IOMMU service |
+| m6. Storage, packages and updates | 17–20: NVMe, block storage and the filesystem; USB storage; packages, with std's third stage; updates, fallback and Secure Boot |
+| m7. Users and the network | 21–22: the console, login and the shell; the network, with std's fourth stage |
+| m8. The first release | 23–24: third-party programs; the first release |
 
-We estimate each step from the size of its code and the review that code needs. Checkpoints then calibrate those estimates against the pace we actually measure ([0249](docs/decisions/0249-estimates-and-checkpoints.md)).
+We size each step by its code and the review that code needs, and promise no dates. Each milestone records the pace we actually measure, and the remaining work is forecast from it ([0277](docs/decisions/0277-sized-work-no-dates.md)). Third-party crates come from trusted publishers, and their vulnerabilities are tracked, so review goes to our own code ([0285](docs/decisions/0285-trusted-publishers.md)).
 
 ## License
 
