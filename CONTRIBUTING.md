@@ -38,7 +38,8 @@ There are two workspaces:
 
 ## xtask
 
-- `cargo xtask build` builds the kernel and writes a UEFI GPT disk image to `target/thisos.img` with `bootloader`'s `UefiBoot`, then prints the image's path. It uses the dev profile; `--release` builds release. `--tests` builds the laptop test images instead (see below).
+- `cargo xtask build` builds the kernel and writes a UEFI GPT disk image to `target/thisos.img` with `bootloader`'s `DiskImageBuilder`, then prints the image's path and its build ID. It uses the dev profile; `--release` builds release.
+  The build ID is `ThisOS <version> <commit> <profile> <time>`, for example `ThisOS 0.0.0 f172dcc-dirty debug 2026-11-04T09:35Z`: the commit is `git describe --always --dirty`, and the time is when xtask built it, in UTC. xtask passes everything after the version to the kernel build as `THISOS_BUILD`. The kernel logs the whole ID as its first line, or `unknown build` in place of the rest when built without xtask. The image holds the ID in `thisos-build.txt` at the root of its FAT partition. `--tests` builds the laptop test images instead (see below).
 - `cargo xtask run` builds, then boots the image in QEMU with a window for the framebuffer and serial output on the terminal. QEMU's monitor is on Ctrl-Alt-2 in that window. `--gdb` starts QEMU's gdb stub on TCP port 1234 and starts the CPU paused.
 
 QEMU runs:
@@ -100,7 +101,7 @@ Anything that passes in QEMU must also pass on the test laptop described in `doc
 `cargo xtask flash` writes the image to a USB stick, erasing it. It takes `--release`, `--device PATH` and `--yes`. It runs as you, and runs `dd` and `sgdisk` through `sudo`. It:
 
 - only considers whole disks on USB that are removable or hotplug, and never the internal disk. With one such disk it uses it; with several, `--device` picks one.
-- shows the stick's path, model, serial and size, and asks before writing. `--yes` skips the question, not the checks.
+- shows the stick's path, model, serial and size, and the build ID the stick holds. It reads `thisos-build.txt` from the stick's FAT partition, mounting it with `udisksctl` if it isn't mounted. Then it asks before writing. `--yes` skips the question, not the checks.
 - refuses a stick smaller than the image, and unmounts the stick's partitions first.
 - writes with `dd`, drops the stick's cached pages with `blockdev --flushbufs` so that the read comes from the stick, then reads the image back and compares it byte for byte.
 - moves the backup GPT to the end of the stick with `sgdisk -e`, checks the table with `sgdisk -v`, and powers the stick off.

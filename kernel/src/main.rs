@@ -18,10 +18,16 @@ type Arch = thisos_arch_x86_64::X86_64;
 #[cfg(target_arch = "x86_64")]
 thisos_arch_x86_64::entry!(kmain);
 
+/// The commit, profile and build time, which `cargo xtask build` passes in.
+const BUILD: &str = match option_env!("THISOS_BUILD") {
+    Some(build) => build,
+    None => "unknown build",
+};
+
 fn kmain(boot: BootInfo<Arch>) -> ! {
     let has_framebuffer = boot.framebuffer.is_some();
     logger::init(boot.serial, boot.framebuffer);
-    log::info!("ThisOS {}", env!("CARGO_PKG_VERSION"));
+    log::info!("ThisOS {} {BUILD}", env!("CARGO_PKG_VERSION"));
     if !has_framebuffer {
         log::warn!("no framebuffer in a format the console draws; logging to serial only");
     }
