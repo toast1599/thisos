@@ -1,7 +1,8 @@
 //! A text console drawn into a framebuffer with JetBrains Mono. It keeps
-//! the text in a grid of cells and redraws the screen from that when it
-//! scrolls, so it never reads the framebuffer, which firmware often maps
-//! uncached.
+//! the text in a grid of cells and, when it scrolls, redraws from that the
+//! cells that change, so it never reads the framebuffer. Firmware often maps
+//! the framebuffer uncached, where every store is a bus transaction, so it
+//! also writes two pixels per store.
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -9,6 +10,8 @@
 mod font;
 
 use core::fmt;
+use core::iter;
+use core::ops::Range;
 
 use thisos_hal::{Framebuffer, PixelFormat};
 
@@ -78,7 +81,7 @@ impl Color {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct Cell {
     byte: u8,
     color: Color,
@@ -104,6 +107,9 @@ struct Screen<'a> {
     font: &'static Font,
     cols: usize,
     rows: usize,
+    /// Rows whose pixels don't match the grid, because large text covers
+    /// them.
+    stale: Range<usize>,
 }
 
 impl<'a> Console<'a> {
@@ -138,6 +144,7 @@ impl<'a> Console<'a> {
             font,
             cols,
             rows,
+            stale: 0..0,
         });
     }
 
@@ -149,7 +156,7 @@ impl<'a> Console<'a> {
     /// Writes `text` on lines of its own, each glyph `scale` times its size
     /// in both directions, in the current color. Characters past the
     /// screen's width are dropped. The large text isn't kept in the grid, so
-    /// it disappears if the console scrolls after it.
+    /// it disappears when the console next scrolls.
     pub fn write_large(&mut self, text: &str, scale: usize) {
         if self.col != 0 {
             self.newline();
@@ -161,6 +168,7 @@ impl<'a> Console<'a> {
             return;
         };
         let top = self.row.saturating_sub(scale);
+        screen.stale = top..top + scale;
         for (i, c) in text.chars().take(screen.cols / scale).enumerate() {
             let byte = u8::try_from(c)
                 .ok()
@@ -199,14 +207,27 @@ impl<'a> Console<'a> {
             self.row += 1;
             return;
         }
+        // Each screen row gets the row below it, and the last row goes
+        // blank. Only cells that differ from what the row shows need
+        // drawing, except on stale rows, which need every cell.
+        for row in 0..screen.rows {
+            let stale = screen.stale.contains(&row);
+            for col in 0..screen.cols {
+                let shown = self.cells[row * MAX_COLS + col];
+                let next = if row + 1 < screen.rows {
+                    self.cells[(row + 1) * MAX_COLS + col]
+                } else {
+                    BLANK
+                };
+                if stale || next != shown {
+                    screen.draw(col, row, next);
+                }
+            }
+        }
+        screen.stale = 0..0;
         let last = (screen.rows - 1) * MAX_COLS;
         self.cells.copy_within(MAX_COLS..last + MAX_COLS, 0);
         self.cells[last..last + MAX_COLS].fill(BLANK);
-        for row in 0..screen.rows {
-            for col in 0..screen.cols {
-                screen.draw(col, row, self.cells[row * MAX_COLS + col]);
-            }
-        }
     }
 }
 
@@ -233,17 +254,14 @@ impl Screen<'_> {
     fn draw(&mut self, col: usize, row: usize, cell: Cell) {
         let Font { width, height, .. } = *self.font;
         let fg = cell.color.rgb();
+        let format = self.fb.format;
         let glyph = self.font.glyph(cell.byte);
         for (y, coverage) in glyph.chunks_exact(width).enumerate() {
             let start = ((row * height + y) * self.fb.stride + col * width) * 4;
-            let (pixels, _) = self.fb.buffer[start..start + width * 4].as_chunks_mut::<4>();
-            for (pixel, &alpha) in pixels.iter_mut().zip(coverage) {
-                let [r, g, b] = fg.map(|channel| scale(channel, alpha));
-                *pixel = match self.fb.format {
-                    PixelFormat::Rgb => [r, g, b, 0],
-                    PixelFormat::Bgr => [b, g, r, 0],
-                };
-            }
+            write_pixels(
+                &mut self.fb.buffer[start..start + width * 4],
+                coverage.iter().map(|&alpha| pixel(fg, alpha, format)),
+            );
         }
     }
 
@@ -251,22 +269,46 @@ impl Screen<'_> {
     fn draw_large(&mut self, col: usize, row: usize, byte: u8, color: Color, factor: usize) {
         let Font { width, height, .. } = *self.font;
         let fg = color.rgb();
+        let format = self.fb.format;
         let glyph = self.font.glyph(byte);
         for (y, coverage) in glyph.chunks_exact(width).enumerate() {
             for dy in 0..factor {
                 let start = ((row * height + y * factor + dy) * self.fb.stride + col * width) * 4;
-                let (pixels, _) =
-                    self.fb.buffer[start..start + width * factor * 4].as_chunks_mut::<4>();
-                for (pixel, &alpha) in pixels.chunks_exact_mut(factor).zip(coverage) {
-                    let [r, g, b] = fg.map(|channel| scale(channel, alpha));
-                    pixel.fill(match self.fb.format {
-                        PixelFormat::Rgb => [r, g, b, 0],
-                        PixelFormat::Bgr => [b, g, r, 0],
-                    });
-                }
+                write_pixels(
+                    &mut self.fb.buffer[start..start + width * factor * 4],
+                    coverage
+                        .iter()
+                        .flat_map(|&alpha| iter::repeat_n(pixel(fg, alpha, format), factor)),
+                );
             }
         }
     }
+}
+
+/// Writes `pixels` along `row`, two per 8-byte store and the last one alone
+/// when there is an odd number: on an uncached framebuffer each store is a
+/// bus transaction, whatever its width.
+fn write_pixels(row: &mut [u8], mut pixels: impl Iterator<Item = u32>) {
+    let (pairs, last) = row.as_chunks_mut::<8>();
+    for pair in pairs {
+        let (Some(low), Some(high)) = (pixels.next(), pixels.next()) else {
+            return;
+        };
+        *pair = (u64::from(low) | u64::from(high) << 32).to_le_bytes();
+    }
+    if let (Ok(last), Some(pixel)) = (<&mut [u8; 4]>::try_from(last), pixels.next()) {
+        *last = pixel.to_le_bytes();
+    }
+}
+
+/// `fg` blended over black by `alpha`, as the four bytes of a pixel in
+/// `format` read as a little-endian word.
+fn pixel(fg: [u8; 3], alpha: u8, format: PixelFormat) -> u32 {
+    let [r, g, b] = fg.map(|channel| scale(channel, alpha));
+    u32::from_le_bytes(match format {
+        PixelFormat::Rgb => [r, g, b, 0],
+        PixelFormat::Bgr => [b, g, r, 0],
+    })
 }
 
 /// Blends `channel` over the black background by `alpha` out of 255.
@@ -376,6 +418,33 @@ mod tests {
 
         let mut fresh = console(&mut b, PixelFormat::Bgr);
         write!(fresh, "b\nc").unwrap();
+        assert_eq!(pixels(&scrolled), pixels(&fresh));
+    }
+
+    #[test]
+    fn scrolls_cells_that_change_only_in_color() {
+        let (mut a, mut b) = (buffer(), buffer());
+        let mut scrolled = console(&mut a, PixelFormat::Bgr);
+        scrolled.set_color(Color::Red);
+        writeln!(scrolled, "ab").unwrap();
+        scrolled.set_color(Color::Gray);
+        write!(scrolled, "ab\na").unwrap();
+
+        let mut fresh = console(&mut b, PixelFormat::Bgr);
+        write!(fresh, "ab\na").unwrap();
+        assert_eq!(pixels(&scrolled), pixels(&fresh));
+    }
+
+    #[test]
+    fn large_text_goes_when_the_console_scrolls() {
+        // Four rows of the 12 px font.
+        let (mut a, mut b) = (vec![0; WIDTH * 64 * 4], vec![0; WIDTH * 64 * 4]);
+        let mut scrolled = sized_console(&mut a, 64, PixelFormat::Bgr);
+        scrolled.write_large("@", 2);
+        write!(scrolled, "x\ny\nz").unwrap();
+
+        let mut fresh = sized_console(&mut b, 64, PixelFormat::Bgr);
+        write!(fresh, "\nx\ny\nz").unwrap();
         assert_eq!(pixels(&scrolled), pixels(&fresh));
     }
 
