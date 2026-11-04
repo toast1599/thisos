@@ -11,5 +11,10 @@ test = false
 doctest = false
 bench = false
 
+[dependencies]
+bootloader_api = "0.11"
+thisos-hal.workspace = true
+x86_64 = "0.15"
+
 [lints]
 workspace = true

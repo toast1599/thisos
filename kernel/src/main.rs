@@ -8,6 +8,18 @@
 
 use core::panic::PanicInfo;
 
+use thisos_hal::{BootInfo, Cpu};
+
+#[cfg(target_arch = "x86_64")]
+type Arch = thisos_arch_x86_64::X86_64;
+
+#[cfg(target_arch = "x86_64")]
+thisos_arch_x86_64::entry!(kmain);
+
+fn kmain(_boot: BootInfo) -> ! {
+    Arch::halt()
+}
+
 // Replaced by the real handler in work item 5.
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {

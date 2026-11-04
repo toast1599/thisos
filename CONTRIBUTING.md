@@ -38,13 +38,20 @@ There are two workspaces:
 
 ## xtask
 
-- `cargo xtask build` builds the kernel and writes a UEFI GPT disk image with its ramdisk, using `bootloader`'s `UefiBoot`, and prints the image's path. `--tests` builds the laptop test images instead (see below).
-- `cargo xtask run` boots the image in QEMU with a window for the framebuffer and serial output on the terminal. `--gdb` starts QEMU's gdb stub and waits.
+- `cargo xtask build` builds the kernel and writes a UEFI GPT disk image to `target/thisos.img` with `bootloader`'s `UefiBoot`, then prints the image's path. It uses the dev profile; `--release` builds release. `--tests` builds the laptop test images instead (see below).
+- `cargo xtask run` builds, then boots the image in QEMU with a window for the framebuffer and serial output on the terminal. QEMU's monitor is on Ctrl-Alt-2 in that window. `--gdb` starts QEMU's gdb stub on TCP port 1234 and starts the CPU paused.
+
+QEMU runs:
+
+- the q35 machine, one CPU and 512 MiB of RAM
+- KVM with the host's CPU when `/dev/kvm` is usable, and TCG emulation otherwise
+- the image as USB storage on an xHCI controller, the way the laptop boots its stick
+- `-no-reboot`, so a triple fault closes QEMU and doesn't loop
 - `cargo xtask test` runs the host tests, then the QEMU tests headless with a timeout.
 - `cargo xtask ci` runs locally everything CI runs.
 - `cargo xtask font` rasterizes `xtask/assets/JetBrainsMono-Regular.ttf` with `fontdue` into the bitmap the kernel embeds. Both the TTF and the bitmap are committed, so ordinary builds never run the rasterizer.
 
-OVMF comes from the `ovmf-prebuilt` crate at a pinned release, and xtask caches it. xtask never writes to block devices: to test on the laptop, write the image to a USB stick yourself.
+OVMF comes from the `ovmf-prebuilt` crate at a pinned release, `edk2-stable202605-r1`, which xtask caches in `target/ovmf/`. Each run copies the firmware's variables file to `target/ovmf-vars.fd`, so every boot starts from the same state. xtask never writes to block devices: to test on the laptop, write the image to a USB stick yourself.
 
 ## Unsafe code
 
@@ -89,6 +96,18 @@ xtask uses clippy's defaults. Formatting is rustfmt's defaults. Identifiers, com
 
 Anything that passes in QEMU must also pass on the test laptop described in `docs/design.md`. Laptop runs happen at every milestone and after any change to arch or driver code. A milestone isn't done until it passes there.
 
+To write an image to a USB stick, find the stick's device with `lsblk` (here `/dev/sdX`; writing it erases the stick), unmount it, then:
+
+```
+sudo dd if=target/thisos.img of=/dev/sdX bs=4M conv=fsync status=progress
+sudo sgdisk -e /dev/sdX
+udisksctl power-off -b /dev/sdX
+```
+
+`sgdisk -e` moves the image's backup GPT to the end of the stick. The image is only a few MiB, so after `dd` that table sits near the start of the stick. The laptop's firmware doesn't list a stick in that state, and Linux warns about it.
+
+Boot the stick from the laptop's F12 menu, with Secure Boot off.
+
 `cargo xtask build --tests` writes one combined image holding every test that doesn't fault, plus one image per faulting test file. Each image ends on a summary screen listing the tests and their results, with a large PASS or FAIL line, then halts.
 
 ## CI
@@ -101,6 +120,8 @@ GitHub Actions runs on every push and pull request:
 - Miri
 - the QEMU tests
 - `cargo deny`
+
+CI caches `target/ovmf/` between runs. Fetching OVMF from GitHub can take minutes, and the cache means CI pays that only when the pinned release changes.
 
 ## Dependencies
 

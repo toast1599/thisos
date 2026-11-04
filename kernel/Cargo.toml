@@ -11,5 +11,11 @@ name = "thisos-kernel"
 test = false
 bench = false
 
+[dependencies]
+thisos-hal.workspace = true
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+thisos-arch-x86_64.workspace = true
+
 [lints]
 workspace = true
