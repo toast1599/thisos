@@ -19,8 +19,12 @@ type Arch = thisos_arch_x86_64::X86_64;
 thisos_arch_x86_64::entry!(kmain);
 
 fn kmain(boot: BootInfo<Arch>) -> ! {
-    logger::init(boot.serial);
+    let has_framebuffer = boot.framebuffer.is_some();
+    logger::init(boot.serial, boot.framebuffer);
     log::info!("ThisOS {}", env!("CARGO_PKG_VERSION"));
+    if !has_framebuffer {
+        log::warn!("no framebuffer in a format the console draws; logging to serial only");
+    }
     Arch::halt()
 }
 

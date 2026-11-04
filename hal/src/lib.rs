@@ -14,6 +14,46 @@ use core::fmt;
 pub struct BootInfo<P: Platform> {
     /// The serial port, or `None` when no device answers.
     pub serial: Option<P::Serial>,
+    /// The screen, or `None` when the loader set up none in a format the
+    /// kernel draws.
+    pub framebuffer: Option<Framebuffer<'static>>,
+}
+
+/// A linear framebuffer of 4-byte pixels, as the firmware set it up. Rows
+/// are `stride` pixels apart, and `buffer` holds at least `height` of them.
+pub struct Framebuffer<'a> {
+    /// The pixels, row after row.
+    pub buffer: &'a mut [u8],
+    /// Visible pixels per row.
+    pub width: usize,
+    /// Rows.
+    pub height: usize,
+    /// Pixels from the start of one row to the start of the next.
+    pub stride: usize,
+    /// The order of the color bytes in each pixel.
+    pub format: PixelFormat,
+}
+
+// By hand, so that Debug doesn't print megabytes of pixels.
+impl fmt::Debug for Framebuffer<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Framebuffer")
+            .field("len", &self.buffer.len())
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("stride", &self.stride)
+            .field("format", &self.format)
+            .finish()
+    }
+}
+
+/// The byte order of a framebuffer pixel. The fourth byte is unused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PixelFormat {
+    /// Red, green, blue.
+    Rgb,
+    /// Blue, green, red.
+    Bgr,
 }
 
 /// Control of the processor the kernel runs on.

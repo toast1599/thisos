@@ -9,7 +9,8 @@ use core::fmt;
 
 use bootloader_api::BootloaderConfig;
 use bootloader_api::config::Mapping;
-use thisos_hal::{BootInfo, Cpu, Platform, Serial};
+use bootloader_api::info::{FrameBuffer, PixelFormat};
+use thisos_hal::{BootInfo, Cpu, Framebuffer, Platform, Serial};
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
 
@@ -63,7 +64,7 @@ pub const BOOTLOADER_CONFIG: BootloaderConfig = {
 /// Call this once, from the entry point, before anything else uses the
 /// devices: COM1's I/O ports.
 #[doc(hidden)]
-pub unsafe fn boot_info(_boot: &'static mut bootloader_api::BootInfo) -> BootInfo<X86_64> {
+pub unsafe fn boot_info(boot: &'static mut bootloader_api::BootInfo) -> BootInfo<X86_64> {
     let config = Config {
         baud_rate: BaudRate::Baud115200,
         ..Config::DEFAULT
@@ -74,7 +75,27 @@ pub unsafe fn boot_info(_boot: &'static mut bootloader_api::BootInfo) -> BootInf
     let tty = unsafe { Uart16550Tty::new_port(COM1_PORT, config) };
     // No device answering is normal: the laptop has no serial port.
     let serial = tty.ok().map(Com1);
-    BootInfo { serial }
+    let framebuffer = boot.framebuffer.take().and_then(framebuffer);
+    BootInfo {
+        serial,
+        framebuffer,
+    }
+}
+
+fn framebuffer(fb: FrameBuffer) -> Option<Framebuffer<'static>> {
+    let info = fb.info();
+    let format = match (info.pixel_format, info.bytes_per_pixel) {
+        (PixelFormat::Rgb, 4) => thisos_hal::PixelFormat::Rgb,
+        (PixelFormat::Bgr, 4) => thisos_hal::PixelFormat::Bgr,
+        _ => return None,
+    };
+    Some(Framebuffer {
+        buffer: fb.into_buffer(),
+        width: info.width,
+        height: info.height,
+        stride: info.stride,
+        format,
+    })
 }
 
 /// Defines the kernel's entry point: `entry!(kmain)` makes the boot loader

@@ -55,6 +55,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "thisos-console"
+version = "0.0.0"
+dependencies = [
+ "thisos-hal",
+]
+
+[[package]]
 name = "thisos-hal"
 version = "0.0.0"
 
@@ -65,6 +72,7 @@ dependencies = [
  "log",
  "spin",
  "thisos-arch-x86_64",
+ "thisos-console",
  "thisos-hal",
 ]
 

@@ -1,0 +1,17 @@
+[package]
+name = "thisos-console"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+bench = false
+
+[dependencies]
+thisos-hal.workspace = true
+
+[lints]
+workspace = true

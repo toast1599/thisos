@@ -1,1 +1,1 @@
-doc-valid-idents = ["ThisOS", ".."]
+doc-valid-idents = ["ThisOS", "JetBrains", ".."]

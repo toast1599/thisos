@@ -83,7 +83,7 @@ The kernel owns these mechanisms ([0001](adr/0001-kernel-scope.md)):
 
 Drivers, filesystems and networking run in user space. Something moves out of the kernel only when there is evidence for it.
 
-The kernel logs through the `log` facade to two places: the serial port (COM1), which QEMU tests read, and a framebuffer text console, which is all the laptop has. The console uses JetBrains Mono rasterized to printable ASCII at about 16 and 32 pixels, picking the size that gives roughly 40 to 60 rows on the screen.
+The kernel logs through the `log` facade to two places: the serial port (COM1), which QEMU tests read, and a framebuffer text console, which is all the laptop has. The console uses JetBrains Mono rasterized to printable ASCII at 12, 16, 24 and 32 pixels per em, which give cells of 7×16, 10×22, 14×32 and 19×43 pixels. It uses the largest size that gives at least 40 rows, or the smallest when none does: 12 px on QEMU's 1280×800 screen (50 rows), 16 px on 1080p and on the test laptop's 1920×1200 (49 and 54 rows), and 32 px at 4K (50 rows). It keeps the text in a grid of cells and redraws the screen from that when it scrolls, because reading the framebuffer is slow on real hardware.
 
 A kernel panic prints its message, its location and a backtrace that follows frame pointers to both log sinks, then halts every core. The kernel is built with frame pointers for this. In a test build a panic exits QEMU with a failure code.
 

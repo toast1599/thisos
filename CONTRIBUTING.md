@@ -49,7 +49,7 @@ QEMU runs:
 - `-no-reboot`, so a triple fault closes QEMU and doesn't loop
 - `cargo xtask test` runs the host tests, then the QEMU tests headless with a timeout.
 - `cargo xtask ci` runs locally everything CI runs.
-- `cargo xtask font` rasterizes `xtask/assets/JetBrainsMono-Regular.ttf` with `fontdue` into the bitmap the kernel embeds. Both the TTF and the bitmap are committed, so ordinary builds never run the rasterizer.
+- `cargo xtask font` rasterizes `xtask/assets/JetBrainsMono-Regular.ttf` (v2.304, under the SIL Open Font License in `xtask/assets/OFL.txt`) with `fontdue` into one 8-bit coverage bitmap per size in `lib/console/src/font/`, and writes the `font.rs` that embeds them. The TTF, the bitmaps and `font.rs` are committed, so ordinary builds never run the rasterizer. It prints any glyphs it had to clip to their cell.
 
 OVMF comes from the `ovmf-prebuilt` crate at a pinned release, `edk2-stable202605-r1`, which xtask caches in `target/ovmf/`. Each run copies the firmware's variables file to `target/ovmf-vars.fd`, so every boot starts from the same state. xtask never writes to block devices: to test on the laptop, write the image to a USB stick yourself.
 

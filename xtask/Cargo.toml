@@ -11,4 +11,5 @@ publish = false
 
 [dependencies]
 bootloader = { version = "0.11", default-features = false, features = ["uefi"] }
+fontdue = "0.9"
 ovmf-prebuilt = "0.2"
