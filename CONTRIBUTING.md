@@ -12,9 +12,24 @@ Every choice that has a reasonable alternative goes to the maintainer before its
 
 An ADR has a status line, a date, and three sections: Context, Decision and Consequences. It is under a page long, and is numbered in sequence (`0005-short-name.md`). A provisional ADR says what will confirm it.
 
+## Work items
+
+Each milestone is a GitHub milestone, and each of its work items is a GitHub issue. An item's issue is opened when work on it starts, and the commit that finishes it closes it. A work item is small enough to review in one sitting, and ends with something that builds or boots.
+
 ## Toolchain
 
-The whole repository uses one pinned, dated nightly, set in `rust-toolchain.toml` and bumped by hand. The kernel builds for the prebuilt `x86_64-unknown-none` target.
+The whole repository uses one pinned, dated nightly, set in `rust-toolchain.toml` and bumped by hand. It is the newest nightly that has rustfmt, clippy, Miri, `rust-src` and the `x86_64-unknown-none` and `x86_64-unknown-uefi` targets. The kernel builds for the prebuilt `x86_64-unknown-none` target.
+
+`rust-toolchain.toml` uses the minimal profile, and lists those components and targets explicitly.
+
+Every crate uses the 2024 edition. Move to the 2027 edition once it is released, expected some time in 2027.
+
+Build profiles:
+
+- `panic = "abort"` in every profile, because the kernel can't unwind.
+- Frame pointers are forced for target builds in `.cargo/config.toml`, so a panic can print a backtrace.
+- Debug info is on in dev and release.
+- Dev builds use `opt-level = 1`. At level 0 the kernel is slow and its stack frames are large.
 
 There are two workspaces:
 
@@ -33,7 +48,7 @@ OVMF comes from the `ovmf-prebuilt` crate at a pinned release, and xtask caches 
 
 ## Unsafe code
 
-`thisos-arch-x86_64` is the only crate allowed unsafe code. Every other crate starts with `#![forbid(unsafe_code)]`. Adding a crate to the exception list is a decision like any other.
+`thisos-arch-x86_64` is the only crate allowed unsafe code. Every other crate starts with `#![forbid(unsafe_code)]`. This is an attribute and not a workspace lint, because Cargo can't combine a crate's own `[lints]` table with the workspace's. Adding a crate to the exception list is a decision like any other.
 
 Inside the exception list:
 
@@ -59,7 +74,6 @@ These are denied:
 - `clippy::unwrap_used` and `clippy::expect_used`, in the kernel and arch crates only
 
 `clippy::pedantic` is on as a warning group. Four of its lints are allowed: `module_name_repetitions`, `must_use_candidate`, `missing_errors_doc` and `missing_panics_doc`. CI passes `-D warnings`, so pedantic warnings fail the build.
-
 xtask uses clippy's defaults. Formatting is rustfmt's defaults. Identifiers, comments, docs and messages use American spelling, as in "color" and "initialize".
 
 ## Tests
@@ -90,4 +104,4 @@ GitHub Actions runs on every push and pull request:
 
 ## Dependencies
 
-Dependencies come from crates.io. Each new dependency is reviewed when it is added, and adding one is a decision. `Cargo.lock` is committed. `cargo deny` checks advisories, licenses and sources. Nothing is vendored.
+Dependencies come from crates.io. Each new dependency is reviewed when it is added, and adding one is a decision. Version requirements are caret ranges such as `"0.11"`. `Cargo.lock` is committed, and pins the exact versions. A `cargo update` is a change reviewed like any other. `cargo deny` checks advisories, licenses and sources. Nothing is vendored.
