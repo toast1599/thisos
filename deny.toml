@@ -1,0 +1,31 @@
+# cargo deny's policy for both workspaces: `cargo xtask ci` checks the root
+# and xtask/ against this one file.
+
+[advisories]
+# The ignore below matches xtask only, so the root's run doesn't meet it.
+unused-ignored-advisory = "allow"
+ignore = [
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained with no fixed version. It comes in through fontdue, which only `cargo xtask font` uses, run by hand on the committed TTF." },
+]
+
+[licenses]
+# Exactly the licenses today's dependencies need. A dependency that brings a
+# new one fails until it is added here, in the same review.
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+# Most of the list is needed by xtask only, so the root's run doesn't meet it.
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

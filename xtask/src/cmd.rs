@@ -5,6 +5,21 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, ensure};
 
+use crate::root;
+
+/// A cargo command in the repository root, using the cargo that runs xtask.
+pub fn cargo() -> Command {
+    let mut cmd = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
+    cmd.current_dir(root());
+    cmd
+}
+
+/// Builds `cmd` for the host. The root's `.cargo/config.toml` makes
+/// x86_64-unknown-none the default target, also for xtask's own workspace.
+pub fn on_host(cmd: &mut Command) -> &mut Command {
+    cmd.args(["--target", "host-tuple"])
+}
+
 /// Runs `cmd` with the terminal attached, and fails if it does.
 pub fn exec(cmd: &mut Command) -> Result<()> {
     let status = cmd

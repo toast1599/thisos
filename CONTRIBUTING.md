@@ -49,8 +49,8 @@ QEMU runs:
 - the image as USB storage on an xHCI controller, the way the laptop boots its stick
 - `-no-reboot`, so a triple fault closes QEMU and doesn't loop
 - `cargo xtask flash` builds, then writes the image to the USB stick for a laptop run (see below).
-- `cargo xtask test` runs the host tests, then the QEMU tests headless with a timeout.
-- `cargo xtask ci` runs locally everything CI runs.
+- `cargo xtask test` runs the host tests of every `lib/*` crate. The QEMU tests, headless with a timeout, join it once they exist.
+- `cargo xtask ci` runs locally everything CI runs, in CI's order, and stops at the first failure: rustfmt on both workspaces; clippy with `-D warnings` on the root workspace for `x86_64-unknown-none`, on each `lib/*` crate for the host with its tests, and on xtask; `cargo xtask test`; Miri on each `lib/*` crate; `cargo deny` on both workspaces; `cargo xtask build`. It needs `cargo-deny` installed (`cargo install cargo-deny --locked`) and checks for it first.
 - `cargo xtask font` rasterizes `xtask/assets/JetBrainsMono-Regular.ttf` (v2.304, under the SIL Open Font License in `xtask/assets/OFL.txt`) with `fontdue` into one 8-bit coverage bitmap per size in `lib/console/src/font/`, and writes the `font.rs` that embeds them. The TTF, the bitmaps and `font.rs` are committed, so ordinary builds never run the rasterizer. It prints any glyphs it had to clip to their cell.
 
 OVMF comes from the `ovmf-prebuilt` crate at a pinned release, `edk2-stable202605-r1`, which xtask caches in `target/ovmf/`. Each run copies the firmware's variables file to `target/ovmf-vars.fd`, so every boot starts from the same state.
@@ -120,11 +120,14 @@ GitHub Actions runs on every push and pull request:
 - clippy with `-D warnings`
 - host tests
 - Miri
-- the QEMU tests
+- the QEMU tests, once they exist
 - `cargo deny`
+- an image build
 
-CI caches `target/ovmf/` between runs. Fetching OVMF from GitHub can take minutes, and the cache means CI pays that only when the pinned release changes.
+`.github/workflows/ci.yml` has one job on `ubuntu-24.04` that runs `cargo xtask ci`, so CI and a local run do the same checks. It installs the toolchain from `rust-toolchain.toml` with the runner's rustup, and `cargo-deny` 0.20.2 as a prebuilt binary through `taiki-e/install-action`. Every action is pinned to a full commit SHA, with its tag in a comment. The workflow only reads the repository, and a new push cancels a run still going on the same ref.
+
+CI caches the cargo registry and both target directories, keyed on `rust-toolchain.toml` and both `Cargo.lock` files. The cache will also hold `target/ovmf/` once CI boots QEMU: fetching OVMF from GitHub can take minutes, and the cache means CI pays that only when the pinned release changes.
 
 ## Dependencies
 
-Dependencies come from crates.io. Each new dependency is reviewed when it is added, and adding one is a decision. Version requirements are caret ranges such as `"0.11"`. `Cargo.lock` is committed, and pins the exact versions. A `cargo update` is a change reviewed like any other. `cargo deny` checks advisories, licenses and sources. Nothing is vendored.
+Dependencies come from crates.io. Each new dependency is reviewed when it is added, and adding one is a decision. Version requirements are caret ranges such as `"0.11"`. `Cargo.lock` is committed, and pins the exact versions. A `cargo update` is a change reviewed like any other. `cargo deny` checks advisories, licenses and sources against `deny.toml`, which both workspaces share. It allows exactly the licenses the dependencies use today, so a dependency with a new license fails until the license is added there, as part of that dependency's review. Unmaintained crates fail like other advisories; an ignored advisory is listed in `deny.toml` with its reason. Crates come from crates.io only, and duplicate versions are a warning. Nothing is vendored.

@@ -1,9 +1,11 @@
 mod build;
+mod ci;
 mod cmd;
 mod flash;
 mod font;
 mod lsblk;
 mod qemu;
+mod test;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -49,6 +51,10 @@ enum Command {
         #[arg(long)]
         yes: bool,
     },
+    /// Run the host tests.
+    Test,
+    /// Run locally everything CI runs.
+    Ci,
     /// Rasterize the console font into lib/console/src/font.
     Font,
 }
@@ -64,6 +70,8 @@ fn main() -> ExitCode {
             device,
             yes,
         } => flash::flash(release, device.as_deref(), yes),
+        Command::Test => test::test(),
+        Command::Ci => ci::ci(),
         Command::Font => font::font(),
     };
     match result {

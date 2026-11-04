@@ -5,7 +5,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 
-use crate::cmd::{exec, output};
+use crate::cmd::{cargo, exec, output};
 use crate::root;
 
 /// The file in the image's FAT partition that holds the build ID.
@@ -21,13 +21,7 @@ pub struct Image {
 /// Builds the kernel and writes the UEFI disk image.
 pub fn build(release: bool) -> Result<Image> {
     let profile = if release { "release" } else { "debug" };
-    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    let pkgid =
-        output(
-            Command::new(&cargo)
-                .current_dir(root())
-                .args(["pkgid", "-p", "thisos-kernel"]),
-        )?;
+    let pkgid = output(cargo().args(["pkgid", "-p", "thisos-kernel"]))?;
     let version = pkgid
         .trim()
         .rsplit(['@', '#'])
@@ -43,9 +37,8 @@ pub fn build(release: bool) -> Result<Image> {
     let build = format!("{} {profile} {}", commit.trim(), time.trim());
     let id = format!("ThisOS {version} {build}");
 
-    let mut cargo_build = Command::new(&cargo);
+    let mut cargo_build = cargo();
     cargo_build
-        .current_dir(root())
         .env("THISOS_BUILD", &build)
         .args(["build", "-p", "thisos-kernel"]);
     if release {
