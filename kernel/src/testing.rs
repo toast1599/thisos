@@ -10,7 +10,7 @@ use thisos_hal::Platform;
 use crate::{Arch, logger};
 
 /// The tests and the index of the one running, or of none once all passed,
-/// for the panic handler's summary.
+/// for the panic handler's summary. `None` until the tests start.
 static RUN: Mutex<Option<Run>> = Mutex::new(None);
 
 #[derive(Clone, Copy)]
@@ -43,11 +43,12 @@ pub fn run(tests: &'static [&'static dyn Test]) -> ! {
         log::info!("test {}", test.name());
         test.run();
     }
-    log::info!("{} tests passed", tests.len());
+    // Before the log line, so that a panic in it doesn't blame the last test.
     *RUN.lock() = Some(Run {
         tests,
         current: tests.len(),
     });
+    log::info!("{} tests passed", tests.len());
     finish(true)
 }
 
@@ -57,27 +58,41 @@ pub fn fail() -> ! {
 }
 
 fn finish(pass: bool) -> ! {
-    if let Some(Some(run)) = RUN.try_lock().map(|run| *run) {
-        if let Some(test) = run.tests.get(run.current).filter(|_| !pass) {
+    if let Some(run) = RUN.try_lock().map(|run| *run) {
+        if let Some(test) = run
+            .and_then(|run| run.tests.get(run.current))
+            .filter(|_| !pass)
+        {
             // The logger may be the thing that panicked, so this goes
             // through the panic path.
             logger::panic(format_args!("test {} failed", test.name()), &"");
         }
-        logger::test_summary(&run, pass);
+        logger::test_summary(&Summary { run, pass }, pass);
     }
     Arch::exit_qemu(pass)
 }
 
-impl fmt::Display for Run {
+struct Summary {
+    run: Option<Run>,
+    pass: bool,
+}
+
+impl fmt::Display for Summary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "summary:")?;
-        for (i, test) in self.tests.iter().enumerate() {
-            let result = match i.cmp(&self.current) {
+        let Some(run) = self.run else {
+            return writeln!(f, "  panic before the tests started");
+        };
+        for (i, test) in run.tests.iter().enumerate() {
+            let result = match i.cmp(&run.current) {
                 core::cmp::Ordering::Less => "ok",
                 core::cmp::Ordering::Equal => "FAILED",
                 core::cmp::Ordering::Greater => "not run",
             };
             writeln!(f, "  {result} {}", test.name())?;
+        }
+        if !self.pass && run.current == run.tests.len() {
+            writeln!(f, "  panic after the last test")?;
         }
         Ok(())
     }
