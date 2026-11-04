@@ -50,9 +50,6 @@ enum Command {
         /// The stick to write, when more than one USB disk is plugged in.
         #[arg(long, value_name = "PATH")]
         device: Option<String>,
-        /// Don't ask before writing.
-        #[arg(long)]
-        yes: bool,
         /// Write the test image instead.
         #[arg(long)]
         tests: bool,
@@ -77,9 +74,8 @@ fn main() -> ExitCode {
         Command::Flash {
             release,
             device,
-            yes,
             tests,
-        } => flash::flash(release, tests, device.as_deref(), yes),
+        } => flash::flash(release, tests, device.as_deref()),
         Command::Test => test::test(),
         Command::Ci => ci::ci(),
         Command::Font => font::font(),

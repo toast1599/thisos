@@ -41,6 +41,11 @@ pub fn ci() -> Result<()> {
         on_host(cargo().args(["clippy", "--manifest-path", "xtask/Cargo.toml"]))
             .args(["--", "-D", "warnings"]),
     )?;
+    exec(on_host(cargo().args([
+        "test",
+        "--manifest-path",
+        "xtask/Cargo.toml",
+    ])))?;
 
     test::test()?;
     // cargo miri takes host-tuple as a target name and fails to build a

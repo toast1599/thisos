@@ -50,7 +50,7 @@ QEMU runs:
 - `-no-reboot`, so a triple fault closes QEMU and doesn't loop
 - `cargo xtask flash` builds, then writes the image, or with `--tests` the test image, to the USB stick for a laptop run (see below).
 - `cargo xtask test` runs the host tests of every `lib/*` crate, then the QEMU tests with `cargo test -p thisos-kernel`. It is the only way to run the QEMU tests: it sets cargo's runner for `x86_64-unknown-none` through `CARGO_TARGET_X86_64_UNKNOWN_NONE_RUNNER` to its own hidden `qemu-test` subcommand, because cargo starts the runner in `kernel/`, where the `xtask` alias's relative manifest path doesn't resolve. A bare `cargo test -p thisos-kernel` runs the kernel ELF on the host, which dies with SIGSEGV.
-- `cargo xtask ci` runs locally everything CI runs, in CI's order, and stops at the first failure: rustfmt on both workspaces; clippy with `-D warnings` on the root workspace for `x86_64-unknown-none`, on each `lib/*` crate for the host with its tests, and on xtask; `cargo xtask test`; Miri on each `lib/*` crate; `cargo deny` on both workspaces; `cargo xtask build`. It needs `cargo-deny` installed (`cargo install cargo-deny --locked`) and checks for it first.
+- `cargo xtask ci` runs locally everything CI runs, in CI's order, and stops at the first failure: rustfmt on both workspaces; clippy with `-D warnings` on the root workspace for `x86_64-unknown-none`, on each `lib/*` crate for the host with its tests, and on xtask; xtask's host tests; `cargo xtask test`; Miri on each `lib/*` crate; `cargo deny` on both workspaces; `cargo xtask build`. It needs `cargo-deny` installed (`cargo install cargo-deny --locked`) and checks for it first.
 - `cargo xtask font` rasterizes `xtask/assets/JetBrainsMono-Regular.ttf` (v2.304, under the SIL Open Font License in `xtask/assets/OFL.txt`) with `fontdue` into one 8-bit coverage bitmap per size in `lib/console/src/font/`, and writes the `font.rs` that embeds them. The TTF, the bitmaps and `font.rs` are committed, so ordinary builds never run the rasterizer. It prints any glyphs it had to clip to their cell.
 
 OVMF comes from the `ovmf-prebuilt` crate at a pinned release, `edk2-stable202605-r1`, which xtask caches in `target/ovmf/`. Each run copies the firmware's variables file to `target/ovmf-vars.fd`, so every boot starts from the same state.
@@ -98,10 +98,11 @@ xtask uses clippy's defaults. Formatting is rustfmt's defaults. Identifiers, com
 
 Anything that passes in QEMU must also pass on the test laptop described in `docs/design.md`. Laptop runs happen at every milestone and after any change to arch or driver code. A milestone isn't done until it passes there.
 
-`cargo xtask flash` writes the image to a USB stick, erasing it. It takes `--release`, `--tests`, `--device PATH` and `--yes`. It runs as you, and runs `dd` and `sgdisk` through `sudo`. It:
+`cargo xtask flash` writes the image to a USB stick, erasing it. It takes `--release`, `--tests` and `--device PATH`. It runs as you, and runs `dd` and `sgdisk` through `sudo`. It:
 
 - only considers whole disks on USB that are removable or hotplug, and never the internal disk. With one such disk it uses it; with several, `--device` picks one.
-- shows the stick's path, model, serial and size, and the build ID the stick holds. It reads `thisos-build.txt` from the stick's FAT partition, mounting it with `udisksctl` if it isn't mounted. Then it asks before writing. `--yes` skips the question, not the checks.
+- refuses a disk with no `/dev/disk/by-id` link, and names the disk by that link in every command after choosing it. A stick swapped while flash waits for an answer takes its link with it, so `dd` fails and no other disk is written.
+- shows the stick's path, by-id link, model, serial and size, and the build ID the stick holds. It reads `thisos-build.txt` from the stick's FAT partition, mounting it with `udisksctl` if it isn't mounted. Then it always asks before writing: external USB disks report hotplug too, so the question is what tells the stick from a backup drive left plugged in.
 - refuses a stick smaller than the image, and unmounts the stick's partitions first.
 - writes with `dd`, drops the stick's cached pages with `blockdev --flushbufs` so that the read comes from the stick, then reads the image back and compares it byte for byte.
 - moves the backup GPT to the end of the stick with `sgdisk -e`, checks the table with `sgdisk -v`, and powers the stick off.
