@@ -4,7 +4,7 @@ ThisOS is a general-purpose operating system written in Rust, built on a microke
 
 ## Status
 
-The design for the first milestones is settled. Milestone 1 (booting the kernel) has its code: the kernel boots under UEFI, logs to serial and a framebuffer console, prints a backtrace when it panics, and runs its tests in QEMU and in CI. It is done once it passes on the test laptop.
+The design for the first milestones is settled. Milestone 1 (booting the kernel) is done: the kernel boots under UEFI in QEMU and on the test laptop, logs to serial and a framebuffer console, prints a backtrace when it panics, and runs its tests in QEMU, in CI and on the laptop. Milestone 2 (the kernel core) is next.
 
 - [docs/design.md](docs/design.md) describes the system and its milestones.
 - [docs/adr/](docs/adr/) holds the decisions that are hard to reverse.
