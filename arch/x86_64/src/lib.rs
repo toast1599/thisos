@@ -17,6 +17,7 @@ use bootloader_api::info::{FrameBuffer, PixelFormat};
 use thisos_hal::{BacktraceEnd, BootInfo, Cpu, Framebuffer, Platform, Serial};
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
+use x86_64::instructions::port::Port;
 
 #[doc(hidden)]
 pub use bootloader_api as __bootloader_api;
@@ -64,7 +65,25 @@ impl Platform for X86_64 {
         let tty = unsafe { Uart16550Tty::new_port(COM1_PORT, COM1_CONFIG) };
         tty.ok().map(Com1)
     }
+
+    fn exit_qemu(success: bool) -> ! {
+        // QEMU exits with status (value << 1) | 1: 33 and 35. Success isn't
+        // 0 because -no-reboot turns a triple fault into status 0.
+        let value: u32 = if success { 0x10 } else { 0x11 };
+        let mut port = Port::new(DEBUG_EXIT_PORT);
+        // SAFETY: Under QEMU, 0xf4 is the isa-debug-exit device xtask adds
+        // for test runs, and the write ends the process. Port I/O touches no
+        // memory, so on a machine without the device nothing the kernel
+        // relies on changes; the CPU halts below.
+        unsafe {
+            port.write(value);
+        }
+        Self::halt()
+    }
 }
+
+/// The I/O port xtask gives QEMU's isa-debug-exit device.
+const DEBUG_EXIT_PORT: u16 = 0xf4;
 
 /// COM1, the first PC serial port, at 115200 baud, 8N1, polled.
 #[derive(Debug)]

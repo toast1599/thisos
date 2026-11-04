@@ -49,7 +49,7 @@ QEMU runs:
 - the image as USB storage on an xHCI controller, the way the laptop boots its stick
 - `-no-reboot`, so a triple fault closes QEMU and doesn't loop
 - `cargo xtask flash` builds, then writes the image to the USB stick for a laptop run (see below).
-- `cargo xtask test` runs the host tests of every `lib/*` crate. The QEMU tests, headless with a timeout, join it once they exist.
+- `cargo xtask test` runs the host tests of every `lib/*` crate, then the QEMU tests with `cargo test -p thisos-kernel`. It is the only way to run the QEMU tests: it sets cargo's runner for `x86_64-unknown-none` through `CARGO_TARGET_X86_64_UNKNOWN_NONE_RUNNER` to its own hidden `qemu-test` subcommand, because cargo starts the runner in `kernel/`, where the `xtask` alias's relative manifest path doesn't resolve. A bare `cargo test -p thisos-kernel` runs the kernel ELF on the host, which dies with SIGSEGV.
 - `cargo xtask ci` runs locally everything CI runs, in CI's order, and stops at the first failure: rustfmt on both workspaces; clippy with `-D warnings` on the root workspace for `x86_64-unknown-none`, on each `lib/*` crate for the host with its tests, and on xtask; `cargo xtask test`; Miri on each `lib/*` crate; `cargo deny` on both workspaces; `cargo xtask build`. It needs `cargo-deny` installed (`cargo install cargo-deny --locked`) and checks for it first.
 - `cargo xtask font` rasterizes `xtask/assets/JetBrainsMono-Regular.ttf` (v2.304, under the SIL Open Font License in `xtask/assets/OFL.txt`) with `fontdue` into one 8-bit coverage bitmap per size in `lib/console/src/font/`, and writes the `font.rs` that embeds them. The TTF, the bitmaps and `font.rs` are committed, so ordinary builds never run the rasterizer. It prints any glyphs it had to clip to their cell.
 
@@ -88,11 +88,11 @@ xtask uses clippy's defaults. Formatting is rustfmt's defaults. Identifiers, com
 ## Tests
 
 - **Host tests.** Generic logic lives in `lib/*` crates and runs under `cargo test` on the host. Every `lib/*` crate also runs its tests under Miri.
-- **QEMU tests.** In-kernel tests are `#[test_case]` functions using `custom_test_frameworks`. `cargo test` builds one kernel ELF per test binary. xtask is the cargo runner: it wraps each ELF in an image and boots it in QEMU. Results go to serial and the screen, and the kernel exits QEMU through `isa-debug-exit`.
-- **Failures.** A failing test prints its name and panic message and exits QEMU with a failure code. The tests after it in that binary don't run; other binaries still run.
+- **QEMU tests.** In-kernel tests are `#[test_case]` functions using `custom_test_frameworks`. `cargo test` builds one kernel ELF per test binary. xtask is the cargo runner: it writes each ELF into an image next to it, `<elf>.img`, and boots it headless in QEMU with serial on standard output. The kernel logs `test <name>` before each test and `<n> tests passed` after the last, to serial and the screen, and exits QEMU through `isa-debug-exit` at port 0xf4: 0x10 for success, which QEMU turns into exit status 33, and 0x11 for failure, status 35. Only 33 is a pass, because `-no-reboot` turns a triple fault into status 0. Until milestone 2 adds the first faulting test, the tests live in the kernel binary under `cfg(test)`, and `thisos-kernel` has no library.
+- **Failures.** A failing test's panic report is followed by `test <name> failed`, and the kernel exits QEMU with failure. The tests after it in that binary don't run; other binaries still run.
 - **Faulting tests.** A test that has to fault, such as a page fault or a stack overflow, goes in a `tests/` file of its own.
 - **Shared support.** Test files share their entry point and panic handler through one support module, so that the combined laptop image can include them.
-- **Hangs.** At milestone 1, xtask kills QEMU after a fixed time per test binary. From milestone 2, a watchdog on the LAPIC timer stops a hung test and names it.
+- **Hangs.** At milestone 1, xtask kills QEMU after 60 s per test binary and fails it. From milestone 2, a watchdog on the LAPIC timer stops a hung test and names it.
 
 ## Real hardware
 
@@ -128,13 +128,13 @@ GitHub Actions runs on every push and pull request:
 - clippy with `-D warnings`
 - host tests
 - Miri
-- the QEMU tests, once they exist
+- the QEMU tests, under TCG
 - `cargo deny`
 - an image build
 
 `.github/workflows/ci.yml` has one job on `ubuntu-24.04` that runs `cargo xtask ci`, so CI and a local run do the same checks. It installs the toolchain from `rust-toolchain.toml` with the runner's rustup, and `cargo-deny` 0.20.2 as a prebuilt binary through `taiki-e/install-action`. Every action is pinned to a full commit SHA, with its tag in a comment. The workflow only reads the repository, and a new push cancels a run still going on the same ref.
 
-CI caches the cargo registry and both target directories, keyed on `rust-toolchain.toml` and both `Cargo.lock` files. The cache will also hold `target/ovmf/` once CI boots QEMU: fetching OVMF from GitHub can take minutes, and the cache means CI pays that only when the pinned release changes.
+CI caches the cargo registry and both target directories, keyed on `rust-toolchain.toml` and both `Cargo.lock` files. The cache holds `target/ovmf/` too: fetching OVMF from GitHub can take minutes, and the cache means CI pays that only when the pinned release changes.
 
 ## Dependencies
 

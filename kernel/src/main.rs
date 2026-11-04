@@ -5,9 +5,14 @@
 #![no_main]
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used)]
+#![feature(custom_test_frameworks)]
+#![test_runner(crate::testing::run)]
+#![reexport_test_harness_main = "test_main"]
 
 mod logger;
 mod panic;
+#[cfg(test)]
+mod testing;
 
 use thisos_hal::{BootInfo, Cpu};
 
@@ -30,5 +35,7 @@ fn kmain(boot: BootInfo<Arch>) -> ! {
     if !has_framebuffer {
         log::warn!("no framebuffer in a format the console draws; logging to serial only");
     }
+    #[cfg(test)]
+    test_main();
     Arch::halt()
 }

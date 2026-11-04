@@ -3,19 +3,36 @@
 use std::fs;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 
 use crate::cmd::{cargo, exec, on_host};
 use crate::root;
 
-/// Runs the host tests of every `lib/*` crate.
+/// Runs the host tests of every `lib/*` crate, then the kernel's tests in
+/// QEMU.
 pub fn test() -> Result<()> {
     for manifest in libs()? {
         exec(on_host(
             cargo().arg("test").arg("--manifest-path").arg(&manifest),
         ))?;
     }
-    Ok(())
+
+    // Set here rather than in .cargo/config.toml: cargo starts the runner in
+    // kernel/, where the xtask alias's relative manifest path doesn't resolve.
+    let xtask = std::env::current_exe().context("finding the xtask executable")?;
+    let xtask = xtask.to_str().context("the xtask path isn't UTF-8")?;
+    ensure!(
+        !xtask.contains(char::is_whitespace),
+        "cargo splits its runner on whitespace, and the xtask path {xtask:?} has some"
+    );
+    exec(
+        cargo()
+            .env(
+                "CARGO_TARGET_X86_64_UNKNOWN_NONE_RUNNER",
+                format!("{xtask} qemu-test"),
+            )
+            .args(["test", "-p", "thisos-kernel"]),
+    )
 }
 
 /// The manifests of the `lib/*` crates, which build and test on the host.

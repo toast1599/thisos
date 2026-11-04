@@ -7,7 +7,7 @@ mod lsblk;
 mod qemu;
 mod test;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -51,12 +51,15 @@ enum Command {
         #[arg(long)]
         yes: bool,
     },
-    /// Run the host tests.
+    /// Run the host tests, then the kernel's tests in QEMU.
     Test,
     /// Run locally everything CI runs.
     Ci,
     /// Rasterize the console font into lib/console/src/font.
     Font,
+    /// Boot a kernel test ELF in QEMU; cargo's runner for `xtask test`.
+    #[command(hide = true)]
+    QemuTest { elf: PathBuf },
 }
 
 fn main() -> ExitCode {
@@ -73,6 +76,7 @@ fn main() -> ExitCode {
         Command::Test => test::test(),
         Command::Ci => ci::ci(),
         Command::Font => font::font(),
+        Command::QemuTest { elf } => qemu::test(&elf),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

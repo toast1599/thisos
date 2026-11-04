@@ -8,7 +8,6 @@ publish.workspace = true
 
 [[bin]]
 name = "thisos-kernel"
-test = false
 bench = false
 
 [dependencies]

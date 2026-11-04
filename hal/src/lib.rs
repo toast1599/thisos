@@ -97,6 +97,11 @@ pub trait Platform {
     /// answers. Anything else using the port at the same time interleaves
     /// its bytes with this one's.
     fn panic_serial() -> Option<Self::Serial>;
+
+    /// Ends a QEMU test run through QEMU's debug exit device, reporting
+    /// whether the tests passed. Without that device, as on real hardware,
+    /// it halts.
+    fn exit_qemu(success: bool) -> !;
 }
 
 /// A serial port the kernel writes text to. Writing `\n` starts a new line
