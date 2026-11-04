@@ -47,11 +47,12 @@ QEMU runs:
 - KVM with the host's CPU when `/dev/kvm` is usable, and TCG emulation otherwise
 - the image as USB storage on an xHCI controller, the way the laptop boots its stick
 - `-no-reboot`, so a triple fault closes QEMU and doesn't loop
+- `cargo xtask flash` builds, then writes the image to the USB stick for a laptop run (see below).
 - `cargo xtask test` runs the host tests, then the QEMU tests headless with a timeout.
 - `cargo xtask ci` runs locally everything CI runs.
 - `cargo xtask font` rasterizes `xtask/assets/JetBrainsMono-Regular.ttf` (v2.304, under the SIL Open Font License in `xtask/assets/OFL.txt`) with `fontdue` into one 8-bit coverage bitmap per size in `lib/console/src/font/`, and writes the `font.rs` that embeds them. The TTF, the bitmaps and `font.rs` are committed, so ordinary builds never run the rasterizer. It prints any glyphs it had to clip to their cell.
 
-OVMF comes from the `ovmf-prebuilt` crate at a pinned release, `edk2-stable202605-r1`, which xtask caches in `target/ovmf/`. Each run copies the firmware's variables file to `target/ovmf-vars.fd`, so every boot starts from the same state. xtask never writes to block devices: to test on the laptop, write the image to a USB stick yourself.
+OVMF comes from the `ovmf-prebuilt` crate at a pinned release, `edk2-stable202605-r1`, which xtask caches in `target/ovmf/`. Each run copies the firmware's variables file to `target/ovmf-vars.fd`, so every boot starts from the same state.
 
 ## Unsafe code
 
@@ -96,15 +97,15 @@ xtask uses clippy's defaults. Formatting is rustfmt's defaults. Identifiers, com
 
 Anything that passes in QEMU must also pass on the test laptop described in `docs/design.md`. Laptop runs happen at every milestone and after any change to arch or driver code. A milestone isn't done until it passes there.
 
-To write an image to a USB stick, find the stick's device with `lsblk` (here `/dev/sdX`; writing it erases the stick), unmount it, then:
+`cargo xtask flash` writes the image to a USB stick, erasing it. It takes `--release`, `--device PATH` and `--yes`. It runs as you, and runs `dd` and `sgdisk` through `sudo`. It:
 
-```
-sudo dd if=target/thisos.img of=/dev/sdX bs=4M conv=fsync status=progress
-sudo sgdisk -e /dev/sdX
-udisksctl power-off -b /dev/sdX
-```
+- only considers whole disks on USB that are removable or hotplug, and never the internal disk. With one such disk it uses it; with several, `--device` picks one.
+- shows the stick's path, model, serial and size, and asks before writing. `--yes` skips the question, not the checks.
+- refuses a stick smaller than the image, and unmounts the stick's partitions first.
+- writes with `dd`, drops the stick's cached pages with `blockdev --flushbufs` so that the read comes from the stick, then reads the image back and compares it byte for byte.
+- moves the backup GPT to the end of the stick with `sgdisk -e`, checks the table with `sgdisk -v`, and powers the stick off.
 
-`sgdisk -e` moves the image's backup GPT to the end of the stick. The image is only a few MiB, so after `dd` that table sits near the start of the stick. The laptop's firmware doesn't list a stick in that state, and Linux warns about it.
+`sgdisk -e` is needed because the image is only a few MiB, so after `dd` its backup GPT sits near the start of the stick. The laptop's firmware doesn't list a stick in that state, and Linux warns about it.
 
 Boot the stick from the laptop's F12 menu, with Secure Boot off.
 

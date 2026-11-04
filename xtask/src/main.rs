@@ -1,6 +1,7 @@
 use std::fs::{self, OpenOptions};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, Stdio};
 
 use ovmf_prebuilt::{Arch, FileType, Prebuilt, Source};
 
@@ -10,6 +11,10 @@ commands:
   build [--release]          build the kernel and write target/thisos.img
   run [--release] [--gdb]    build, then boot the image in QEMU
                              (--gdb: gdb stub on tcp 1234, start paused)
+  flash [--release] [--device PATH] [--yes]
+                             build, then write the image to a USB stick,
+                             verify it and power the stick off
+                             (--yes: don't ask before writing)
   font                       rasterize the console font into lib/console/src/font";
 
 const OVMF: Source = Source::EDK2_STABLE202605_R1;
@@ -20,6 +25,20 @@ const FONT_SIZES: [u32; 4] = [12, 16, 24, 32];
 struct Options {
     release: bool,
     gdb: bool,
+}
+
+struct FlashOptions {
+    build: Options,
+    device: Option<String>,
+    yes: bool,
+}
+
+/// A whole disk, as `lsblk` describes it.
+struct Disk {
+    path: String,
+    size: u64,
+    model: String,
+    serial: String,
 }
 
 fn main() -> ExitCode {
@@ -36,6 +55,7 @@ fn main() -> ExitCode {
         "build" => parse(flags, false)
             .and_then(|opts| build(&opts).map(|img| println!("{}", img.display()))),
         "run" => parse(flags, true).and_then(|opts| run(&opts)),
+        "flash" => parse_flash(flags).and_then(|opts| flash(&opts)),
         "font" => match flags.first() {
             Some(flag) => Err(format!("unknown option: {flag}\n\n{USAGE}")),
             None => font(),
@@ -60,6 +80,27 @@ fn parse(flags: &[String], allow_gdb: bool) -> Result<Options, String> {
         match flag.as_str() {
             "--release" => opts.release = true,
             "--gdb" if allow_gdb => opts.gdb = true,
+            _ => return Err(format!("unknown option: {flag}\n\n{USAGE}")),
+        }
+    }
+    Ok(opts)
+}
+
+fn parse_flash(flags: &[String]) -> Result<FlashOptions, String> {
+    let mut opts = FlashOptions {
+        build: Options {
+            release: false,
+            gdb: false,
+        },
+        device: None,
+        yes: false,
+    };
+    let mut flags = flags.iter();
+    while let Some(flag) = flags.next() {
+        match flag.as_str() {
+            "--release" => opts.build.release = true,
+            "--yes" => opts.yes = true,
+            "--device" => opts.device = Some(flags.next().ok_or("--device needs a path")?.clone()),
             _ => return Err(format!("unknown option: {flag}\n\n{USAGE}")),
         }
     }
@@ -221,6 +262,236 @@ fn font() -> Result<(), String> {
     );
     let file = root().join("lib/console/src/font.rs");
     fs::write(&file, rs).map_err(|e| format!("writing {}: {e}", file.display()))
+}
+
+/// Builds the image, writes it to a USB stick with `sudo dd`, reads it back
+/// to check it, moves the backup GPT to the end of the stick and powers the
+/// stick off.
+fn flash(opts: &FlashOptions) -> Result<(), String> {
+    let image = build(&opts.build)?;
+    let data = fs::read(&image).map_err(|e| format!("reading {}: {e}", image.display()))?;
+
+    let disks = usb_disks()?;
+    let disk = match (&opts.device, disks.as_slice()) {
+        (Some(path), _) => disks
+            .iter()
+            .find(|disk| disk.path == *path)
+            .ok_or_else(|| {
+                format!("{path} isn't a whole disk on USB that is removable or hotplug")
+            })?,
+        (None, [disk]) => disk,
+        (None, []) => return Err("no removable USB disk found".into()),
+        (None, _) => {
+            let list: Vec<String> = disks.iter().map(describe).collect();
+            return Err(format!(
+                "more than one USB disk; pick one with --device:\n  {}",
+                list.join("\n  ")
+            ));
+        }
+    };
+    if data.len() as u64 > disk.size {
+        return Err(format!(
+            "the image is {} bytes, larger than {}",
+            data.len(),
+            describe(disk)
+        ));
+    }
+
+    println!("image: {} ({} bytes)", image.display(), data.len());
+    println!("stick: {}", describe(disk));
+    if !opts.yes
+        && !confirm(&format!(
+            "Erase everything on {} and write the image? [y/N] ",
+            disk.path
+        ))?
+    {
+        return Err("canceled; nothing was written".into());
+    }
+
+    unmount(&disk.path)?;
+    // Ask for the password now, not in the middle of dd's progress output.
+    exec(Command::new("sudo").arg("-v"))?;
+    exec(Command::new("sudo").args([
+        "dd",
+        &format!("if={}", image.display()),
+        &format!("of={}", disk.path),
+        "bs=4M",
+        "conv=fsync",
+        "status=progress",
+    ]))?;
+    // This has to come before sgdisk -e, which rewrites the primary GPT header.
+    verify(&disk.path, &data)?;
+    exec(Command::new("sudo").args(["sgdisk", "-e", &disk.path]))?;
+    let check = output(Command::new("sudo").args(["sgdisk", "-v", &disk.path]))?;
+    if !check.contains("No problems found") {
+        return Err(format!(
+            "sgdisk -v found problems on {}:\n{check}",
+            disk.path
+        ));
+    }
+    // The desktop may have mounted the new partition after dd.
+    unmount(&disk.path)?;
+    exec(Command::new("udisksctl").args(["power-off", "-b", &disk.path]))?;
+    println!("{} written, verified and powered off", disk.path);
+    Ok(())
+}
+
+/// Whole disks on USB that are removable or hotplug: the only disks `flash`
+/// writes.
+fn usb_disks() -> Result<Vec<Disk>, String> {
+    let list = lsblk(&[
+        "-d",
+        "-b",
+        "-e7",
+        "-o",
+        "PATH,TYPE,TRAN,RM,HOTPLUG,SIZE,MODEL,SERIAL",
+    ])?;
+    let mut disks = Vec::new();
+    for line in list.lines() {
+        let fields = pairs(line);
+        let field = |key| field(&fields, key);
+        let removable = field("RM") == "1" || field("HOTPLUG") == "1";
+        if field("TYPE") != "disk" || field("TRAN") != "usb" || !removable {
+            continue;
+        }
+        disks.push(Disk {
+            path: field("PATH").into(),
+            size: field("SIZE")
+                .parse()
+                .map_err(|e| format!("lsblk size {:?}: {e}", field("SIZE")))?,
+            model: field("MODEL").into(),
+            serial: field("SERIAL").into(),
+        });
+    }
+    Ok(disks)
+}
+
+fn describe(disk: &Disk) -> String {
+    let gib = disk.size as f64 / f64::from(1u32 << 30);
+    format!(
+        "{}: {} {}, {gib:.1} GiB",
+        disk.path, disk.model, disk.serial
+    )
+}
+
+/// Unmounts every mounted partition on `device`.
+fn unmount(device: &str) -> Result<(), String> {
+    for line in lsblk(&["-n", "-o", "PATH,MOUNTPOINT", device])?.lines() {
+        let fields = pairs(line);
+        if !field(&fields, "MOUNTPOINT").is_empty() {
+            exec(Command::new("udisksctl").args(["unmount", "-b", field(&fields, "PATH")]))?;
+        }
+    }
+    Ok(())
+}
+
+/// Reads the image's length back from `device` and compares it with `image`.
+fn verify(device: &str, image: &[u8]) -> Result<(), String> {
+    // Dropping the device's cached pages makes the read come from the stick
+    // and not from what dd left in memory. O_DIRECT would do the same, but
+    // uutils dd, which Ubuntu ships as dd, fails with EINVAL reading a block
+    // device that way.
+    exec(Command::new("sudo").args(["blockdev", "--flushbufs", device]))?;
+    let out = Command::new("sudo")
+        .args([
+            "dd",
+            &format!("if={device}"),
+            "bs=4M",
+            "iflag=count_bytes",
+            &format!("count={}", image.len()),
+            "status=none",
+        ])
+        .stdin(Stdio::inherit())
+        .output()
+        .map_err(|e| format!("running sudo dd: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "reading {device} back failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    if let Some(offset) = out.stdout.iter().zip(image).position(|(a, b)| a != b) {
+        return Err(format!("{device} differs from the image at byte {offset}"));
+    }
+    if out.stdout.len() < image.len() {
+        return Err(format!(
+            "read back {} of the image's {} bytes from {device}",
+            out.stdout.len(),
+            image.len()
+        ));
+    }
+    println!("verified: {device} holds the image");
+    Ok(())
+}
+
+fn lsblk(args: &[&str]) -> Result<String, String> {
+    output(Command::new("lsblk").arg("-P").args(args))
+}
+
+/// Splits a line of `lsblk -P` output, `KEY="value" ...`, into pairs.
+/// lsblk escapes quotes inside values as `\x22`, so the next quote always
+/// ends a value.
+fn pairs(line: &str) -> Vec<(&str, &str)> {
+    let mut pairs = Vec::new();
+    let mut rest = line;
+    while let Some((key, after)) = rest.split_once("=\"") {
+        let Some((value, after)) = after.split_once('"') else {
+            break;
+        };
+        pairs.push((key.trim(), value));
+        rest = after;
+    }
+    pairs
+}
+
+fn field<'a>(pairs: &[(&str, &'a str)], key: &str) -> &'a str {
+    pairs.iter().find(|(k, _)| *k == key).map_or("", |(_, v)| v)
+}
+
+fn confirm(prompt: &str) -> Result<bool, String> {
+    print!("{prompt}");
+    io::stdout()
+        .flush()
+        .map_err(|e| format!("writing the prompt: {e}"))?;
+    let mut answer = String::new();
+    io::stdin()
+        .read_line(&mut answer)
+        .map_err(|e| format!("reading the answer: {e}"))?;
+    Ok(matches!(answer.trim(), "y" | "Y" | "yes"))
+}
+
+/// Runs `cmd` with the terminal attached, and fails if it does.
+fn exec(cmd: &mut Command) -> Result<(), String> {
+    let status = cmd
+        .status()
+        .map_err(|e| format!("running {}: {e}", show(cmd)))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("{} failed: {status}", show(cmd)))
+    }
+}
+
+/// Runs `cmd` and returns its standard output, failing if it fails.
+fn output(cmd: &mut Command) -> Result<String, String> {
+    let out = cmd
+        .stdin(Stdio::inherit())
+        .output()
+        .map_err(|e| format!("running {}: {e}", show(cmd)))?;
+    if !out.status.success() {
+        return Err(format!(
+            "{} failed: {}",
+            show(cmd),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    String::from_utf8(out.stdout).map_err(|e| format!("output of {}: {e}", show(cmd)))
+}
+
+fn show(cmd: &Command) -> String {
+    let mut words = vec![cmd.get_program().to_string_lossy().into_owned()];
+    words.extend(cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()));
+    words.join(" ")
 }
 
 fn kvm_usable() -> bool {
