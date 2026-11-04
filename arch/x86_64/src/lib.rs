@@ -5,12 +5,16 @@
 #![no_std]
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
+mod backtrace;
+
+use core::arch::asm;
 use core::fmt;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use bootloader_api::BootloaderConfig;
 use bootloader_api::config::Mapping;
 use bootloader_api::info::{FrameBuffer, PixelFormat};
-use thisos_hal::{BootInfo, Cpu, Framebuffer, Platform, Serial};
+use thisos_hal::{BacktraceEnd, BootInfo, Cpu, Framebuffer, Platform, Serial};
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
 
@@ -29,10 +33,37 @@ impl Cpu for X86_64 {
             x86_64::instructions::hlt();
         }
     }
+
+    // Not inlined, so that rbp here is this function's own frame and the
+    // first return address is in the caller.
+    #[inline(never)]
+    fn backtrace(f: impl FnMut(u64)) -> BacktraceEnd {
+        let rbp: u64;
+        // SAFETY: Copying rbp into a register reads no memory and changes no
+        // other state.
+        unsafe {
+            asm!("mov {}, rbp", out(reg) rbp, options(nomem, nostack, preserves_flags));
+        }
+        backtrace::walk(rbp, f)
+    }
 }
 
 impl Platform for X86_64 {
     type Serial = Com1;
+
+    fn panic_serial() -> Option<Com1> {
+        static TAKEN: AtomicBool = AtomicBool::new(false);
+        if TAKEN.swap(true, Ordering::Relaxed) {
+            return None;
+        }
+        // SAFETY: COM1's eight ports are the standard PC serial port's, so
+        // they are valid for as long as the machine runs. The Com1 from
+        // boot_info may still exist, which makes two users of the ports;
+        // that only interleaves the bytes each writes, since port I/O to the
+        // UART touches no memory. TAKEN keeps it to two.
+        let tty = unsafe { Uart16550Tty::new_port(COM1_PORT, COM1_CONFIG) };
+        tty.ok().map(Com1)
+    }
 }
 
 /// COM1, the first PC serial port, at 115200 baud, 8N1, polled.
@@ -48,6 +79,11 @@ impl fmt::Write for Com1 {
 impl Serial for Com1 {}
 
 const COM1_PORT: u16 = 0x3F8;
+
+const COM1_CONFIG: Config = Config {
+    baud_rate: BaudRate::Baud115200,
+    ..Config::DEFAULT
+};
 
 #[doc(hidden)]
 pub const BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -65,14 +101,14 @@ pub const BOOTLOADER_CONFIG: BootloaderConfig = {
 /// devices: COM1's I/O ports.
 #[doc(hidden)]
 pub unsafe fn boot_info(boot: &'static mut bootloader_api::BootInfo) -> BootInfo<X86_64> {
-    let config = Config {
-        baud_rate: BaudRate::Baud115200,
-        ..Config::DEFAULT
-    };
+    backtrace::init(
+        boot.kernel_stack_bottom..boot.kernel_stack_bottom + boot.kernel_stack_len,
+        boot.kernel_image_offset,
+    );
     // SAFETY: The caller runs this once, before anything else touches COM1's
     // eight ports, and the port moves into the BootInfo, so it is the only
     // user of those ports from here on.
-    let tty = unsafe { Uart16550Tty::new_port(COM1_PORT, config) };
+    let tty = unsafe { Uart16550Tty::new_port(COM1_PORT, COM1_CONFIG) };
     // No device answering is normal: the laptop has no serial port.
     let serial = tty.ok().map(Com1);
     let framebuffer = boot.framebuffer.take().and_then(framebuffer);

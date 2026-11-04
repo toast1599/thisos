@@ -110,6 +110,14 @@ Anything that passes in QEMU must also pass on the test laptop described in `doc
 
 Boot the stick from the laptop's F12 menu, with Secure Boot off.
 
+A panic's backtrace lists link addresses. To name them, run `addr2line` on the kernel ELF that went into the image, with the profile it was built in:
+
+```
+addr2line -f -C -e target/x86_64-unknown-none/debug/thisos-kernel 0x28af3 0x2bc5b
+```
+
+`llvm-addr2line` takes the same arguments.
+
 `cargo xtask build --tests` writes one combined image holding every test that doesn't fault, plus one image per faulting test file. Each image ends on a summary screen listing the tests and their results, with a large PASS or FAIL line, then halts.
 
 ## CI

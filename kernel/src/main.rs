@@ -7,8 +7,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 mod logger;
-
-use core::panic::PanicInfo;
+mod panic;
 
 use thisos_hal::{BootInfo, Cpu};
 
@@ -32,12 +31,4 @@ fn kmain(boot: BootInfo<Arch>) -> ! {
         log::warn!("no framebuffer in a format the console draws; logging to serial only");
     }
     Arch::halt()
-}
-
-// Replaced by the real handler in work item 5.
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {
-        core::hint::spin_loop();
-    }
 }

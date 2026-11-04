@@ -61,12 +61,42 @@ pub trait Cpu {
     /// Stops this processor for good: interrupts stay off and it never
     /// runs kernel code again.
     fn halt() -> !;
+
+    /// Walks the frame pointers on the kernel stack and calls `f` with the
+    /// address of each call on it, innermost first, starting in the caller.
+    /// Addresses are link addresses, inside the call instruction: what
+    /// `addr2line` expects for the kernel ELF. Stops after [`MAX_FRAMES`].
+    fn backtrace(f: impl FnMut(u64)) -> BacktraceEnd;
+}
+
+/// The most frames [`Cpu::backtrace`] reports.
+pub const MAX_FRAMES: usize = 32;
+
+/// Why [`Cpu::backtrace`] stopped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BacktraceEnd {
+    /// It reached the outermost frame.
+    Done,
+    /// It reported [`MAX_FRAMES`] frames.
+    TooDeep,
+    /// The next frame pointer is outside the kernel stack.
+    OutsideStack(u64),
+    /// The next frame pointer isn't 8-byte aligned.
+    Misaligned(u64),
+    /// The next frame pointer doesn't lie above the current one.
+    NotIncreasing(u64),
 }
 
 /// The devices an architecture hands the kernel in [`BootInfo`].
 pub trait Platform {
     /// The serial port the kernel logs to.
     type Serial: Serial;
+
+    /// A second handle to the serial port, for a panic that finds the first
+    /// one locked. It returns `Some` at most once, and `None` when no device
+    /// answers. Anything else using the port at the same time interleaves
+    /// its bytes with this one's.
+    fn panic_serial() -> Option<Self::Serial>;
 }
 
 /// A serial port the kernel writes text to. Writing `\n` starts a new line
