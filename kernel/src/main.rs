@@ -6,6 +6,8 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
+mod logger;
+
 use core::panic::PanicInfo;
 
 use thisos_hal::{BootInfo, Cpu};
@@ -16,7 +18,9 @@ type Arch = thisos_arch_x86_64::X86_64;
 #[cfg(target_arch = "x86_64")]
 thisos_arch_x86_64::entry!(kmain);
 
-fn kmain(_boot: BootInfo) -> ! {
+fn kmain(boot: BootInfo<Arch>) -> ! {
+    logger::init(boot.serial);
+    log::info!("ThisOS {}", env!("CARGO_PKG_VERSION"));
     Arch::halt()
 }
 
