@@ -25,7 +25,7 @@ const TEST_SUCCESS: i32 = 33;
 /// Builds, then boots the image in QEMU with a window and serial on the
 /// terminal.
 pub fn run(release: bool, gdb: bool) -> Result<()> {
-    let image = build::build(release)?;
+    let image = build::build(release, false)?;
     let mut qemu = qemu(&image.path, &root().join("target/ovmf-vars.fd"))?;
     if gdb {
         qemu.args(["-s", "-S"]);

@@ -69,6 +69,30 @@ pub fn panic(head: fmt::Arguments, body: &dyn fmt::Display) {
     }
 }
 
+/// Writes the test summary, `body`, to both sinks, then PASS or FAIL: four
+/// times the font's size on the console, plain on serial. When the lock is
+/// held, a panic came from inside the logger, and its report on serial is
+/// all there is.
+#[cfg(test)]
+pub fn test_summary(body: &dyn fmt::Display, pass: bool) {
+    let Some(mut sinks) = LOGGER.sinks.try_lock() else {
+        return;
+    };
+    let Sinks { serial, console } = &mut *sinks;
+    let (word, color) = if pass {
+        ("PASS", Color::Green)
+    } else {
+        ("FAIL", Color::Red)
+    };
+    if let Some(serial) = serial {
+        let _ = writeln!(serial, "{body}{word}");
+    }
+    console.set_color(Color::Gray);
+    let _ = write!(console, "{body}");
+    console.set_color(color);
+    console.write_large(word, 4);
+}
+
 // A record that fails to format has nowhere else to be reported, so this
 // and write_console drop the results of their writes.
 fn write_serial(serial: &mut Serial, record: &Record, body: &dyn fmt::Display) {

@@ -65,6 +65,6 @@ pub fn ci() -> Result<()> {
         ]))?;
     }
 
-    build::build(false)?;
+    build::build(false, false)?;
     Ok(())
 }

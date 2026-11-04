@@ -99,8 +99,8 @@ pub trait Platform {
     fn panic_serial() -> Option<Self::Serial>;
 
     /// Ends a QEMU test run through QEMU's debug exit device, reporting
-    /// whether the tests passed. Without that device, as on real hardware,
-    /// it halts.
+    /// whether the tests passed. It touches the device only when it runs
+    /// under a hypervisor; on real hardware it only halts.
     fn exit_qemu(success: bool) -> !;
 }
 

@@ -28,6 +28,9 @@ enum Command {
         /// Use the release profile.
         #[arg(long)]
         release: bool,
+        /// Build the kernel's tests into target/thisos-tests.img instead.
+        #[arg(long)]
+        tests: bool,
     },
     /// Build, then boot the image in QEMU.
     Run {
@@ -50,6 +53,9 @@ enum Command {
         /// Don't ask before writing.
         #[arg(long)]
         yes: bool,
+        /// Write the test image instead.
+        #[arg(long)]
+        tests: bool,
     },
     /// Run the host tests, then the kernel's tests in QEMU.
     Test,
@@ -64,7 +70,7 @@ enum Command {
 
 fn main() -> ExitCode {
     let result = match Cli::parse().command {
-        Command::Build { release } => build::build(release).map(|image| {
+        Command::Build { release, tests } => build::build(release, tests).map(|image| {
             println!("{}\n{}", image.path.display(), image.id);
         }),
         Command::Run { release, gdb } => qemu::run(release, gdb),
@@ -72,7 +78,8 @@ fn main() -> ExitCode {
             release,
             device,
             yes,
-        } => flash::flash(release, device.as_deref(), yes),
+            tests,
+        } => flash::flash(release, tests, device.as_deref(), yes),
         Command::Test => test::test(),
         Command::Ci => ci::ci(),
         Command::Font => font::font(),

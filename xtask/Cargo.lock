@@ -981,6 +981,7 @@ dependencies = [
  "clap",
  "fontdue",
  "ovmf-prebuilt",
+ "serde_json",
 ]
 
 [[package]]

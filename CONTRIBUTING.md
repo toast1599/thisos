@@ -39,7 +39,7 @@ There are two workspaces:
 ## xtask
 
 - `cargo xtask build` builds the kernel and writes a UEFI GPT disk image to `target/thisos.img` with `bootloader`'s `DiskImageBuilder`, then prints the image's path and its build ID. It uses the dev profile; `--release` builds release.
-  The build ID is `ThisOS <version> <commit> <profile> <time>`, for example `ThisOS 0.0.0 f172dcc-dirty debug 2026-11-04T09:35Z`: the commit is `git describe --always --dirty`, and the time is when xtask built it, in UTC. xtask passes everything after the version to the kernel build as `THISOS_BUILD`. The kernel logs the whole ID as its first line, or `unknown build` in place of the rest when built without xtask. The image holds the ID in `thisos-build.txt` at the root of its FAT partition. `--tests` builds the laptop test images instead (see below).
+  The build ID is `ThisOS <version> <commit> <profile> <time>`, for example `ThisOS 0.0.0 f172dcc-dirty debug 2026-11-04T09:35Z`: the commit is `git describe --always --dirty`, and the time is when xtask built it, in UTC. xtask passes everything after the version to the kernel build as `THISOS_BUILD`. The kernel logs the whole ID as its first line, or `unknown build` in place of the rest when built without xtask. The image holds the ID in `thisos-build.txt` at the root of its FAT partition. `--tests` builds the laptop test image instead (see below), and its ID has `tests` after the profile, as in `ThisOS 0.0.0 3ddbe39 debug tests 2026-11-04T15:00Z`.
 - `cargo xtask run` builds, then boots the image in QEMU with a window for the framebuffer and serial output on the terminal. QEMU's monitor is on Ctrl-Alt-2 in that window. `--gdb` starts QEMU's gdb stub on TCP port 1234 and starts the CPU paused.
 
 QEMU runs:
@@ -48,7 +48,7 @@ QEMU runs:
 - KVM with the host's CPU when `/dev/kvm` is usable, and TCG emulation otherwise
 - the image as USB storage on an xHCI controller, the way the laptop boots its stick
 - `-no-reboot`, so a triple fault closes QEMU and doesn't loop
-- `cargo xtask flash` builds, then writes the image to the USB stick for a laptop run (see below).
+- `cargo xtask flash` builds, then writes the image, or with `--tests` the test image, to the USB stick for a laptop run (see below).
 - `cargo xtask test` runs the host tests of every `lib/*` crate, then the QEMU tests with `cargo test -p thisos-kernel`. It is the only way to run the QEMU tests: it sets cargo's runner for `x86_64-unknown-none` through `CARGO_TARGET_X86_64_UNKNOWN_NONE_RUNNER` to its own hidden `qemu-test` subcommand, because cargo starts the runner in `kernel/`, where the `xtask` alias's relative manifest path doesn't resolve. A bare `cargo test -p thisos-kernel` runs the kernel ELF on the host, which dies with SIGSEGV.
 - `cargo xtask ci` runs locally everything CI runs, in CI's order, and stops at the first failure: rustfmt on both workspaces; clippy with `-D warnings` on the root workspace for `x86_64-unknown-none`, on each `lib/*` crate for the host with its tests, and on xtask; `cargo xtask test`; Miri on each `lib/*` crate; `cargo deny` on both workspaces; `cargo xtask build`. It needs `cargo-deny` installed (`cargo install cargo-deny --locked`) and checks for it first.
 - `cargo xtask font` rasterizes `xtask/assets/JetBrainsMono-Regular.ttf` (v2.304, under the SIL Open Font License in `xtask/assets/OFL.txt`) with `fontdue` into one 8-bit coverage bitmap per size in `lib/console/src/font/`, and writes the `font.rs` that embeds them. The TTF, the bitmaps and `font.rs` are committed, so ordinary builds never run the rasterizer. It prints any glyphs it had to clip to their cell.
@@ -88,8 +88,8 @@ xtask uses clippy's defaults. Formatting is rustfmt's defaults. Identifiers, com
 ## Tests
 
 - **Host tests.** Generic logic lives in `lib/*` crates and runs under `cargo test` on the host. Every `lib/*` crate also runs its tests under Miri.
-- **QEMU tests.** In-kernel tests are `#[test_case]` functions using `custom_test_frameworks`. `cargo test` builds one kernel ELF per test binary. xtask is the cargo runner: it writes each ELF into an image next to it, `<elf>.img`, and boots it headless in QEMU with serial on standard output. The kernel logs `test <name>` before each test and `<n> tests passed` after the last, to serial and the screen, and exits QEMU through `isa-debug-exit` at port 0xf4: 0x10 for success, which QEMU turns into exit status 33, and 0x11 for failure, status 35. Only 33 is a pass, because `-no-reboot` turns a triple fault into status 0. Until milestone 2 adds the first faulting test, the tests live in the kernel binary under `cfg(test)`, and `thisos-kernel` has no library.
-- **Failures.** A failing test's panic report is followed by `test <name> failed`, and the kernel exits QEMU with failure. The tests after it in that binary don't run; other binaries still run.
+- **QEMU tests.** In-kernel tests are `#[test_case]` functions using `custom_test_frameworks`. `cargo test` builds one kernel ELF per test binary. xtask is the cargo runner: it writes each ELF into an image next to it, `<elf>.img`, and boots it headless in QEMU with serial on standard output. The kernel logs `test <name>` before each test and `<n> tests passed` after the last, to serial and the screen. It ends on a summary: `summary:`, then a line per test saying `ok`, `FAILED` or `not run`, then PASS or FAIL, four times the font's size on the screen. Then it exits QEMU through `isa-debug-exit` at port 0xf4: 0x10 for success, which QEMU turns into exit status 33, and 0x11 for failure, status 35. Only 33 is a pass, because `-no-reboot` turns a triple fault into status 0. The kernel writes the port only when CPUID reports a hypervisor, which QEMU does with KVM and with TCG; on the laptop, where nobody knows what 0xf4 decodes to, it halts after the summary. Until milestone 2 adds the first faulting test, the tests live in the kernel binary under `cfg(test)`, and `thisos-kernel` has no library.
+- **Failures.** A failing test's panic report is followed by `test <name> failed` and the summary, and the kernel exits QEMU with failure. The tests after it in that binary don't run; other binaries still run.
 - **Faulting tests.** A test that has to fault, such as a page fault or a stack overflow, goes in a `tests/` file of its own.
 - **Shared support.** Test files share their entry point and panic handler through one support module, so that the combined laptop image can include them.
 - **Hangs.** At milestone 1, xtask kills QEMU after 60 s per test binary and fails it. From milestone 2, a watchdog on the LAPIC timer stops a hung test and names it.
@@ -98,7 +98,7 @@ xtask uses clippy's defaults. Formatting is rustfmt's defaults. Identifiers, com
 
 Anything that passes in QEMU must also pass on the test laptop described in `docs/design.md`. Laptop runs happen at every milestone and after any change to arch or driver code. A milestone isn't done until it passes there.
 
-`cargo xtask flash` writes the image to a USB stick, erasing it. It takes `--release`, `--device PATH` and `--yes`. It runs as you, and runs `dd` and `sgdisk` through `sudo`. It:
+`cargo xtask flash` writes the image to a USB stick, erasing it. It takes `--release`, `--tests`, `--device PATH` and `--yes`. It runs as you, and runs `dd` and `sgdisk` through `sudo`. It:
 
 - only considers whole disks on USB that are removable or hotplug, and never the internal disk. With one such disk it uses it; with several, `--device` picks one.
 - shows the stick's path, model, serial and size, and the build ID the stick holds. It reads `thisos-build.txt` from the stick's FAT partition, mounting it with `udisksctl` if it isn't mounted. Then it asks before writing. `--yes` skips the question, not the checks.
@@ -118,7 +118,7 @@ addr2line -f -C -e target/x86_64-unknown-none/debug/thisos-kernel 0x28af3 0x2bc5
 
 `llvm-addr2line` takes the same arguments.
 
-`cargo xtask build --tests` writes one combined image holding every test that doesn't fault, plus one image per faulting test file. Each image ends on a summary screen listing the tests and their results, with a large PASS or FAIL line, then halts.
+`cargo xtask build --tests` writes the kernel's test binary into `target/thisos-tests.img`, and `cargo xtask flash --tests` writes that to the stick. It finds the binary in the JSON messages of `cargo test --no-run`. The image ends on the summary screen described under Tests, with the panic report above it when a test fails, then halts. Once milestone 2 adds faulting tests, it becomes one combined image holding every test that doesn't fault, plus one image per faulting test file.
 
 ## CI
 

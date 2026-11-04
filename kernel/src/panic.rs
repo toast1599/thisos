@@ -1,5 +1,5 @@
 //! The panic handler: reports the panic with a backtrace to both log sinks,
-//! then halts. In a test build it exits QEMU with failure instead.
+//! then halts. In a test build it ends the test run with failure instead.
 
 use core::fmt;
 use core::panic::PanicInfo;
@@ -38,8 +38,9 @@ fn panic(info: &PanicInfo) -> ! {
         None => logger::panic(format_args!("PANIC: {}", info.message()), &backtrace),
     }
     #[cfg(test)]
-    crate::testing::report_failure();
-    stop()
+    crate::testing::fail();
+    #[cfg(not(test))]
+    Arch::halt();
 }
 
 fn stop() -> ! {

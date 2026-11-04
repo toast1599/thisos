@@ -146,6 +146,30 @@ impl<'a> Console<'a> {
         self.color = color;
     }
 
+    /// Writes `text` on lines of its own, each glyph `scale` times its size
+    /// in both directions, in the current color. Characters past the
+    /// screen's width are dropped. The large text isn't kept in the grid, so
+    /// it disappears if the console scrolls after it.
+    pub fn write_large(&mut self, text: &str, scale: usize) {
+        if self.col != 0 {
+            self.newline();
+        }
+        for _ in 0..scale {
+            self.newline();
+        }
+        let Some(screen) = &mut self.screen else {
+            return;
+        };
+        let top = self.row.saturating_sub(scale);
+        for (i, c) in text.chars().take(screen.cols / scale).enumerate() {
+            let byte = u8::try_from(c)
+                .ok()
+                .filter(|byte| (FIRST_GLYPH..=LAST_GLYPH).contains(byte))
+                .unwrap_or(b'?');
+            screen.draw_large(i * scale, top, byte, self.color, scale);
+        }
+    }
+
     fn put(&mut self, byte: u8) {
         let Some(cols) = self.screen.as_ref().map(|screen| screen.cols) else {
             return;
@@ -222,6 +246,27 @@ impl Screen<'_> {
             }
         }
     }
+
+    /// Draws `byte` `factor` times its size, from the cell at `col`, `row`.
+    fn draw_large(&mut self, col: usize, row: usize, byte: u8, color: Color, factor: usize) {
+        let Font { width, height, .. } = *self.font;
+        let fg = color.rgb();
+        let glyph = self.font.glyph(byte);
+        for (y, coverage) in glyph.chunks_exact(width).enumerate() {
+            for dy in 0..factor {
+                let start = ((row * height + y * factor + dy) * self.fb.stride + col * width) * 4;
+                let (pixels, _) =
+                    self.fb.buffer[start..start + width * factor * 4].as_chunks_mut::<4>();
+                for (pixel, &alpha) in pixels.chunks_exact_mut(factor).zip(coverage) {
+                    let [r, g, b] = fg.map(|channel| scale(channel, alpha));
+                    pixel.fill(match self.fb.format {
+                        PixelFormat::Rgb => [r, g, b, 0],
+                        PixelFormat::Bgr => [b, g, r, 0],
+                    });
+                }
+            }
+        }
+    }
 }
 
 /// Blends `channel` over the black background by `alpha` out of 255.
@@ -251,11 +296,15 @@ mod tests {
     }
 
     fn console(buffer: &mut [u8], format: PixelFormat) -> Box<Console<'_>> {
+        sized_console(buffer, HEIGHT, format)
+    }
+
+    fn sized_console(buffer: &mut [u8], height: usize, format: PixelFormat) -> Box<Console<'_>> {
         let mut console = Box::new(Console::new());
         console.attach(Framebuffer {
             buffer,
             width: WIDTH,
-            height: HEIGHT,
+            height,
             stride: WIDTH,
             format,
         });
@@ -336,5 +385,44 @@ mod tests {
         let mut console = console(&mut buffer, PixelFormat::Bgr);
         write!(console, "é\tx").unwrap();
         assert_eq!(text(&console, 0), "??x");
+    }
+
+    /// Checks that the 7x16 glyph at the top left of `small` appears twice
+    /// its size in `large`, from pixel row `top`.
+    fn assert_doubled(small: &[u8], large: &[u8], top: usize) {
+        let (small, large) = (small.as_chunks::<4>().0, large.as_chunks::<4>().0);
+        for y in 0..16 {
+            for x in 0..7 {
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let big = large[(top + 2 * y + dy) * WIDTH + 2 * x + dx];
+                    assert_eq!(big, small[y * WIDTH + x], "glyph pixel {x}, {y}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn draws_large_text_as_scaled_glyphs() {
+        // Four rows of the 12 px font.
+        let (mut a, mut b) = (vec![0; WIDTH * 64 * 4], vec![0; WIDTH * 64 * 4]);
+        let mut small = sized_console(&mut a, 64, PixelFormat::Bgr);
+        write!(small, "@").unwrap();
+        let mut large = sized_console(&mut b, 64, PixelFormat::Bgr);
+        large.write_large("@", 2);
+        write!(large, "x").unwrap();
+        assert_doubled(pixels(&small), pixels(&large), 0);
+        assert_eq!(text(&large, 2), "x");
+    }
+
+    #[test]
+    fn scrolls_to_make_room_for_large_text() {
+        let (mut a, mut b) = (vec![0; WIDTH * 64 * 4], vec![0; WIDTH * 64 * 4]);
+        let mut small = sized_console(&mut a, 64, PixelFormat::Bgr);
+        write!(small, "@").unwrap();
+        let mut large = sized_console(&mut b, 64, PixelFormat::Bgr);
+        write!(large, "a\nb\nc\nd").unwrap();
+        large.write_large("@", 2);
+        assert_eq!(text(&large, 0), "d");
+        assert_doubled(pixels(&small), pixels(&large), 16);
     }
 }

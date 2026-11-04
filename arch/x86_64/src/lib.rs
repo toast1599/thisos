@@ -67,19 +67,29 @@ impl Platform for X86_64 {
     }
 
     fn exit_qemu(success: bool) -> ! {
-        // QEMU exits with status (value << 1) | 1: 33 and 35. Success isn't
-        // 0 because -no-reboot turns a triple fault into status 0.
-        let value: u32 = if success { 0x10 } else { 0x11 };
-        let mut port = Port::new(DEBUG_EXIT_PORT);
-        // SAFETY: Under QEMU, 0xf4 is the isa-debug-exit device xtask adds
-        // for test runs, and the write ends the process. Port I/O touches no
-        // memory, so on a machine without the device nothing the kernel
-        // relies on changes; the CPU halts below.
-        unsafe {
-            port.write(value);
+        // What 0xf4 decodes to on the laptop's chipset is unknown, so real
+        // hardware never sees the write.
+        if under_hypervisor() {
+            // QEMU exits with status (value << 1) | 1: 33 and 35. Success
+            // isn't 0 because -no-reboot turns a triple fault into status 0.
+            let value: u32 = if success { 0x10 } else { 0x11 };
+            let mut port = Port::new(DEBUG_EXIT_PORT);
+            // SAFETY: Under QEMU, 0xf4 is the isa-debug-exit device xtask
+            // adds for test runs, and the write ends the process. Port I/O
+            // touches no memory, so under a hypervisor without the device
+            // nothing the kernel relies on changes; the CPU halts below.
+            unsafe {
+                port.write(value);
+            }
         }
         Self::halt()
     }
+}
+
+/// Whether CPUID leaf 1 sets ECX bit 31, which real CPUs leave clear and
+/// hypervisors set.
+fn under_hypervisor() -> bool {
+    core::arch::x86_64::__cpuid(1).ecx & (1 << 31) != 0
 }
 
 /// The I/O port xtask gives QEMU's isa-debug-exit device.
