@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, ensure};
 
 use crate::cmd::{cargo, exec, on_host};
-use crate::root;
+use crate::{build, root};
 
 /// Runs the host tests of every `lib/*` crate, then the kernel's tests in
 /// QEMU.
@@ -31,6 +31,9 @@ pub fn test() -> Result<()> {
                 "CARGO_TARGET_X86_64_UNKNOWN_NONE_RUNNER",
                 format!("{xtask} qemu-test"),
             )
+            // The same as build --tests, so that switching between the two
+            // doesn't rebuild the kernel.
+            .env("THISOS_BUILD", build::build_env(false, true)?)
             .args(["test", "-p", "thisos-kernel"]),
     )
 }

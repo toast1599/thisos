@@ -29,15 +29,7 @@ pub fn build(release: bool, tests: bool) -> Result<Image> {
         .rsplit(['@', '#'])
         .next()
         .with_context(|| format!("no version in cargo pkgid output {pkgid:?}"))?;
-    let commit = output(
-        Command::new("git")
-            .current_dir(root())
-            .args(["describe", "--always", "--dirty"]),
-    )?;
-    let time = output(Command::new("date").args(["-u", "+%Y-%m-%dT%H:%MZ"]))?;
-    let kind = if tests { " tests" } else { "" };
-    // The kernel logs "ThisOS <version> " followed by this.
-    let build = format!("{} {profile}{kind} {}", commit.trim(), time.trim());
+    let build = build_env(release, tests)?;
     let id = format!("ThisOS {version} {build}");
 
     let (kernel, path) = if tests {
@@ -68,6 +60,20 @@ pub fn build(release: bool, tests: bool) -> Result<Image> {
         .create_uefi_image(&path)
         .with_context(|| format!("writing {}", path.display()))?;
     Ok(Image { path, id })
+}
+
+/// `THISOS_BUILD` for a kernel build: `<commit> <profile>[ tests] <time>`.
+/// The kernel logs "ThisOS <version> " followed by this.
+pub fn build_env(release: bool, tests: bool) -> Result<String> {
+    let profile = if release { "release" } else { "debug" };
+    let commit = output(
+        Command::new("git")
+            .current_dir(root())
+            .args(["describe", "--always", "--dirty"]),
+    )?;
+    let time = output(Command::new("date").args(["-u", "+%Y-%m-%dT%H:%MZ"]))?;
+    let kind = if tests { " tests" } else { "" };
+    Ok(format!("{} {profile}{kind} {}", commit.trim(), time.trim()))
 }
 
 /// Builds the kernel's test binary and returns its path, which cargo names
