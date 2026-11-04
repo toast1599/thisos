@@ -1,0 +1,5 @@
+[toolchain]
+channel = "nightly-2026-11-04"
+profile = "minimal"
+components = ["rustfmt", "clippy", "miri", "rust-src"]
+targets = ["x86_64-unknown-none", "x86_64-unknown-uefi"]
