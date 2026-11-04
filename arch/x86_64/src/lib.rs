@@ -6,6 +6,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 mod backtrace;
+mod pat;
 
 use core::arch::asm;
 use core::fmt;
@@ -17,6 +18,7 @@ use bootloader_api::info::{FrameBuffer, PixelFormat};
 use thisos_hal::{BacktraceEnd, BootInfo, Cpu, Framebuffer, Platform, Serial};
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
+use x86_64::VirtAddr;
 use x86_64::instructions::port::Port;
 
 #[doc(hidden)]
@@ -29,6 +31,15 @@ pub struct X86_64;
 impl Cpu for X86_64 {
     fn halt() -> ! {
         x86_64::instructions::interrupts::disable();
+        // Drains the write-combining buffers, which hlt doesn't, so that the
+        // last text written to the framebuffer reaches the screen.
+        // SAFETY: sfence, which every x86_64 CPU has, only orders stores;
+        // it reads no registers and changes no state the kernel relies on.
+        // The target builds without SSE, which is why the intrinsic can't
+        // be called safely.
+        unsafe {
+            asm!("sfence", options(nostack, preserves_flags));
+        }
         // An NMI or SMI can still wake the CPU from hlt, so go straight back.
         loop {
             x86_64::instructions::hlt();
@@ -143,9 +154,28 @@ pub unsafe fn boot_info(boot: &'static mut bootloader_api::BootInfo) -> BootInfo
     // No device answering is normal: the laptop has no serial port.
     let serial = tty.ok().map(Com1);
     let framebuffer = boot.framebuffer.take().and_then(framebuffer);
+    let framebuffer_write_combining =
+        match (&framebuffer, boot.physical_memory_offset.into_option()) {
+            (Some(fb), Some(offset)) => {
+                let range = fb.buffer.as_ptr_range();
+                // SAFETY: BOOTLOADER_CONFIG has the loader map all physical
+                // memory, at offset. The caller runs this once, before
+                // anything else, so nothing else uses the page tables, and
+                // the loader sets PWT on none of its pages, so none selects
+                // PAT entry 1.
+                unsafe {
+                    pat::write_combine(
+                        VirtAddr::from_ptr(range.start)..VirtAddr::from_ptr(range.end),
+                        VirtAddr::new(offset),
+                    )
+                }
+            }
+            _ => false,
+        };
     BootInfo {
         serial,
         framebuffer,
+        framebuffer_write_combining,
     }
 }
 

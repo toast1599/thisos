@@ -34,6 +34,10 @@ fn kmain(boot: BootInfo<Arch>) -> ! {
     log::info!("ThisOS {} {BUILD}", env!("CARGO_PKG_VERSION"));
     if !has_framebuffer {
         log::warn!("no framebuffer in a format the console draws; logging to serial only");
+    } else if boot.framebuffer_write_combining {
+        log::info!("framebuffer is write-combining");
+    } else {
+        log::warn!("framebuffer isn't write-combining, so the console may be slow");
     }
     #[cfg(test)]
     test_main();

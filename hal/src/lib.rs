@@ -17,6 +17,10 @@ pub struct BootInfo<P: Platform> {
     /// The screen, or `None` when the loader set up none in a format the
     /// kernel draws.
     pub framebuffer: Option<Framebuffer<'static>>,
+    /// Whether the architecture made stores to the framebuffer
+    /// write-combining. Without it each store is its own bus transaction
+    /// where the firmware maps the framebuffer uncached.
+    pub framebuffer_write_combining: bool,
 }
 
 /// A linear framebuffer of 4-byte pixels, as the firmware set it up. Rows
