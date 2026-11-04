@@ -132,7 +132,7 @@ GitHub Actions runs on every push and pull request:
 - `cargo deny`
 - an image build
 
-`.github/workflows/ci.yml` has one job on `ubuntu-24.04` that runs `cargo xtask ci`, so CI and a local run do the same checks. It installs the toolchain from `rust-toolchain.toml` with the runner's rustup, and `cargo-deny` 0.20.2 as a prebuilt binary through `taiki-e/install-action`. Every action is pinned to a full commit SHA, with its tag in a comment. The workflow only reads the repository, and a new push cancels a run still going on the same ref.
+`.github/workflows/ci.yml` has one job on `ubuntu-24.04` that runs `cargo xtask ci`, so CI and a local run do the same checks. It installs the toolchain from `rust-toolchain.toml` with the runner's rustup, `cargo-deny` 0.20.2 as a prebuilt binary through `taiki-e/install-action`, and QEMU from Ubuntu's `qemu-system-x86` package, which the runner image lacks. Every action is pinned to a full commit SHA, with its tag in a comment. The workflow only reads the repository, and a new push cancels a run still going on the same ref.
 
 CI caches the cargo registry and both target directories, keyed on `rust-toolchain.toml` and both `Cargo.lock` files. The cache holds `target/ovmf/` too: fetching OVMF from GitHub can take minutes, and the cache means CI pays that only when the pinned release changes.
 
