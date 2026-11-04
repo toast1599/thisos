@@ -59,6 +59,8 @@ OVMF comes from the `ovmf-prebuilt` crate at a pinned release, `edk2-stable20260
 
 `thisos-arch-x86_64` is the only crate allowed unsafe code. Every other crate starts with `#![forbid(unsafe_code)]`. This is an attribute and not a workspace lint, because Cargo can't combine a crate's own `[lints]` table with the workspace's. Adding a crate to the exception list is a decision like any other.
 
+Neither `forbid(unsafe_code)` nor clippy's unsafe lints check code that a macro from another crate expands into, and a `macro_rules!` body is only checked where it is expanded. So unsafe code reaches the kernel through `thisos_arch_x86_64::entry!` and the `bootloader_api::entry_point!` it calls, and no lint checks the SAFETY comment inside `entry!`. A dependency whose macros a forbidding crate uses is reviewed as unsafe code. A macro in the arch crate that expands to unsafe code follows the rules below as if its expansion were written in the arch crate.
+
 Inside the exception list:
 
 - Every `unsafe` block has a `// SAFETY:` comment saying which invariant holds and why.

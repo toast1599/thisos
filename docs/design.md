@@ -121,6 +121,8 @@ Each milestone ends with QEMU and the laptop doing something they couldn't befor
 
 - How a handle is represented (for example, table index plus generation), and the syscall calling convention. Due at milestones 3 and 4.
 - The heap allocator crate and the frame allocator's algorithm. Due at milestone 2.
+- How the kernel logs from an interrupt or exception handler. The logger's lock is a spin lock, so a handler that logs while the code it interrupted holds the lock never returns. Due at milestone 2.
+- How a panic inside the framebuffer console reaches the screen. Its report goes to serial only, which the laptop doesn't have. Due at milestone 2, when the shared test support module lets a test panic inside the logger.
 - The name and API of the audited driver crate. Due at milestone 5.
 - Networking on the laptop: its only network device is Intel CNVi Wi-Fi, so matching QEMU there would need a Wi-Fi driver or a USB Ethernet adapter, which needs xHCI first.
 - Which loader boots aarch64 and riscv64.

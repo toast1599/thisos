@@ -59,9 +59,11 @@ impl Platform for X86_64 {
         }
         // SAFETY: COM1's eight ports are the standard PC serial port's, so
         // they are valid for as long as the machine runs. The Com1 from
-        // boot_info may still exist, which makes two users of the ports;
-        // that only interleaves the bytes each writes, since port I/O to the
-        // UART touches no memory. TAKEN keeps it to two.
+        // boot_info may still exist, which makes two users of the ports.
+        // new_port re-initializes the UART and runs its loopback test, so
+        // bytes the first user left in the transmit FIFO can be lost. Port
+        // I/O to the UART touches no memory, so nothing else is affected.
+        // TAKEN keeps it to two.
         let tty = unsafe { Uart16550Tty::new_port(COM1_PORT, COM1_CONFIG) };
         tty.ok().map(Com1)
     }
