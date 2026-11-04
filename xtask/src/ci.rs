@@ -30,6 +30,17 @@ pub fn ci() -> Result<()> {
     ]))?;
 
     exec(cargo().args(["clippy", "--workspace", "--", "-D", "warnings"]))?;
+    // Not --workspace --all-targets: that builds thisos-console's tests,
+    // which need std, for x86_64-unknown-none.
+    exec(cargo().args([
+        "clippy",
+        "-p",
+        "thisos-kernel",
+        "--tests",
+        "--",
+        "-D",
+        "warnings",
+    ]))?;
     let libs = test::libs()?;
     for manifest in &libs {
         exec(
@@ -38,8 +49,12 @@ pub fn ci() -> Result<()> {
         )?;
     }
     exec(
-        on_host(cargo().args(["clippy", "--manifest-path", "xtask/Cargo.toml"]))
-            .args(["--", "-D", "warnings"]),
+        on_host(cargo().args(["clippy", "--manifest-path", "xtask/Cargo.toml"])).args([
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ]),
     )?;
     exec(on_host(cargo().args([
         "test",
