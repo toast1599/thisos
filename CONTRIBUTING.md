@@ -34,7 +34,7 @@ Build profiles:
 There are two workspaces:
 
 - The root workspace holds the target crates. Its `.cargo/config.toml` defaults to `x86_64-unknown-none`.
-- `xtask/` is its own workspace for host tooling, run as `cargo xtask`.
+- `xtask/` is its own workspace for host tooling, run as `cargo xtask`. Its own `.cargo/config.toml` sets the target to `x86_64-unknown-linux-gnu`, because cargo also reads the root one and `host-tuple` isn't accepted there; that is what lets rust-analyzer and plain `cargo` commands inside `xtask/` build for the host.
 
 ## xtask
 

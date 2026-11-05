@@ -1,0 +1,5 @@
+# xtask runs on the host, but cargo also reads the root .cargo/config.toml,
+# whose default target is x86_64-unknown-none. Cargo doesn't accept
+# host-tuple here, so this names the host that development and CI use.
+[build]
+target = "x86_64-unknown-linux-gnu"
