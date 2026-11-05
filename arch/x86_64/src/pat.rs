@@ -114,7 +114,12 @@ impl PageTables {
         let table = (phys_offset + frame.start_address().as_u64()).as_mut_ptr::<PageTable>();
         // SAFETY: The caller guarantees that phys_offset maps all physical
         // memory, so this is the level 4 table CR3 names, and that nothing
-        // else uses the tables, so this is the only reference to it.
+        // else uses the tables, so this is the only reference to it. The CPU's
+        // page walker still sets Accessed and Dirty bits in it while the
+        // reference lives, which the aliasing rules don't allow. That is
+        // accepted here because the reference lasts one call, on one core,
+        // and nothing reads those bits; see the open question on page tables
+        // in docs/design.md.
         let table = unsafe { &mut *table };
         // SAFETY: As above: the offset maps every frame the tables use, and
         // this is the only user of the level 4 table.
