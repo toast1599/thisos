@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["kernel", "hal", "arch/x86_64", "lib/console"]
+members = ["kernel", "hal", "arch/x86_64", "lib/console", "lib/frames"]
 
 [workspace.package]
 version = "0.0.0"
@@ -13,6 +13,7 @@ publish = false
 thisos-hal = { path = "hal" }
 thisos-arch-x86_64 = { path = "arch/x86_64" }
 thisos-console = { path = "lib/console" }
+thisos-frames = { path = "lib/frames" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

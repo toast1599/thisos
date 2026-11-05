@@ -62,6 +62,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "thisos-frames"
+version = "0.0.0"
+
+[[package]]
 name = "thisos-hal"
 version = "0.0.0"
 
@@ -73,6 +77,7 @@ dependencies = [
  "spin",
  "thisos-arch-x86_64",
  "thisos-console",
+ "thisos-frames",
  "thisos-hal",
  "thisos-kernel",
 ]

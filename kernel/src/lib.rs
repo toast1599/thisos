@@ -11,6 +11,7 @@
 #![test_runner(crate::testing::run)]
 #![reexport_test_harness_main = "test_main"]
 
+mod frames;
 mod logger;
 mod panic;
 #[cfg(feature = "testing")]
@@ -50,6 +51,7 @@ pub fn init(boot: BootInfo<Arch>) {
     } else {
         log::warn!("framebuffer isn't write-combining, so the console may be slow");
     }
+    frames::init(boot.memory);
 }
 
 /// The kernel binary's main function.

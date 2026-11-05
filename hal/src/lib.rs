@@ -21,6 +21,32 @@ pub struct BootInfo<P: Platform> {
     /// write-combining. Without it each store is its own bus transaction
     /// where the firmware maps the framebuffer uncached.
     pub framebuffer_write_combining: bool,
+    /// Physical memory, as the loader left it.
+    pub memory: P::MemoryMap,
+}
+
+/// A range of physical memory in the loader's memory map.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MemoryRegion {
+    /// The physical address of the first byte.
+    pub start: u64,
+    /// The physical address after the last byte.
+    pub end: u64,
+    /// Who uses it.
+    pub kind: MemoryKind,
+}
+
+/// Who uses a [`MemoryRegion`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MemoryKind {
+    /// Free RAM the kernel may use.
+    Usable,
+    /// RAM the loader left in use: the kernel image, its stack, the page
+    /// tables and the boot information, the memory map included.
+    Loader,
+    /// Memory the firmware reports, by the firmware's own type number, such
+    /// as UEFI runtime services, ACPI tables or MMIO.
+    Firmware(u32),
 }
 
 /// A linear framebuffer of 4-byte pixels, as the firmware set it up. Rows
@@ -114,6 +140,10 @@ pub trait Platform {
 
     /// The registers the CPU had when it trapped.
     type TrapFrame: TrapFrame;
+
+    /// The memory map in [`BootInfo`]. A clone taken before iterating
+    /// reads the whole map again.
+    type MemoryMap: Iterator<Item = MemoryRegion> + Clone + Send;
 
     /// The address of the unmapped page right below the kernel stack, which
     /// a stack overflow runs into.

@@ -7,6 +7,7 @@
 
 mod backtrace;
 mod framebuffer;
+mod memory;
 mod once;
 mod pat;
 mod trap;
@@ -27,6 +28,7 @@ use x86_64::instructions::port::Port;
 #[doc(hidden)]
 pub use bootloader_api as __bootloader_api;
 pub use framebuffer::FramebufferPixels;
+pub use memory::MemoryMap;
 pub use trap::TrapFrame;
 
 /// The x86_64 architecture, as the kernel sees it through `thisos-hal`.
@@ -73,6 +75,7 @@ impl Platform for X86_64 {
     type Serial = Com1;
     type Pixels = FramebufferPixels;
     type TrapFrame = TrapFrame;
+    type MemoryMap = MemoryMap;
 
     fn guard_page() -> u64 {
         backtrace::stack_bottom() - 4096
@@ -212,10 +215,14 @@ pub unsafe fn boot_info(
             }
             _ => false,
         };
+    // Nothing writes the loader's structure after this, so the rest is
+    // read through a shared reference.
+    let boot: &'static bootloader_api::BootInfo = boot;
     BootInfo {
         serial,
         framebuffer,
         framebuffer_write_combining,
+        memory: MemoryMap::new(&boot.memory_regions),
     }
 }
 
