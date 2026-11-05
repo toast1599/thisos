@@ -13,6 +13,7 @@
 
 mod frames;
 mod logger;
+mod paging;
 mod panic;
 #[cfg(feature = "testing")]
 pub mod testing;
@@ -52,6 +53,7 @@ pub fn init(boot: BootInfo<Arch>) {
         log::warn!("framebuffer isn't write-combining, so the console may be slow");
     }
     frames::init(boot.memory);
+    paging::init();
 }
 
 /// The kernel binary's main function.

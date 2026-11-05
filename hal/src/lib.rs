@@ -6,6 +6,9 @@
 #![forbid(unsafe_code)]
 
 use core::fmt;
+use core::ops::Range;
+
+use thisos_frames::Frame;
 
 /// What the kernel learns from the boot loader, in a form that names no
 /// boot protocol. Each architecture crate builds it from its loader's own
@@ -145,6 +148,15 @@ pub trait Platform {
     /// reads the whole map again.
     type MemoryMap: Iterator<Item = MemoryRegion> + Clone + Send;
 
+    /// The kernel's own page tables.
+    type PageTables: PageTables;
+
+    /// Builds page tables of the kernel's own, with frames from `alloc`,
+    /// that map everything the loader mapped for the kernel at the same
+    /// addresses and nothing else, and switches to them. Returns `None` if
+    /// they were taken already. Panics if `alloc` runs out of frames.
+    fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<Self::PageTables>;
+
     /// The address of the unmapped page right below the kernel stack, which
     /// a stack overflow runs into.
     fn guard_page() -> u64;
@@ -164,6 +176,61 @@ pub trait Platform {
     /// whether the tests passed. It touches the device only when it runs
     /// under a hypervisor; on real hardware it only halts.
     fn exit_qemu(success: bool) -> !;
+}
+
+/// The page tables the CPU uses, of which there is one set for now. Pages
+/// are 4 KiB.
+pub trait PageTables: Send {
+    /// The virtual addresses [`PageTables::map`] maps into. The loader
+    /// mapped nothing there.
+    fn kernel_space(&self) -> Range<u64>;
+
+    /// Maps the page at `page` to `frame`, no-execute, and writable if
+    /// `writable`. New tables on the way come from `alloc`. The frame stays
+    /// mapped for good.
+    fn map(
+        &mut self,
+        page: u64,
+        frame: Frame,
+        writable: bool,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
+    ) -> Result<(), MapError>;
+
+    /// Where `addr` is mapped, or `None` if it isn't.
+    fn translate(&self, addr: u64) -> Option<Translation>;
+}
+
+/// Why [`PageTables::map`] failed. It hands the frame back.
+#[derive(Debug)]
+pub struct MapError {
+    /// What was wrong.
+    pub kind: MapErrorKind,
+    /// The frame that wasn't mapped.
+    pub frame: Frame,
+}
+
+/// What was wrong with a [`PageTables::map`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MapErrorKind {
+    /// The page isn't 4 KiB aligned.
+    Unaligned,
+    /// The page is outside [`PageTables::kernel_space`].
+    OutsideKernelSpace,
+    /// The page is mapped already.
+    Mapped,
+    /// `alloc` had no frame for a table.
+    NoFrames,
+}
+
+/// Where an address is mapped, as [`PageTables::translate`] finds it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Translation {
+    /// The physical address it maps to.
+    pub phys: u64,
+    /// Whether writes are allowed.
+    pub writable: bool,
+    /// Whether instruction fetches are allowed.
+    pub executable: bool,
 }
 
 /// A serial port the kernel writes text to. Writing `\n` starts a new line

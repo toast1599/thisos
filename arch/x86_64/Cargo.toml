@@ -13,6 +13,7 @@ bench = false
 
 [dependencies]
 bootloader_api = "0.11"
+thisos-frames.workspace = true
 thisos-hal.workspace = true
 uart_16550 = "0.9"
 x86_64 = "0.15"

@@ -3,6 +3,9 @@
 //! lock, and a handler that found it held by the code it interrupted would
 //! never return.
 
+#[cfg(test)]
+use core::sync::atomic::{AtomicUsize, Ordering};
+
 use spin::Mutex;
 use thisos_frames::{Frame, Frames};
 use thisos_hal::{MemoryKind, Platform};
@@ -20,6 +23,10 @@ static FRAMES: Mutex<Frames<WORDS>> = Mutex::new(Frames::new());
 /// The memory map, for reading it again after `init`.
 static MEMORY: Mutex<Option<MemoryMap>> = Mutex::new(None);
 
+/// The free frames right after `init`, before the page tables took some.
+#[cfg(test)]
+static SEEDED: AtomicUsize = AtomicUsize::new(0);
+
 /// Makes the Usable regions of `memory` free, and logs how much memory
 /// that is. `kernel::init` calls this once.
 pub fn init(memory: MemoryMap) {
@@ -29,6 +36,8 @@ pub fn init(memory: MemoryMap) {
         regions += 1;
         above += frames.add(region.start..region.end);
     }
+    #[cfg(test)]
+    SEEDED.store(frames.free_frames(), Ordering::Relaxed);
     // 256 frames to the MiB.
     let free = frames.free_frames() / 256;
     log::info!("memory: {free} MiB free in {regions} usable regions");
@@ -43,10 +52,6 @@ pub fn init(memory: MemoryMap) {
 }
 
 /// Takes a free frame, or returns `None` when there is none.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the kernel's page tables will be the first user")
-)]
 pub fn alloc() -> Option<Frame> {
     FRAMES.lock().alloc()
 }
@@ -54,10 +59,19 @@ pub fn alloc() -> Option<Frame> {
 /// Makes `frame` free again.
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "the kernel's page tables will be the first user")
+    expect(dead_code, reason = "nothing frees a frame until unmap in M3")
 )]
 pub fn free(frame: Frame) {
     FRAMES.lock().free(frame);
+}
+
+/// The memory map `init` was given.
+#[cfg(test)]
+pub fn memory() -> MemoryMap {
+    let Some(memory) = MEMORY.lock().clone() else {
+        panic!("frames::init didn't run");
+    };
+    memory
 }
 
 #[cfg(test)]
@@ -70,15 +84,8 @@ mod tests {
 
     static HELD: Mutex<[Option<Frame>; BATCH]> = Mutex::new([const { None }; BATCH]);
 
-    fn memory() -> MemoryMap {
-        let Some(memory) = MEMORY.lock().clone() else {
-            panic!("frames::init didn't run");
-        };
-        memory
-    }
-
     #[test_case]
-    fn free_frames_match_the_memory_map() {
+    fn seeded_frames_match_the_memory_map() {
         let limit = FRAMES.lock().limit();
         let expected: u64 = memory()
             .filter(|r| r.kind == MemoryKind::Usable)
@@ -88,8 +95,8 @@ mod tests {
                 end.saturating_sub(first)
             })
             .sum();
-        let free = FRAMES.lock().free_frames();
-        assert_eq!(u64::try_from(free), Ok(expected));
+        let seeded = SEEDED.load(Ordering::Relaxed);
+        assert_eq!(u64::try_from(seeded), Ok(expected));
     }
 
     #[test_case]

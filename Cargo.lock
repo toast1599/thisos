@@ -49,6 +49,7 @@ name = "thisos-arch-x86_64"
 version = "0.0.0"
 dependencies = [
  "bootloader_api",
+ "thisos-frames",
  "thisos-hal",
  "uart_16550",
  "x86_64",
@@ -68,6 +69,9 @@ version = "0.0.0"
 [[package]]
 name = "thisos-hal"
 version = "0.0.0"
+dependencies = [
+ "thisos-frames",
+]
 
 [[package]]
 name = "thisos-kernel"

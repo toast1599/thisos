@@ -9,6 +9,7 @@ mod backtrace;
 mod framebuffer;
 mod memory;
 mod once;
+mod paging;
 mod pat;
 mod trap;
 
@@ -19,6 +20,8 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use bootloader_api::BootloaderConfig;
 use bootloader_api::config::Mapping;
 use bootloader_api::info::{FrameBuffer, PixelFormat};
+use once::Once;
+use thisos_frames::Frame;
 use thisos_hal::{BacktraceEnd, BootInfo, Cpu, Framebuffer, Platform, Serial, TrapHandler};
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
@@ -29,6 +32,7 @@ use x86_64::instructions::port::Port;
 pub use bootloader_api as __bootloader_api;
 pub use framebuffer::FramebufferPixels;
 pub use memory::MemoryMap;
+pub use paging::KernelPageTables;
 pub use trap::TrapFrame;
 
 /// The x86_64 architecture, as the kernel sees it through `thisos-hal`.
@@ -76,6 +80,17 @@ impl Platform for X86_64 {
     type Pixels = FramebufferPixels;
     type TrapFrame = TrapFrame;
     type MemoryMap = MemoryMap;
+    type PageTables = KernelPageTables;
+
+    fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<KernelPageTables> {
+        let Some(&offset) = PHYS_OFFSET.get() else {
+            panic!("the loader didn't map physical memory");
+        };
+        // SAFETY: boot_info recorded where the loader mapped all physical
+        // memory, and loaded the kernel's own descriptor tables before the
+        // kernel could call this.
+        unsafe { paging::take(offset, alloc) }
+    }
 
     fn guard_page() -> u64 {
         backtrace::stack_bottom() - 4096
@@ -141,6 +156,9 @@ fn under_hypervisor() -> bool {
     core::arch::x86_64::__cpuid(1).ecx & (1 << 31) != 0
 }
 
+/// Where the loader mapped all physical memory, which `boot_info` records.
+static PHYS_OFFSET: Once<VirtAddr> = Once::new();
+
 /// The I/O port xtask gives QEMU's isa-debug-exit device.
 const DEBUG_EXIT_PORT: u16 = 0xf4;
 
@@ -167,6 +185,10 @@ const COM1_CONFIG: Config = Config {
 pub const BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     config.mappings.physical_memory = Some(Mapping::Dynamic);
+    // Everything the loader maps for the kernel goes in the upper half,
+    // which leaves the lower half to user space. Only the loader's own
+    // identity mappings are below it.
+    config.mappings.dynamic_range_start = Some(0xffff_8000_0000_0000);
     config
 };
 
@@ -202,19 +224,22 @@ pub unsafe fn boot_info(
     // No device answering is normal: the laptop has no serial port.
     let serial = tty.ok().map(Com1);
     let framebuffer = boot.framebuffer.take().and_then(framebuffer);
-    let framebuffer_write_combining =
-        match (&framebuffer, boot.physical_memory_offset.into_option()) {
-            (Some(fb), Some(offset)) => {
-                let range = fb.pixels.range();
-                // SAFETY: BOOTLOADER_CONFIG has the loader map all physical
-                // memory, at offset. The caller runs this once, before
-                // anything else, so nothing else uses the page tables, and
-                // the loader sets PWT on none of its pages, so none selects
-                // PAT entry 1.
-                unsafe { pat::write_combine(range, VirtAddr::new(offset)) }
-            }
-            _ => false,
-        };
+    let phys_offset = boot.physical_memory_offset.into_option().map(VirtAddr::new);
+    if let Some(offset) = phys_offset {
+        PHYS_OFFSET.init(offset);
+    }
+    let framebuffer_write_combining = match (&framebuffer, phys_offset) {
+        (Some(fb), Some(offset)) => {
+            let range = fb.pixels.range();
+            // SAFETY: BOOTLOADER_CONFIG has the loader map all physical
+            // memory, at offset. The caller runs this once, before
+            // anything else, so nothing else uses the page tables, and
+            // the loader sets PWT on none of its pages, so none selects
+            // PAT entry 1.
+            unsafe { pat::write_combine(range, offset) }
+        }
+        _ => false,
+    };
     // Nothing writes the loader's structure after this, so the rest is
     // read through a shared reference.
     let boot: &'static bootloader_api::BootInfo = boot;

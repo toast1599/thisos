@@ -11,5 +11,8 @@ test = false
 doctest = false
 bench = false
 
+[dependencies]
+thisos-frames.workspace = true
+
 [lints]
 workspace = true
