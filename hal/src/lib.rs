@@ -16,7 +16,7 @@ pub struct BootInfo<P: Platform> {
     pub serial: Option<P::Serial>,
     /// The screen, or `None` when the loader set up none in a format the
     /// kernel draws.
-    pub framebuffer: Option<Framebuffer<'static>>,
+    pub framebuffer: Option<Framebuffer<P::Pixels>>,
     /// Whether the architecture made stores to the framebuffer
     /// write-combining. Without it each store is its own bus transaction
     /// where the firmware maps the framebuffer uncached.
@@ -24,10 +24,11 @@ pub struct BootInfo<P: Platform> {
 }
 
 /// A linear framebuffer of 4-byte pixels, as the firmware set it up. Rows
-/// are `stride` pixels apart, and `buffer` holds at least `height` of them.
-pub struct Framebuffer<'a> {
+/// are `stride` pixels apart, and `pixels` holds at least `height` of them.
+#[derive(Debug)]
+pub struct Framebuffer<M> {
     /// The pixels, row after row.
-    pub buffer: &'a mut [u8],
+    pub pixels: M,
     /// Visible pixels per row.
     pub width: usize,
     /// Rows.
@@ -38,17 +39,25 @@ pub struct Framebuffer<'a> {
     pub format: PixelFormat,
 }
 
-// By hand, so that Debug doesn't print megabytes of pixels.
-impl fmt::Debug for Framebuffer<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Framebuffer")
-            .field("len", &self.buffer.len())
-            .field("width", &self.width)
-            .field("height", &self.height)
-            .field("stride", &self.stride)
-            .field("format", &self.format)
-            .finish()
-    }
+/// The memory of a [`Framebuffer`], written one pixel or two at a time
+/// and never read: firmware often maps it uncached, where every access is a
+/// bus transaction. A pixel is 4 bytes, stored as a little-endian word, and
+/// an index counts pixels from the start of the first row.
+#[expect(
+    clippy::len_without_is_empty,
+    reason = "the console only needs the length to clear the screen"
+)]
+pub trait Pixels: Send {
+    /// The number of pixels.
+    fn len(&self) -> usize;
+
+    /// Stores `pixel` at `index`. Panics if `index` is out of range.
+    fn store(&mut self, index: usize, pixel: u32);
+
+    /// Stores the low half of `pixels` at `index` and the high half after
+    /// it, in one 8-byte store. Panics unless `index` is even and both
+    /// pixels are in range.
+    fn store_pair(&mut self, index: usize, pixels: u64);
 }
 
 /// The byte order of a framebuffer pixel. The fourth byte is unused.
@@ -99,6 +108,9 @@ pub enum BacktraceEnd {
 pub trait Platform {
     /// The serial port the kernel logs to.
     type Serial: Serial;
+
+    /// The memory of the framebuffer in [`BootInfo`].
+    type Pixels: Pixels;
 
     /// The registers the CPU had when it trapped.
     type TrapFrame: TrapFrame;

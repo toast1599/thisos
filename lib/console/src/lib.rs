@@ -2,7 +2,7 @@
 //! the text in a grid of cells and, when it scrolls, redraws from that the
 //! cells that change, so it never reads the framebuffer. Firmware often maps
 //! the framebuffer uncached, where every store is a bus transaction, so it
-//! also writes two pixels per store.
+//! also writes two pixels per store where it can.
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -13,7 +13,7 @@ use core::fmt;
 use core::iter;
 use core::ops::Range;
 
-use thisos_hal::{Framebuffer, PixelFormat};
+use thisos_hal::{Framebuffer, PixelFormat, Pixels};
 
 /// The most columns and rows the grid holds. A larger screen keeps an
 /// empty margin on the right or at the bottom.
@@ -94,16 +94,16 @@ const BLANK: Cell = Cell {
 
 /// A text console. Writing `\n` starts a new line, a line longer than the
 /// screen wraps, and characters outside printable ASCII show as `?`.
-pub struct Console<'a> {
-    screen: Option<Screen<'a>>,
+pub struct Console<M> {
+    screen: Option<Screen<M>>,
     cells: [Cell; MAX_COLS * MAX_ROWS],
     col: usize,
     row: usize,
     color: Color,
 }
 
-struct Screen<'a> {
-    fb: Framebuffer<'a>,
+struct Screen<M> {
+    fb: Framebuffer<M>,
     font: &'static Font,
     cols: usize,
     rows: usize,
@@ -112,7 +112,7 @@ struct Screen<'a> {
     stale: Range<usize>,
 }
 
-impl<'a> Console<'a> {
+impl<M: Pixels> Console<M> {
     /// A console with no screen, which drops what it is given until
     /// [`Console::attach`]. It is `const` so that a static can hold it:
     /// the grid is too large to build on the kernel's stack.
@@ -131,11 +131,12 @@ impl<'a> Console<'a> {
     }
 
     /// Starts drawing to `fb`, and clears it to black.
-    pub fn attach(&mut self, fb: Framebuffer<'a>) {
+    pub fn attach(&mut self, mut fb: Framebuffer<M>) {
         let font = Font::pick(fb.height);
         let cols = (fb.width / font.width).min(MAX_COLS);
         let rows = (fb.height / font.height).min(MAX_ROWS);
-        fb.buffer.fill(0);
+        let len = fb.pixels.len();
+        write_pixels(&mut fb.pixels, 0..len, iter::repeat(0));
         self.cells.fill(BLANK);
         self.col = 0;
         self.row = 0;
@@ -231,13 +232,13 @@ impl<'a> Console<'a> {
     }
 }
 
-impl Default for Console<'_> {
+impl<M: Pixels> Default for Console<M> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl fmt::Write for Console<'_> {
+impl<M: Pixels> fmt::Write for Console<M> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for c in s.chars() {
             match u8::try_from(c) {
@@ -250,16 +251,17 @@ impl fmt::Write for Console<'_> {
     }
 }
 
-impl Screen<'_> {
+impl<M: Pixels> Screen<M> {
     fn draw(&mut self, col: usize, row: usize, cell: Cell) {
         let Font { width, height, .. } = *self.font;
         let fg = cell.color.rgb();
         let format = self.fb.format;
         let glyph = self.font.glyph(cell.byte);
         for (y, coverage) in glyph.chunks_exact(width).enumerate() {
-            let start = ((row * height + y) * self.fb.stride + col * width) * 4;
+            let start = (row * height + y) * self.fb.stride + col * width;
             write_pixels(
-                &mut self.fb.buffer[start..start + width * 4],
+                &mut self.fb.pixels,
+                start..start + width,
                 coverage.iter().map(|&alpha| pixel(fg, alpha, format)),
             );
         }
@@ -273,9 +275,10 @@ impl Screen<'_> {
         let glyph = self.font.glyph(byte);
         for (y, coverage) in glyph.chunks_exact(width).enumerate() {
             for dy in 0..factor {
-                let start = ((row * height + y * factor + dy) * self.fb.stride + col * width) * 4;
+                let start = (row * height + y * factor + dy) * self.fb.stride + col * width;
                 write_pixels(
-                    &mut self.fb.buffer[start..start + width * factor * 4],
+                    &mut self.fb.pixels,
+                    start..start + width * factor,
                     coverage
                         .iter()
                         .flat_map(|&alpha| iter::repeat_n(pixel(fg, alpha, format), factor)),
@@ -285,19 +288,31 @@ impl Screen<'_> {
     }
 }
 
-/// Writes `pixels` along `row`, two per 8-byte store and the last one alone
-/// when there is an odd number: on an uncached framebuffer each store is a
-/// bus transaction, whatever its width.
-fn write_pixels(row: &mut [u8], mut pixels: impl Iterator<Item = u32>) {
-    let (pairs, last) = row.as_chunks_mut::<8>();
-    for pair in pairs {
+/// Writes `pixels` to the indices in `run`, two per 8-byte store, which
+/// [`Pixels::store_pair`] only takes at an even index: a run that starts
+/// at an odd index writes its first pixel alone, and one with an odd
+/// number of pixels after that writes its last alone. On an uncached framebuffer each store is a bus
+/// transaction, whatever its width.
+fn write_pixels(fb: &mut impl Pixels, run: Range<usize>, mut pixels: impl Iterator<Item = u32>) {
+    let mut index = run.start;
+    if index % 2 == 1
+        && index < run.end
+        && let Some(pixel) = pixels.next()
+    {
+        fb.store(index, pixel);
+        index += 1;
+    }
+    while index + 2 <= run.end {
         let (Some(low), Some(high)) = (pixels.next(), pixels.next()) else {
             return;
         };
-        *pair = (u64::from(low) | u64::from(high) << 32).to_le_bytes();
+        fb.store_pair(index, u64::from(low) | u64::from(high) << 32);
+        index += 2;
     }
-    if let (Ok(last), Some(pixel)) = (<&mut [u8; 4]>::try_from(last), pixels.next()) {
-        *last = pixel.to_le_bytes();
+    if index < run.end
+        && let Some(pixel) = pixels.next()
+    {
+        fb.store(index, pixel);
     }
 }
 
@@ -333,18 +348,39 @@ mod tests {
     const WIDTH: usize = 70;
     const HEIGHT: usize = 32;
 
-    fn buffer() -> Vec<u8> {
-        vec![0xAA; WIDTH * HEIGHT * 4]
+    /// Framebuffer memory that panics on the stores the real one can't
+    /// take, so that the tests catch them.
+    #[derive(Debug)]
+    struct Memory(Vec<u32>);
+
+    impl Pixels for Memory {
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        fn store(&mut self, index: usize, pixel: u32) {
+            self.0[index] = pixel;
+        }
+
+        fn store_pair(&mut self, index: usize, pixels: u64) {
+            assert!(index % 2 == 0, "pair stored at odd index {index}");
+            let low = u32::try_from(pixels & 0xFFFF_FFFF).unwrap();
+            let high = u32::try_from(pixels >> 32).unwrap();
+            self.0[index..index + 2].copy_from_slice(&[low, high]);
+        }
     }
 
-    fn console(buffer: &mut [u8], format: PixelFormat) -> Box<Console<'_>> {
-        sized_console(buffer, HEIGHT, format)
+    // Set in every byte before the console clears the screen.
+    const UNCLEARED: u32 = 0xAAAA_AAAA;
+
+    fn console(format: PixelFormat) -> Box<Console<Memory>> {
+        sized_console(HEIGHT, format)
     }
 
-    fn sized_console(buffer: &mut [u8], height: usize, format: PixelFormat) -> Box<Console<'_>> {
+    fn sized_console(height: usize, format: PixelFormat) -> Box<Console<Memory>> {
         let mut console = Box::new(Console::new());
         console.attach(Framebuffer {
-            buffer,
+            pixels: Memory(vec![UNCLEARED; WIDTH * height]),
             width: WIDTH,
             height,
             stride: WIDTH,
@@ -353,15 +389,15 @@ mod tests {
         console
     }
 
-    fn text(console: &Console<'_>, row: usize) -> String {
+    fn text(console: &Console<Memory>, row: usize) -> String {
         let cols = console.screen.as_ref().unwrap().cols;
         let cells = &console.cells[row * MAX_COLS..row * MAX_COLS + cols];
         let line: String = cells.iter().map(|cell| char::from(cell.byte)).collect();
         String::from(line.trim_end())
     }
 
-    fn pixels<'a>(console: &'a Console<'_>) -> &'a [u8] {
-        console.screen.as_ref().unwrap().fb.buffer
+    fn pixels(console: &Console<Memory>) -> &[u32] {
+        &console.screen.as_ref().unwrap().fb.pixels.0
     }
 
     #[test]
@@ -376,61 +412,70 @@ mod tests {
     #[test]
     fn clears_the_screen_and_draws_in_the_pixel_format() {
         for (format, red) in [(PixelFormat::Rgb, 0), (PixelFormat::Bgr, 2)] {
-            let mut buffer = buffer();
-            let mut console = console(&mut buffer, format);
+            let mut console = console(format);
             console.set_color(Color::Red);
             write!(console, "@").unwrap();
             let pixels = pixels(&console);
-            assert!(!pixels.contains(&0xAA), "{format:?}: not cleared");
+            assert!(!pixels.contains(&UNCLEARED), "{format:?}: not cleared");
             // Red is 0xF0, 0x50, 0x50, so a drawn pixel has more red than blue.
             assert!(
                 pixels
-                    .as_chunks::<4>()
-                    .0
                     .iter()
+                    .map(|pixel| pixel.to_le_bytes())
                     .any(|pixel| pixel[red] > pixel[2 - red] && pixel[3] == 0),
                 "{format:?}: no red pixel"
             );
         }
     }
 
+    // The 12 px font's cells are 7 pixels wide, so the second column starts
+    // at an odd index and its rows need a single store before the pairs.
+    #[test]
+    fn draws_a_glyph_the_same_at_an_odd_index() {
+        let mut even = console(PixelFormat::Bgr);
+        write!(even, "@").unwrap();
+        let mut odd = console(PixelFormat::Bgr);
+        write!(odd, " @").unwrap();
+        let (even, odd) = (pixels(&even), pixels(&odd));
+        for y in 0..16 {
+            let row = y * WIDTH;
+            assert_eq!(odd[row + 7..row + 14], even[row..row + 7], "glyph row {y}");
+        }
+    }
+
     #[test]
     fn wraps_long_lines_without_an_empty_row() {
-        let mut buffer = buffer();
-        let mut console = console(&mut buffer, PixelFormat::Bgr);
+        let mut console = console(PixelFormat::Bgr);
         write!(console, "0123456789\nab").unwrap();
         assert_eq!(text(&console, 0), "0123456789");
         assert_eq!(text(&console, 1), "ab");
 
-        let mut buffer = self::buffer();
-        let mut console = self::console(&mut buffer, PixelFormat::Bgr);
+        let mut console = self::console(PixelFormat::Bgr);
         write!(console, "0123456789x").unwrap();
         assert_eq!(text(&console, 1), "x");
     }
 
     #[test]
     fn scrolls_the_text_and_the_pixels() {
-        let (mut a, mut b) = (buffer(), buffer());
-        let mut scrolled = console(&mut a, PixelFormat::Bgr);
+        let mut scrolled = console(PixelFormat::Bgr);
         write!(scrolled, "a\nb\nc").unwrap();
         assert_eq!(text(&scrolled, 0), "b");
         assert_eq!(text(&scrolled, 1), "c");
 
-        let mut fresh = console(&mut b, PixelFormat::Bgr);
+        let mut fresh = console(PixelFormat::Bgr);
         write!(fresh, "b\nc").unwrap();
         assert_eq!(pixels(&scrolled), pixels(&fresh));
     }
 
     #[test]
     fn scrolls_cells_that_change_only_in_color() {
-        let (mut a, mut b) = (buffer(), buffer());
-        let mut scrolled = console(&mut a, PixelFormat::Bgr);
+        let mut scrolled = console(PixelFormat::Bgr);
         scrolled.set_color(Color::Red);
         writeln!(scrolled, "ab").unwrap();
         scrolled.set_color(Color::Gray);
         write!(scrolled, "ab\na").unwrap();
 
-        let mut fresh = console(&mut b, PixelFormat::Bgr);
+        let mut fresh = console(PixelFormat::Bgr);
         write!(fresh, "ab\na").unwrap();
         assert_eq!(pixels(&scrolled), pixels(&fresh));
     }
@@ -438,28 +483,25 @@ mod tests {
     #[test]
     fn large_text_goes_when_the_console_scrolls() {
         // Four rows of the 12 px font.
-        let (mut a, mut b) = (vec![0; WIDTH * 64 * 4], vec![0; WIDTH * 64 * 4]);
-        let mut scrolled = sized_console(&mut a, 64, PixelFormat::Bgr);
+        let mut scrolled = sized_console(64, PixelFormat::Bgr);
         scrolled.write_large("@", 2);
         write!(scrolled, "x\ny\nz").unwrap();
 
-        let mut fresh = sized_console(&mut b, 64, PixelFormat::Bgr);
+        let mut fresh = sized_console(64, PixelFormat::Bgr);
         write!(fresh, "\nx\ny\nz").unwrap();
         assert_eq!(pixels(&scrolled), pixels(&fresh));
     }
 
     #[test]
     fn shows_unprintable_characters_as_question_marks() {
-        let mut buffer = buffer();
-        let mut console = console(&mut buffer, PixelFormat::Bgr);
+        let mut console = console(PixelFormat::Bgr);
         write!(console, "é\tx").unwrap();
         assert_eq!(text(&console, 0), "??x");
     }
 
     /// Checks that the 7x16 glyph at the top left of `small` appears twice
     /// its size in `large`, from pixel row `top`.
-    fn assert_doubled(small: &[u8], large: &[u8], top: usize) {
-        let (small, large) = (small.as_chunks::<4>().0, large.as_chunks::<4>().0);
+    fn assert_doubled(small: &[u32], large: &[u32], top: usize) {
         for y in 0..16 {
             for x in 0..7 {
                 for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
@@ -473,10 +515,9 @@ mod tests {
     #[test]
     fn draws_large_text_as_scaled_glyphs() {
         // Four rows of the 12 px font.
-        let (mut a, mut b) = (vec![0; WIDTH * 64 * 4], vec![0; WIDTH * 64 * 4]);
-        let mut small = sized_console(&mut a, 64, PixelFormat::Bgr);
+        let mut small = sized_console(64, PixelFormat::Bgr);
         write!(small, "@").unwrap();
-        let mut large = sized_console(&mut b, 64, PixelFormat::Bgr);
+        let mut large = sized_console(64, PixelFormat::Bgr);
         large.write_large("@", 2);
         write!(large, "x").unwrap();
         assert_doubled(pixels(&small), pixels(&large), 0);
@@ -485,10 +526,9 @@ mod tests {
 
     #[test]
     fn scrolls_to_make_room_for_large_text() {
-        let (mut a, mut b) = (vec![0; WIDTH * 64 * 4], vec![0; WIDTH * 64 * 4]);
-        let mut small = sized_console(&mut a, 64, PixelFormat::Bgr);
+        let mut small = sized_console(64, PixelFormat::Bgr);
         write!(small, "@").unwrap();
-        let mut large = sized_console(&mut b, 64, PixelFormat::Bgr);
+        let mut large = sized_console(64, PixelFormat::Bgr);
         write!(large, "a\nb\nc\nd").unwrap();
         large.write_large("@", 2);
         assert_eq!(text(&large, 0), "d");

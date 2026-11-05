@@ -1,3 +1,4 @@
+mod banned;
 mod build;
 mod ci;
 mod cmd;

@@ -6,6 +6,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 mod backtrace;
+mod framebuffer;
 mod once;
 mod pat;
 mod trap;
@@ -25,6 +26,7 @@ use x86_64::instructions::port::Port;
 
 #[doc(hidden)]
 pub use bootloader_api as __bootloader_api;
+pub use framebuffer::FramebufferPixels;
 pub use trap::TrapFrame;
 
 /// The x86_64 architecture, as the kernel sees it through `thisos-hal`.
@@ -69,6 +71,7 @@ impl Cpu for X86_64 {
 
 impl Platform for X86_64 {
     type Serial = Com1;
+    type Pixels = FramebufferPixels;
     type TrapFrame = TrapFrame;
 
     fn guard_page() -> u64 {
@@ -172,6 +175,9 @@ pub const BOOTLOADER_CONFIG: BootloaderConfig = {
 ///
 /// Call this once, from the entry point, before anything else uses the
 /// descriptor tables or the devices: COM1's I/O ports.
+///
+/// `boot` is the one `&'static mut` that CONTRIBUTING allows, because the
+/// loader's entry signature fixes it. It goes no further than this function.
 #[doc(hidden)]
 pub unsafe fn boot_info(
     boot: &'static mut bootloader_api::BootInfo,
@@ -196,18 +202,13 @@ pub unsafe fn boot_info(
     let framebuffer_write_combining =
         match (&framebuffer, boot.physical_memory_offset.into_option()) {
             (Some(fb), Some(offset)) => {
-                let range = fb.buffer.as_ptr_range();
+                let range = fb.pixels.range();
                 // SAFETY: BOOTLOADER_CONFIG has the loader map all physical
                 // memory, at offset. The caller runs this once, before
                 // anything else, so nothing else uses the page tables, and
                 // the loader sets PWT on none of its pages, so none selects
                 // PAT entry 1.
-                unsafe {
-                    pat::write_combine(
-                        VirtAddr::from_ptr(range.start)..VirtAddr::from_ptr(range.end),
-                        VirtAddr::new(offset),
-                    )
-                }
+                unsafe { pat::write_combine(range, VirtAddr::new(offset)) }
             }
             _ => false,
         };
@@ -218,15 +219,23 @@ pub unsafe fn boot_info(
     }
 }
 
-fn framebuffer(fb: FrameBuffer) -> Option<Framebuffer<'static>> {
+fn framebuffer(mut fb: FrameBuffer) -> Option<Framebuffer<FramebufferPixels>> {
     let info = fb.info();
     let format = match (info.pixel_format, info.bytes_per_pixel) {
         (PixelFormat::Rgb, 4) => thisos_hal::PixelFormat::Rgb,
         (PixelFormat::Bgr, 4) => thisos_hal::PixelFormat::Bgr,
         _ => return None,
     };
+    // buffer_mut's slice is the loader's only way to give the framebuffer's
+    // address, and the one reference to it CONTRIBUTING allows: nothing
+    // reads or writes through it, only its pointer range is kept.
+    // SAFETY: The loader maps the framebuffer for the kernel's life.
+    // boot_info, which runs once, takes this FrameBuffer from the loader's
+    // BootInfo and hands it to nothing else, and no kernel code reads or
+    // writes the framebuffer's frames through the physical-memory mapping.
+    let pixels = unsafe { FramebufferPixels::new(fb.buffer_mut().as_mut_ptr_range())? };
     Some(Framebuffer {
-        buffer: fb.into_buffer(),
+        pixels,
         width: info.width,
         height: info.height,
         stride: info.stride,
@@ -237,7 +246,8 @@ fn framebuffer(fb: FrameBuffer) -> Option<Framebuffer<'static>> {
 /// Defines the kernel's entry point: `entry!(kmain, trap)` makes the boot
 /// loader call `kmain(thisos_hal::BootInfo<X86_64>) -> !`, after making
 /// `trap` the [`TrapHandler`]. The kernel uses this macro so that it never
-/// names the boot loader's types.
+/// names the boot loader's types. The function it generates takes the
+/// loader's `&'static mut` and hands it straight to `boot_info`.
 #[macro_export]
 macro_rules! entry {
     ($main:path, $trap:path) => {

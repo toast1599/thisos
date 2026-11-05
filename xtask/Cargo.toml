@@ -9,6 +9,13 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/toast1599/thisos"
 publish = false
 
+# The banned-pattern lints from the root workspace's table, which xtask,
+# a workspace of its own, doesn't inherit.
+[lints.clippy]
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+mem_forget = "deny"
+
 [dependencies]
 anyhow = "1"
 bootloader = { version = "0.11", default-features = false, features = ["uefi"] }

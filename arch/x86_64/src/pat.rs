@@ -4,15 +4,15 @@
 //! gets WC by selecting a PAT entry that holds WC: entry 1, as Linux uses,
 //! picked by PWT alone.
 
+use core::marker::PhantomData;
 use core::ops::Range;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use x86_64::VirtAddr;
+use x86_64::instructions::tlb;
 use x86_64::registers::control::Cr3;
 use x86_64::registers::model_specific::Msr;
-use x86_64::structures::paging::mapper::{MappedFrame, MapperFlush, TranslateResult};
-use x86_64::structures::paging::{
-    Mapper, OffsetPageTable, Page, PageTable, PageTableFlags, Size4KiB, Translate,
-};
+use x86_64::structures::paging::{Page, PageTableIndex, Size4KiB};
 
 const IA32_MTRRCAP: u32 = 0xfe;
 const IA32_PAT: u32 = 0x277;
@@ -100,9 +100,22 @@ impl Msrs {
     }
 }
 
+// Page-table entry bits.
+const PRESENT: u64 = 1 << 0;
+const PWT: u64 = 1 << 3;
+const PCD: u64 = 1 << 4;
+/// A large page in a level 3 or 2 entry; the PAT bit in a level 1 entry.
+const PS_OR_PAT: u64 = 1 << 7;
+const ADDRESS: u64 = 0x000f_ffff_ffff_f000;
+
 /// The kernel's page tables, reached through the loader's mapping of all
-/// physical memory. Only `new` makes one.
-struct PageTables(OffsetPageTable<'static>);
+/// physical memory. Only `new` makes one. It never makes a reference to a
+/// table: the CPU's page walker sets Accessed and Dirty bits in the tables
+/// at any time, so each access is one atomic operation on one entry.
+struct PageTables {
+    phys_offset: VirtAddr,
+    level_4: u64,
+}
 
 impl PageTables {
     /// # Safety
@@ -111,48 +124,91 @@ impl PageTables {
     /// and nothing else may use the page tables while this exists.
     unsafe fn new(phys_offset: VirtAddr) -> Self {
         let (frame, _) = Cr3::read();
-        let table = (phys_offset + frame.start_address().as_u64()).as_mut_ptr::<PageTable>();
-        // SAFETY: The caller guarantees that phys_offset maps all physical
-        // memory, so this is the level 4 table CR3 names, and that nothing
-        // else uses the tables, so this is the only reference to it. The CPU's
-        // page walker still sets Accessed and Dirty bits in it while the
-        // reference lives, which the aliasing rules don't allow. That is
-        // accepted here because the reference lasts one call, on one core,
-        // and nothing reads those bits; see the open question on page tables
-        // in docs/design.md.
-        let table = unsafe { &mut *table };
-        // SAFETY: As above: the offset maps every frame the tables use, and
-        // this is the only user of the level 4 table.
-        Self(unsafe { OffsetPageTable::new(table, phys_offset) })
-    }
-
-    /// The frame and flags of `page`, when it is mapped as a 4 KiB page.
-    fn entry(&self, page: Page) -> Option<(u64, PageTableFlags)> {
-        match self.0.translate(page.start_address()) {
-            TranslateResult::Mapped {
-                frame: MappedFrame::Size4KiB(frame),
-                flags,
-                ..
-            } => Some((frame.start_address().as_u64(), flags)),
-            _ => None,
+        Self {
+            phys_offset,
+            level_4: frame.start_address().as_u64(),
         }
     }
 
-    /// Sets PWT on `page`, which then selects PAT entry 1, and flushes it
-    /// from the TLB. Returns whether the page was mapped to update.
+    /// Entry `index` of the table at physical address `table`.
+    fn entry(&self, table: u64, index: PageTableIndex) -> Entry<'_> {
+        // The table's address comes from CR3 or a table entry, and reaches
+        // memory through the physical-memory mapping.
+        let address = self.phys_offset + table + 8 * u64::from(index);
+        Entry(address.as_mut_ptr(), PhantomData)
+    }
+
+    /// The level 1 entry that maps `page`, when it is mapped as a 4 KiB
+    /// page.
+    fn leaf(&self, page: Page) -> Option<Entry<'_>> {
+        let mut table = self.level_4;
+        for index in [page.p4_index(), page.p3_index(), page.p2_index()] {
+            let value = self.entry(table, index).load();
+            if value & PRESENT == 0 || value & PS_OR_PAT != 0 {
+                return None;
+            }
+            table = value & ADDRESS;
+        }
+        let leaf = self.entry(table, page.p1_index());
+        (leaf.load() & PRESENT != 0).then_some(leaf)
+    }
+
+    /// The frame `page` maps, when it is mapped as a 4 KiB page.
+    fn frame(&self, page: Page) -> Option<u64> {
+        self.leaf(page).map(|leaf| leaf.load() & ADDRESS)
+    }
+
+    /// Makes `page` select PAT entry 1, by setting PWT and clearing PCD and
+    /// the PAT bit, and flushes it from the TLB. Returns whether the page
+    /// was mapped to update.
     ///
     /// # Safety
     ///
     /// PAT entry 1 must hold a memory type `page` may have: for WC, every
     /// other mapping of its frame must be UC.
-    unsafe fn select_entry_1(&mut self, page: Page, flags: PageTableFlags) -> bool {
-        let flags = (flags - PageTableFlags::NO_CACHE - PageTableFlags::HUGE_PAGE)
-            | PageTableFlags::WRITE_THROUGH;
+    unsafe fn select_entry_1(&mut self, page: Page) -> bool {
+        let Some(leaf) = self.leaf(page) else {
+            return false;
+        };
         // SAFETY: The page stays mapped to the same frame with the same
-        // access rights, so every reference into it stays valid; only its
-        // memory type changes, which the caller guarantees is allowed.
-        let result = unsafe { self.0.update_flags(page, flags) };
-        result.map(MapperFlush::flush).is_ok()
+        // access rights, so everything reached through it stays valid; only
+        // its memory type changes, which the caller guarantees is allowed.
+        unsafe { leaf.update(|value| (value & !(PCD | PS_OR_PAT)) | PWT) };
+        tlb::flush(page.start_address());
+        true
+    }
+}
+
+/// A page-table entry. Only `PageTables::entry` makes one, from a table it
+/// reached through the physical-memory mapping, so the pointer is 8-byte
+/// aligned and mapped, and the CPU's page walker, which writes entries
+/// atomically, is its only other user while the `PageTables` lives.
+#[derive(Clone, Copy)]
+struct Entry<'t>(*mut u64, PhantomData<&'t PageTables>);
+
+impl Entry<'_> {
+    fn load(self) -> u64 {
+        // SAFETY: As the type says: aligned, mapped, and accessed only
+        // atomically. The reference lasts this one load.
+        unsafe { AtomicU64::from_ptr(self.0) }.load(Ordering::Relaxed)
+    }
+
+    /// Replaces the entry's value `v` with `f(v)` in one atomic step, so
+    /// that an Accessed or Dirty bit the CPU sets meanwhile isn't lost.
+    ///
+    /// # Safety
+    ///
+    /// The new value must keep valid everything the kernel reaches through
+    /// the entry's pages.
+    unsafe fn update(self, f: impl Fn(u64) -> u64) {
+        // SAFETY: As in load. The reference lasts this function.
+        let entry = unsafe { AtomicU64::from_ptr(self.0) };
+        let mut current = entry.load(Ordering::Relaxed);
+        while let Err(seen) =
+            entry.compare_exchange_weak(current, f(current), Ordering::Relaxed, Ordering::Relaxed)
+        {
+            current = seen;
+        }
     }
 }
 
@@ -180,8 +236,8 @@ pub unsafe fn write_combine(range: Range<VirtAddr>, phys_offset: VirtAddr) -> bo
     );
     // Checked in full first, so that a failure changes nothing.
     for page in pages {
-        match tables.entry(page) {
-            Some((frame, _)) if msrs.uncached(frame) => {}
+        match tables.frame(page) {
+            Some(frame) if msrs.uncached(frame) => {}
             _ => return false,
         }
     }
@@ -189,15 +245,11 @@ pub unsafe fn write_combine(range: Range<VirtAddr>, phys_offset: VirtAddr) -> bo
     unsafe { msrs.set_entry_1_wc() };
     let mut all = true;
     for page in pages {
-        let Some((_, flags)) = tables.entry(page) else {
-            all = false;
-            continue;
-        };
         // SAFETY: Entry 1 now holds WC. The MTRRs make the page's frame UC,
         // as checked above, so the frame's other mapping, in the loader's
         // mapping of all physical memory, is UC too, and the WC page has no
         // cacheable alias.
-        all &= unsafe { tables.select_entry_1(page, flags) };
+        all &= unsafe { tables.select_entry_1(page) };
     }
     all
 }

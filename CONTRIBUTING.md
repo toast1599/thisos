@@ -50,7 +50,7 @@ QEMU runs:
 - `-no-reboot`, so a triple fault closes QEMU and doesn't loop
 - `cargo xtask flash` builds, then writes the image, or with `--tests` the test image, to the USB stick for a laptop run (see below).
 - `cargo xtask test` runs the host tests of every `lib/*` crate, then the QEMU tests with `cargo test -p thisos-kernel`. It is the only way to run the QEMU tests: it sets cargo's runner for `x86_64-unknown-none` through `CARGO_TARGET_X86_64_UNKNOWN_NONE_RUNNER` to its own hidden `qemu-test` subcommand, because cargo starts the runner in `kernel/`, where the `xtask` alias's relative manifest path doesn't resolve. A bare `cargo test -p thisos-kernel` runs the kernel ELF on the host, which dies with SIGSEGV.
-- `cargo xtask ci` runs locally everything CI runs, in CI's order, and stops at the first failure: rustfmt on both workspaces; clippy with `-D warnings` on the root workspace for `x86_64-unknown-none`, on the kernel's tests for the same target, on each `lib/*` crate for the host with its tests, and on xtask with its tests; xtask's host tests; `cargo xtask test`; Miri on each `lib/*` crate; `cargo deny` on both workspaces; `cargo xtask build`. It needs `cargo-deny` installed (`cargo install cargo-deny --locked`) and checks for it first.
+- `cargo xtask ci` runs locally everything CI runs, in CI's order, and stops at the first failure: the source check for banned patterns that no lint catches (`static mut` and `&'static mut`, see Banned patterns); rustfmt on both workspaces; clippy with `-D warnings` on the root workspace for `x86_64-unknown-none`, on the kernel's tests for the same target, on each `lib/*` crate for the host with its tests, and on xtask with its tests; xtask's host tests; `cargo xtask test`; Miri on each `lib/*` crate; `cargo deny` on both workspaces; `cargo xtask build`. It needs `cargo-deny` installed (`cargo install cargo-deny --locked`) and checks for it first.
 - `cargo xtask font` rasterizes `xtask/assets/JetBrainsMono-Regular.ttf` (v2.304, under the SIL Open Font License in `xtask/assets/OFL.txt`) with `fontdue` into one 8-bit coverage bitmap per size in `lib/console/src/font/`, and writes the `font.rs` that embeds them. The TTF, the bitmaps and `font.rs` are committed, so ordinary builds never run the rasterizer. It prints any glyphs it had to clip to their cell.
 
 OVMF comes from the `ovmf-prebuilt` crate at a pinned release, `edk2-stable202605-r1`, which xtask caches in `target/ovmf/`. Each run copies the firmware's variables file to `target/ovmf-vars.fd`, so every boot starts from the same state.
@@ -70,6 +70,32 @@ Inside the exception list:
 
 Tests back up a `// SAFETY:` argument; they don't replace it.
 
+## Banned patterns
+
+These are banned in every crate, with or without unsafe code, and the record of why is [0005](docs/adr/0005-banned-patterns.md). Each says what to do instead, and how it is caught: by a lint, by `banned::check` in `cargo xtask ci`, or only in review. Breaking one is a decision like adding a crate to the unsafe exception list.
+
+Memory and aliasing:
+
+- **`static mut`.** Use a static of an atomic, a write-once cell such as the arch crate's `Once`, a lock, or a wrapper over an `UnsafeCell` that encodes who uses it, as the IST stacks do. Caught by the xtask check.
+- **`&'static mut`.** Reach kernel-lifetime memory through a `&'static T` with interior mutability, or through a type that wraps a raw pointer and has a safe API. The one exception is the loader's entry signature, `fn(&'static mut BootInfo) -> !`, which `bootloader_api::entry_point!` fixes: the reference goes no further than the function `entry!` generates and `boot_info`, and never leaves the arch crate. Caught by the xtask check, which allows those two lines, and in review where the lifetime is inferred.
+- **References to memory the hardware or another mapping writes**: page tables, whose Accessed and Dirty bits the CPU sets; MMIO; the framebuffer; DMA buffers. Reach it through a raw pointer, one volatile or atomic access at a time, as the framebuffer's `FramebufferPixels` and the PAT setup's page-table walker do. The one exception is the slice that `bootloader_api`'s `FrameBuffer::buffer_mut` returns, which is the loader's only way to give the framebuffer's address: `framebuffer()` in the arch crate takes the pointer range from it and never reads or writes through it. Caught in review.
+- **Unbounded lifetimes.** A reference made from a raw pointer borrows from the value that owns the memory, or lasts one expression; never `&*ptr` or `slice::from_raw_parts` with a lifetime the caller picks freely. Caught in review.
+- **Leaking to get `'static`.** No `Box::leak`, `mem::forget` or `ManuallyDrop` to make a `'static` or skip a destructor; kernel-lifetime values go in statics. Caught by `clippy::mem_forget` and `disallowed-methods` in `clippy.toml`.
+
+Values:
+
+- **`transmute`.** Use `From` and `TryFrom`, `to_le_bytes` and `from_le_bytes`, or a pointer's `cast()`. Caught by `disallowed-methods`.
+- **Uninitialized memory.** No `mem::zeroed`, `MaybeUninit::uninit().assume_init()` or `Vec::set_len` over unwritten memory. Use const constructors, and `MaybeUninit::write` before reading. Caught by `disallowed-methods` and clippy's default `uninit_assumed_init` and `uninit_vec`.
+- **Integers turned into pointers.** Pointers keep their provenance through `addr`, `with_addr` and `map_addr`. An integer becomes a pointer, through exposed provenance or the `x86_64` crate's `VirtAddr::as_ptr`, only in the arch crate, and only for an address that reaches it as an integer from the hardware or the loader: a register such as `rbp` or CR3, a `BootInfo` field, or a physical address through the physical-memory mapping. The SAFETY comment or a comment at the conversion says which. `clippy::as_conversions` already rules out `as` casts; `disallowed-methods` catches `ptr::with_exposed_provenance`, and review catches `as_ptr`.
+- **Unchecked operations** such as `get_unchecked`, `unreachable_unchecked`, `unwrap_unchecked` and `str::from_utf8_unchecked`. Use the checked one; using an unchecked one needs a measurement that the check matters, and a decision. Caught by `disallowed-methods`.
+
+Concurrency, handlers and escape hatches:
+
+- **A lock shared with a handler.** A trap or interrupt handler never takes a lock that ordinary code holds while traps or interrupts can arrive, because the handler then spins forever. The panic path's `try_lock` is how the trap report avoids it today; logging from handlers is the open question due with the LAPIC timer. Caught in review.
+- **`unsafe impl Send` or `Sync` on a type that doesn't encode the invariant.** Only a type that wraps one resource and says in its SAFETY comment why sharing or moving it is sound, like `Once`, the IST `Stack` and `FramebufferPixels`; never a plain data struct, to get it into a static. Caught in review.
+- **`#[allow]`.** Silence a lint with `#[expect(lint, reason = "...")]`, so that an exception nobody needs any more fails the build. Caught by `clippy::allow_attributes` and `clippy::allow_attributes_without_reason`.
+- **Unsafe attributes outside the arch crate**: `no_mangle`, `export_name`, `link_section`. They appear only in the arch crate or in its macros' expansions. Caught by `forbid(unsafe_code)`, which counts them as unsafe code, except inside other crates' macro expansions, as described above.
+
 ## Lints
 
 Target crates (kernel, hal, arch, abi, `lib/*`, `user/*`) share `[workspace.lints]` in the root `Cargo.toml`.
@@ -83,9 +109,10 @@ These are denied:
 - `clippy::cast_possible_truncation`, `clippy::cast_sign_loss` and `clippy::as_conversions`: use `From` and `TryFrom`
 - `missing_docs` on public items
 - `clippy::unwrap_used` and `clippy::expect_used`, in the kernel and arch crates only, through a `#![deny(...)]` attribute in each crate root
+- `clippy::allow_attributes`, `clippy::allow_attributes_without_reason`, `clippy::mem_forget` and `clippy::disallowed_methods`, for the banned patterns above. `clippy.toml` lists the disallowed methods with what to use instead, and applies to xtask too
 
 `clippy::pedantic` is on as a warning group. Four of its lints are allowed: `module_name_repetitions`, `must_use_candidate`, `missing_errors_doc` and `missing_panics_doc`. CI passes `-D warnings`, so pedantic warnings fail the build. Test code is linted too: the kernel's `cfg(test)` code and `tests/` files, each `lib/*` crate's tests and xtask's tests. `clippy.toml` adds ThisOS to the identifiers that doc comments may write without backticks.
-xtask uses clippy's defaults. Formatting is rustfmt's defaults. Identifiers, comments, docs and messages use American spelling, as in "color" and "initialize".
+xtask uses clippy's defaults, plus its own `[lints.clippy]` table that denies the banned-pattern lints above except `disallowed_methods`, which `-D warnings` already makes an error there. Formatting is rustfmt's defaults. Identifiers, comments, docs and messages use American spelling, as in "color" and "initialize".
 
 ## Tests
 

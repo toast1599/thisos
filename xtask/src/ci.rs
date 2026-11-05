@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use anyhow::{Result, ensure};
 
 use crate::cmd::{cargo, exec, on_host, output};
-use crate::{build, test};
+use crate::{banned, build, test};
 
 /// Runs the checks in CI's order and stops at the first that fails.
 pub fn ci() -> Result<()> {
@@ -20,6 +20,7 @@ pub fn ci() -> Result<()> {
         "cargo deny isn't installed; install it with `cargo install cargo-deny --locked`"
     );
 
+    banned::check()?;
     exec(cargo().args(["fmt", "--all", "--check"]))?;
     exec(cargo().args([
         "fmt",

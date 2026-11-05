@@ -30,6 +30,10 @@ multiple_unsafe_ops_per_block = "deny"
 cast_possible_truncation = "deny"
 cast_sign_loss = "deny"
 as_conversions = "deny"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+mem_forget = "deny"
+disallowed_methods = "deny"
 
 [profile.dev]
 panic = "abort"

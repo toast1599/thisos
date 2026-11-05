@@ -1,1 +1,21 @@
 doc-valid-idents = ["ThisOS", "JetBrains", ".."]
+
+# The banned patterns in CONTRIBUTING.md that a call names. Each entry says
+# what to use instead.
+disallowed-methods = [
+    { path = "core::mem::transmute", reason = "use From/TryFrom, to/from_le_bytes or pointer cast()" },
+    { path = "core::mem::transmute_copy", reason = "use From/TryFrom, to/from_le_bytes or pointer cast()" },
+    { path = "core::mem::zeroed", reason = "use a const constructor, or MaybeUninit::write before assume_init" },
+    { path = "core::mem::forget", reason = "kernel-lifetime values go in statics; don't skip destructors" },
+    { path = "core::mem::ManuallyDrop::new", reason = "kernel-lifetime values go in statics; don't skip destructors" },
+    { path = "alloc::boxed::Box::leak", reason = "kernel-lifetime values go in statics, never a leaked &'static mut" },
+    { path = "core::ptr::with_exposed_provenance", reason = "keep provenance with addr/with_addr/map_addr" },
+    { path = "core::ptr::with_exposed_provenance_mut", reason = "keep provenance with addr/with_addr/map_addr" },
+    { path = "core::hint::unreachable_unchecked", reason = "use the checked operation" },
+    { path = "core::option::Option::unwrap_unchecked", reason = "use the checked operation" },
+    { path = "core::result::Result::unwrap_unchecked", reason = "use the checked operation" },
+    { path = "core::str::from_utf8_unchecked", reason = "use the checked operation" },
+    { path = "core::str::from_utf8_unchecked_mut", reason = "use the checked operation" },
+    { path = "slice::get_unchecked", reason = "use the checked operation" },
+    { path = "slice::get_unchecked_mut", reason = "use the checked operation" },
+]

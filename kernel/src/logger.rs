@@ -11,6 +11,7 @@ use thisos_hal::{Framebuffer, Platform};
 use crate::Arch;
 
 type Serial = <Arch as Platform>::Serial;
+type Pixels = <Arch as Platform>::Pixels;
 
 struct Logger {
     // One lock for both, so that records reach them in the same order.
@@ -19,7 +20,7 @@ struct Logger {
 
 struct Sinks {
     serial: Option<Serial>,
-    console: Console<'static>,
+    console: Console<Pixels>,
 }
 
 static LOGGER: Logger = Logger {
@@ -30,7 +31,7 @@ static LOGGER: Logger = Logger {
 };
 
 /// Installs the logger. Only `kmain` calls this, once.
-pub fn init(serial: Option<Serial>, framebuffer: Option<Framebuffer<'static>>) {
+pub fn init(serial: Option<Serial>, framebuffer: Option<Framebuffer<Pixels>>) {
     {
         let mut sinks = LOGGER.sinks.lock();
         sinks.serial = serial;
@@ -105,7 +106,7 @@ fn write_serial(serial: &mut Serial, record: &Record, body: &dyn fmt::Display) {
     );
 }
 
-fn write_console(console: &mut Console, record: &Record, body: &dyn fmt::Display) {
+fn write_console(console: &mut Console<Pixels>, record: &Record, body: &dyn fmt::Display) {
     console.set_color(color(record.level()));
     let _ = write!(console, "{}", record.level());
     console.set_color(Color::Gray);
