@@ -84,12 +84,14 @@ pub fn flash(release: bool, kernel: Kernel, device: Option<&str>) -> Result<()> 
     unmount(dev)?;
     // Ask for the password now, not in the middle of dd's progress output.
     exec(Command::new("sudo").arg("-v"))?;
+    // nocreat, because a stick pulled during the password prompt takes its
+    // link with it, and dd would otherwise write the image to a new file there.
     exec(Command::new("sudo").args([
         "dd",
         &format!("if={}", image.path.display()),
         &format!("of={dev}"),
         "bs=4M",
-        "conv=fsync",
+        "conv=fsync,nocreat",
         "status=progress",
     ]))?;
     // This has to come before sgdisk -e, which rewrites the primary GPT header.

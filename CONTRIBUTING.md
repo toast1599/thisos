@@ -130,7 +130,7 @@ Anything that passes in QEMU must also pass on the test laptop described in `doc
 `cargo xtask flash` writes the image to a USB stick, erasing it. It takes `--release`, `--tests`, `--test <name>` and `--device PATH`. It runs as you, and runs `dd` and `sgdisk` through `sudo`. It:
 
 - only considers whole disks on USB that are removable or hotplug, and never the internal disk. With one such disk it uses it; with several, `--device` picks one.
-- refuses a disk with no `/dev/disk/by-id` link, and names the disk by that link in every command after choosing it. A stick swapped while flash waits for an answer takes its link with it, so `dd` fails and no other disk is written.
+- refuses a disk with no `/dev/disk/by-id` link, and names the disk by that link in every command after choosing it. A stick swapped while flash waits for an answer or a password takes its link with it, and `dd` runs with `conv=nocreat`, so it fails instead of writing the image to a new file at the link's path, and no other disk is written.
 - shows the stick's path, by-id link, model, serial and size, and the build ID the stick holds. It reads `thisos-build.txt` from the stick's FAT partition, mounting it with `udisksctl` if it isn't mounted. Then it always asks before writing: external USB disks report hotplug too, so the question is what tells the stick from a backup drive left plugged in.
 - refuses a stick smaller than the image, and unmounts the stick's partitions first.
 - writes with `dd`, drops the stick's cached pages with `blockdev --flushbufs` so that the read comes from the stick, then reads the image back and compares it byte for byte.
