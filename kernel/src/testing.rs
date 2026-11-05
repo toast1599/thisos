@@ -1,6 +1,6 @@
-//! The test runner for the kernel's `#[test_case]` functions. It ends on a
-//! summary of the results with a large PASS or FAIL, which is all the laptop
-//! shows, then exits QEMU.
+//! The test runner for the kernel's `#[test_case]` functions, and for the
+//! faulting tests in `tests/`. It ends on a summary of the results with a
+//! large PASS or FAIL, which is all the laptop shows, then exits QEMU.
 
 use core::fmt;
 
@@ -19,9 +19,12 @@ struct Run {
     current: usize,
 }
 
-/// A `#[test_case]` function.
+/// A test: a `#[test_case]` function, or a function a faulting test passes
+/// to [`run`].
 pub trait Test: Sync {
+    /// The function's path.
     fn name(&self) -> &'static str;
+    /// Calls the function.
     fn run(&self);
 }
 
@@ -55,6 +58,17 @@ pub fn run(tests: &'static [&'static dyn Test]) -> ! {
 /// Names the failed test after its panic report, then reports failure.
 pub fn fail() -> ! {
     finish(false)
+}
+
+/// Ends the run with the running test passed and the rest not run. A test
+/// that passes by faulting calls this from its trap handler.
+pub fn pass() -> ! {
+    if let Some(mut run) = RUN.try_lock()
+        && let Some(run) = &mut *run
+    {
+        run.current += 1;
+    }
+    finish(true)
 }
 
 fn finish(pass: bool) -> ! {

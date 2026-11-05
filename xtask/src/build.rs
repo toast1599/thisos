@@ -76,8 +76,9 @@ pub fn build_env(release: bool, tests: bool) -> Result<String> {
     Ok(format!("{} {profile}{kind} {}", commit.trim(), time.trim()))
 }
 
-/// Builds the kernel's test binary and returns its path, which cargo names
-/// only in its JSON messages.
+/// Builds the kernel's test binaries and returns the path of the library's,
+/// which holds the tests that don't fault. Cargo names it only in its JSON
+/// messages.
 fn test_elf(release: bool, build: &str) -> Result<PathBuf> {
     let mut cargo_test = cargo();
     cargo_test
@@ -95,14 +96,16 @@ fn test_elf(release: bool, build: &str) -> Result<PathBuf> {
             serde_json::from_str(line).with_context(|| format!("cargo message {line:?}"))?;
         if message["reason"] == "compiler-artifact"
             && message["profile"]["test"] == true
+            && message["target"]["kind"][0] == "lib"
             && let Some(elf) = message["executable"].as_str()
         {
             elfs.push(PathBuf::from(elf));
         }
     }
-    // The faulting tests of milestone 2 add a binary each, and an image each.
+    // The faulting tests in kernel/tests/ get an image each in the next work
+    // item.
     match <[PathBuf; 1]>::try_from(elfs) {
         Ok([elf]) => Ok(elf),
-        Err(elfs) => bail!("expected one kernel test binary, cargo built {elfs:?}"),
+        Err(elfs) => bail!("expected one kernel library test binary, cargo built {elfs:?}"),
     }
 }

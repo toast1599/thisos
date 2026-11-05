@@ -73,7 +73,7 @@ pub fn panic(head: fmt::Arguments, body: &dyn fmt::Display) {
 /// times the font's size on the console, plain on serial. When the lock is
 /// held, a panic came from inside the logger, and its report on serial is
 /// all there is.
-#[cfg(test)]
+#[cfg(feature = "testing")]
 pub fn test_summary(body: &dyn fmt::Display, pass: bool) {
     let Some(mut sinks) = LOGGER.sinks.try_lock() else {
         return;

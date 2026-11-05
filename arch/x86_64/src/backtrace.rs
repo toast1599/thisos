@@ -21,6 +21,17 @@ pub fn init(stack: Range<u64>, image_offset: u64) {
     IMAGE_OFFSET.store(image_offset, Ordering::Relaxed);
 }
 
+/// The link address of `address`, an address in the loaded kernel image.
+pub fn link_address(address: u64) -> u64 {
+    address.wrapping_sub(IMAGE_OFFSET.load(Ordering::Relaxed))
+}
+
+/// The lowest address of the kernel stack. The loader leaves the page below
+/// it unmapped, as a guard page.
+pub fn stack_bottom() -> u64 {
+    STACK_START.load(Ordering::Relaxed)
+}
+
 /// A frame pointer whose two words, the caller's rbp and the return
 /// address, lie 8-byte aligned inside the kernel stack. Only `new` makes one.
 struct Frame(u64);
@@ -56,7 +67,6 @@ impl Frame {
 /// Walks the frames from `rbp` outwards; see `Cpu::backtrace`.
 pub fn walk(mut rbp: u64, mut f: impl FnMut(u64)) -> BacktraceEnd {
     let stack = STACK_START.load(Ordering::Relaxed)..STACK_END.load(Ordering::Relaxed);
-    let offset = IMAGE_OFFSET.load(Ordering::Relaxed);
     for _ in 0..MAX_FRAMES {
         let frame = match Frame::new(rbp, &stack) {
             Ok(frame) => frame,
@@ -71,7 +81,7 @@ pub fn walk(mut rbp: u64, mut f: impl FnMut(u64)) -> BacktraceEnd {
         // One byte back from the return address is inside the call. The
         // return address itself can be past the caller's end when the callee
         // never returns, as with panic_fmt, and addr2line then names nothing.
-        f(ret.wrapping_sub(offset).wrapping_sub(1));
+        f(link_address(ret).wrapping_sub(1));
         let caller = frame.caller();
         if caller == 0 {
             return BacktraceEnd::Done;

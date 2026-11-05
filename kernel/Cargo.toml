@@ -6,9 +6,27 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[lib]
+doctest = false
+bench = false
+
 [[bin]]
 name = "thisos-kernel"
+test = false
 bench = false
+
+# Each faulting test is a file of its own, with its own entry point.
+[[test]]
+name = "page_fault"
+harness = false
+
+[[test]]
+name = "stack_overflow"
+harness = false
+
+[features]
+# The test runner and the test end of the panic handler, for the tests.
+testing = []
 
 [dependencies]
 log = "0.4"
@@ -18,6 +36,11 @@ thisos-hal.workspace = true
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 thisos-arch-x86_64.workspace = true
+
+# Integration tests build the library without cfg(test), so they turn on
+# its test support through this.
+[dev-dependencies]
+thisos-kernel = { path = ".", features = ["testing"] }
 
 [lints]
 workspace = true

@@ -1,0 +1,29 @@
+//! The kernel's trap handler.
+
+use thisos_hal::{Platform, Trap};
+
+use crate::{Arch, panic};
+
+/// The kernel's trap handler, which every entry point passes to `entry!`.
+/// A breakpoint returns. Until the kernel has user space, any other trap is
+/// a kernel bug, and panics.
+pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
+    match trap {
+        Trap::Breakpoint => {}
+        _ => panic::trap(trap, frame),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use thisos_hal::Cpu;
+
+    use crate::Arch;
+
+    // Passes by returning: with no IDT entry the CPU triple-faults, and a
+    // handler that panics fails the run.
+    #[test_case]
+    fn breakpoint_returns() {
+        Arch::breakpoint();
+    }
+}

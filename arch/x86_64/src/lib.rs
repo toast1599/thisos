@@ -6,7 +6,9 @@
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
 mod backtrace;
+mod once;
 mod pat;
+mod trap;
 
 use core::arch::asm;
 use core::fmt;
@@ -15,7 +17,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use bootloader_api::BootloaderConfig;
 use bootloader_api::config::Mapping;
 use bootloader_api::info::{FrameBuffer, PixelFormat};
-use thisos_hal::{BacktraceEnd, BootInfo, Cpu, Framebuffer, Platform, Serial};
+use thisos_hal::{BacktraceEnd, BootInfo, Cpu, Framebuffer, Platform, Serial, TrapHandler};
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
 use x86_64::VirtAddr;
@@ -23,6 +25,7 @@ use x86_64::instructions::port::Port;
 
 #[doc(hidden)]
 pub use bootloader_api as __bootloader_api;
+pub use trap::TrapFrame;
 
 /// The x86_64 architecture, as the kernel sees it through `thisos-hal`.
 #[derive(Debug)]
@@ -58,10 +61,37 @@ impl Cpu for X86_64 {
         }
         backtrace::walk(rbp, f)
     }
+
+    fn breakpoint() {
+        x86_64::instructions::interrupts::int3();
+    }
 }
 
 impl Platform for X86_64 {
     type Serial = Com1;
+    type TrapFrame = TrapFrame;
+
+    fn guard_page() -> u64 {
+        backtrace::stack_bottom() - 4096
+    }
+
+    fn read_guard_page() -> ! {
+        let page = Self::guard_page();
+        loop {
+            // SAFETY: The loader maps nothing at the guard page, so the load
+            // reads nothing and only traps. It is assembly rather than a
+            // volatile read, because Rust makes reading unmapped memory
+            // undefined behavior even where the hardware only traps.
+            unsafe {
+                asm!(
+                    "mov {}, byte ptr [{}]",
+                    out(reg_byte) _,
+                    in(reg) page,
+                    options(nostack, readonly, preserves_flags),
+                );
+            }
+        }
+    }
 
     fn panic_serial() -> Option<Com1> {
         static TAKEN: AtomicBool = AtomicBool::new(false);
@@ -134,19 +164,28 @@ pub const BOOTLOADER_CONFIG: BootloaderConfig = {
     config
 };
 
-/// Builds the kernel's [`BootInfo`] from the loader's, and sets up the
-/// devices it holds.
+/// Loads the descriptor tables with `trap` as the trap handler, builds the
+/// kernel's [`BootInfo`] from the loader's, and sets up the devices it
+/// holds.
 ///
 /// # Safety
 ///
 /// Call this once, from the entry point, before anything else uses the
-/// devices: COM1's I/O ports.
+/// descriptor tables or the devices: COM1's I/O ports.
 #[doc(hidden)]
-pub unsafe fn boot_info(boot: &'static mut bootloader_api::BootInfo) -> BootInfo<X86_64> {
+pub unsafe fn boot_info(
+    boot: &'static mut bootloader_api::BootInfo,
+    trap: TrapHandler<X86_64>,
+) -> BootInfo<X86_64> {
     backtrace::init(
         boot.kernel_stack_bottom..boot.kernel_stack_bottom + boot.kernel_stack_len,
         boot.kernel_image_offset,
     );
+    // SAFETY: The caller runs this once, first, so nothing has used the
+    // segment registers or descriptor tables yet, and nothing has trapped.
+    unsafe {
+        trap::init(trap);
+    }
     // SAFETY: The caller runs this once, before anything else touches COM1's
     // eight ports, and the port moves into the BootInfo, so it is the only
     // user of those ports from here on.
@@ -195,12 +234,13 @@ fn framebuffer(fb: FrameBuffer) -> Option<Framebuffer<'static>> {
     })
 }
 
-/// Defines the kernel's entry point: `entry!(kmain)` makes the boot loader
-/// call `kmain(thisos_hal::BootInfo<X86_64>) -> !`. The kernel uses this
-/// macro so that it never names the boot loader's types.
+/// Defines the kernel's entry point: `entry!(kmain, trap)` makes the boot
+/// loader call `kmain(thisos_hal::BootInfo<X86_64>) -> !`, after making
+/// `trap` the [`TrapHandler`]. The kernel uses this macro so that it never
+/// names the boot loader's types.
 #[macro_export]
 macro_rules! entry {
-    ($main:path) => {
+    ($main:path, $trap:path) => {
         // Inside an anonymous const, so the kernel can't name the entry
         // function and call it a second time.
         const _: () = {
@@ -212,7 +252,7 @@ macro_rules! entry {
             fn __thisos_start(boot: &'static mut $crate::__bootloader_api::BootInfo) -> ! {
                 // SAFETY: The loader jumps to the entry point once, and
                 // nothing else can name this function.
-                let boot = unsafe { $crate::boot_info(boot) };
+                let boot = unsafe { $crate::boot_info(boot, $trap) };
                 $main(boot)
             }
         };

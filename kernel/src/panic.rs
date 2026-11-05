@@ -1,11 +1,12 @@
 //! The panic handler: reports the panic with a backtrace to both log sinks,
 //! then halts. In a test build it ends the test run with failure instead.
+//! Traps the kernel can't handle end the same way.
 
 use core::fmt;
 use core::panic::PanicInfo;
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use thisos_hal::{BacktraceEnd, Cpu, MAX_FRAMES, Platform};
+use thisos_hal::{BacktraceEnd, Cpu, MAX_FRAMES, Platform, Trap, TrapFrame};
 
 use crate::{Arch, logger};
 
@@ -13,23 +14,10 @@ static PANICKING: AtomicBool = AtomicBool::new(false);
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    // A panic while reporting one would recurse, and the first report is
-    // the one worth reading.
-    if PANICKING.swap(true, Ordering::Relaxed) {
-        stop();
-    }
-    let mut backtrace = Backtrace {
-        frames: [0; MAX_FRAMES],
-        len: 0,
-        end: BacktraceEnd::Done,
-    };
+    enter();
+    let mut backtrace = Backtrace::new();
     // Walked once, so both sinks show the same frames.
-    backtrace.end = Arch::backtrace(|address| {
-        if let Some(slot) = backtrace.frames.get_mut(backtrace.len) {
-            *slot = address;
-            backtrace.len += 1;
-        }
-    });
+    backtrace.end = Arch::backtrace(|address| backtrace.frames.push(address));
     match info.location() {
         Some(location) => logger::panic(
             format_args!("PANIC at {location}: {}", info.message()),
@@ -37,29 +25,89 @@ fn panic(info: &PanicInfo) -> ! {
         ),
         None => logger::panic(format_args!("PANIC: {}", info.message()), &backtrace),
     }
-    #[cfg(test)]
+    end()
+}
+
+/// Reports `trap` as a panic, with the registers in `frame` and a backtrace
+/// of the trapped code, then ends as a panic does. Not through `panic!`,
+/// whose backtrace would start in the handler, and for a trap on a stack of
+/// its own stop there at once.
+pub fn trap(trap: Trap, frame: &<Arch as Platform>::TrapFrame) -> ! {
+    enter();
+    let mut backtrace = Backtrace::new();
+    backtrace.end = frame.backtrace(|address| backtrace.frames.push(address));
+    logger::panic(
+        format_args!("PANIC: {trap}"),
+        &format_args!("{frame}{backtrace}"),
+    );
+    end()
+}
+
+fn enter() {
+    // A panic while reporting one would recurse, and the first report is
+    // the one worth reading.
+    if PANICKING.swap(true, Ordering::Relaxed) {
+        stop();
+    }
+}
+
+fn end() -> ! {
+    #[cfg(feature = "testing")]
     crate::testing::fail();
-    #[cfg(not(test))]
+    #[cfg(not(feature = "testing"))]
     Arch::halt();
 }
 
 fn stop() -> ! {
-    if cfg!(test) {
+    if cfg!(feature = "testing") {
         Arch::exit_qemu(false);
     }
     Arch::halt()
 }
 
 struct Backtrace {
-    frames: [u64; MAX_FRAMES],
-    len: usize,
+    frames: Frames,
     end: BacktraceEnd,
+}
+
+impl Backtrace {
+    fn new() -> Self {
+        Backtrace {
+            frames: Frames {
+                addresses: [0; MAX_FRAMES],
+                len: 0,
+            },
+            end: BacktraceEnd::Done,
+        }
+    }
+}
+
+/// The first [`MAX_FRAMES`] addresses pushed. A trap's backtrace reports
+/// one more, and the last is dropped.
+struct Frames {
+    addresses: [u64; MAX_FRAMES],
+    len: usize,
+}
+
+impl Frames {
+    fn push(&mut self, address: u64) {
+        if let Some(slot) = self.addresses.get_mut(self.len) {
+            *slot = address;
+            self.len += 1;
+        }
+    }
 }
 
 impl fmt::Display for Backtrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "backtrace (link addresses):")?;
-        for (i, address) in self.frames.iter().take(self.len).enumerate() {
+        for (i, address) in self
+            .frames
+            .addresses
+            .iter()
+            .take(self.frames.len)
+            .enumerate()
+        {
             writeln!(f, "  #{i} {address:#x}")?;
         }
         match self.end {

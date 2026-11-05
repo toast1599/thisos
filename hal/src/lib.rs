@@ -71,6 +71,10 @@ pub trait Cpu {
     /// Addresses are link addresses, inside the call instruction: what
     /// `addr2line` expects for the kernel ELF. Stops after [`MAX_FRAMES`].
     fn backtrace(f: impl FnMut(u64)) -> BacktraceEnd;
+
+    /// Traps with [`Trap::Breakpoint`], and returns once the trap handler
+    /// does.
+    fn breakpoint();
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
@@ -96,6 +100,18 @@ pub trait Platform {
     /// The serial port the kernel logs to.
     type Serial: Serial;
 
+    /// The registers the CPU had when it trapped.
+    type TrapFrame: TrapFrame;
+
+    /// The address of the unmapped page right below the kernel stack, which
+    /// a stack overflow runs into.
+    fn guard_page() -> u64;
+
+    /// Reads the first byte of [`Platform::guard_page`], which traps with
+    /// [`Trap::PageFault`]. A trap handler that returns makes it fault
+    /// again. For tests.
+    fn read_guard_page() -> !;
+
     /// A second handle to the serial port, for a panic that finds the first
     /// one locked. It returns `Some` at most once, and `None` when no device
     /// answers. Anything else using the port at the same time interleaves
@@ -111,3 +127,85 @@ pub trait Platform {
 /// A serial port the kernel writes text to. Writing `\n` starts a new line
 /// on the terminal at the other end.
 pub trait Serial: fmt::Write + Send {}
+
+/// The kernel's trap handler, which the architecture calls on every trap.
+/// When it returns, the trapped code resumes, and a fault runs the faulting
+/// instruction again; after a [`Trap::DoubleFault`] or a trap that can't
+/// resume, the architecture halts instead.
+pub type TrapHandler<P> = fn(Trap, &mut <P as Platform>::TrapFrame);
+
+/// Why the CPU trapped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Trap {
+    /// A breakpoint instruction, as [`Cpu::breakpoint`] runs.
+    Breakpoint,
+    /// An access the page tables don't allow.
+    PageFault {
+        /// The address accessed.
+        address: u64,
+        /// What the access was.
+        access: Access,
+    },
+    /// A fault while the CPU was starting the handler of another, such as
+    /// a page fault on a full stack.
+    DoubleFault,
+    /// Any other exception, by the architecture's vector number and the
+    /// error code it pushed, or 0 when it pushes none.
+    Other {
+        /// The vector number.
+        vector: u8,
+        /// The error code.
+        error: u64,
+    },
+}
+
+impl fmt::Display for Trap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Trap::Breakpoint => write!(f, "breakpoint"),
+            Trap::PageFault { address, access } => {
+                write!(f, "page fault on {access} at {address:#x}")
+            }
+            Trap::DoubleFault => write!(f, "double fault"),
+            Trap::Other { vector, error } => {
+                write!(f, "exception {vector}, error code {error:#x}")
+            }
+        }
+    }
+}
+
+/// What a faulting access was.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Access {
+    /// A data read.
+    Read,
+    /// A data write.
+    Write,
+    /// An instruction fetch.
+    Execute,
+}
+
+impl fmt::Display for Access {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Access::Read => "read",
+            Access::Write => "write",
+            Access::Execute => "execute",
+        })
+    }
+}
+
+/// The registers saved when the CPU trapped. Displaying it prints all of
+/// them.
+pub trait TrapFrame: fmt::Display {
+    /// The trapped instruction's address, or for a breakpoint the address
+    /// after it.
+    fn ip(&self) -> u64;
+
+    /// The stack pointer when the CPU trapped.
+    fn sp(&self) -> u64;
+
+    /// Calls `f` with the link address of the trapped instruction, then
+    /// walks the trapped code's frame pointers as [`Cpu::backtrace`] does.
+    fn backtrace(&self, f: impl FnMut(u64)) -> BacktraceEnd;
+}
