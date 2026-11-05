@@ -12,6 +12,18 @@ use crate::root;
 /// The file in the image's FAT partition that holds the build ID.
 pub const BUILD_FILE: &str = "thisos-build.txt";
 
+/// What an image boots.
+#[derive(Clone, Copy)]
+pub enum Kernel<'a> {
+    /// The kernel itself.
+    Main,
+    /// The kernel library's test binary, which holds the tests that don't
+    /// fault.
+    Tests,
+    /// The faulting test in `kernel/tests/<name>.rs`.
+    Test(&'a str),
+}
+
 /// A disk image `build` wrote.
 pub struct Image {
     pub path: PathBuf,
@@ -19,9 +31,8 @@ pub struct Image {
     pub id: String,
 }
 
-/// Builds the kernel and writes the UEFI disk image. With `tests`, builds
-/// the kernel's test binary instead and writes the laptop test image.
-pub fn build(release: bool, tests: bool) -> Result<Image> {
+/// Builds `kernel` and writes its UEFI disk image.
+pub fn build(release: bool, kernel: Kernel) -> Result<Image> {
     let profile = if release { "release" } else { "debug" };
     let pkgid = output(cargo().args(["pkgid", "-p", "thisos-kernel"]))?;
     let version = pkgid
@@ -29,42 +40,47 @@ pub fn build(release: bool, tests: bool) -> Result<Image> {
         .rsplit(['@', '#'])
         .next()
         .with_context(|| format!("no version in cargo pkgid output {pkgid:?}"))?;
-    let build = build_env(release, tests)?;
+    let build = build_env(release, kernel)?;
     let id = format!("ThisOS {version} {build}");
 
-    let (kernel, path) = if tests {
-        (
-            test_elf(release, &build)?,
-            root().join("target/thisos-tests.img"),
-        )
-    } else {
-        let mut cargo_build = cargo();
-        cargo_build
-            .env("THISOS_BUILD", &build)
-            .args(["build", "-p", "thisos-kernel"]);
-        if release {
-            cargo_build.arg("--release");
+    let (elf, path) = match kernel {
+        Kernel::Main => {
+            let mut cargo_build = cargo();
+            cargo_build
+                .env("THISOS_BUILD", &build)
+                .args(["build", "-p", "thisos-kernel"]);
+            if release {
+                cargo_build.arg("--release");
+            }
+            exec(&mut cargo_build)?;
+            (
+                root()
+                    .join("target/x86_64-unknown-none")
+                    .join(profile)
+                    .join("thisos-kernel"),
+                root().join("target/thisos.img"),
+            )
         }
-        exec(&mut cargo_build)?;
-        (
-            root()
-                .join("target/x86_64-unknown-none")
-                .join(profile)
-                .join("thisos-kernel"),
-            root().join("target/thisos.img"),
-        )
+        Kernel::Tests => (
+            test_elf(release, &build, &["--lib"])?,
+            root().join("target/thisos-tests.img"),
+        ),
+        Kernel::Test(name) => (
+            test_elf(release, &build, &["--test", name])?,
+            root().join(format!("target/thisos-test-{name}.img")),
+        ),
     };
 
-    bootloader::DiskImageBuilder::new(kernel)
+    bootloader::DiskImageBuilder::new(elf)
         .set_file_contents(BUILD_FILE.into(), format!("{id}\n").into_bytes())
         .create_uefi_image(&path)
         .with_context(|| format!("writing {}", path.display()))?;
     Ok(Image { path, id })
 }
 
-/// `THISOS_BUILD` for a kernel build: `<commit> <profile>[ tests] <time>`.
-/// The kernel logs "ThisOS <version> " followed by this.
-pub fn build_env(release: bool, tests: bool) -> Result<String> {
+/// `THISOS_BUILD` for a kernel build: `<commit> <profile>[ tests| test
+/// <name>] <time>`. The kernel logs "ThisOS <version> " followed by this.
+pub fn build_env(release: bool, kernel: Kernel) -> Result<String> {
     let profile = if release { "release" } else { "debug" };
     let commit = output(
         Command::new("git")
@@ -72,18 +88,23 @@ pub fn build_env(release: bool, tests: bool) -> Result<String> {
             .args(["describe", "--always", "--dirty"]),
     )?;
     let time = output(Command::new("date").args(["-u", "+%Y-%m-%dT%H:%MZ"]))?;
-    let kind = if tests { " tests" } else { "" };
+    let kind = match kernel {
+        Kernel::Main => String::new(),
+        Kernel::Tests => " tests".into(),
+        Kernel::Test(name) => format!(" test {name}"),
+    };
     Ok(format!("{} {profile}{kind} {}", commit.trim(), time.trim()))
 }
 
-/// Builds the kernel's test binaries and returns the path of the library's,
-/// which holds the tests that don't fault. Cargo names it only in its JSON
-/// messages.
-fn test_elf(release: bool, build: &str) -> Result<PathBuf> {
+/// Builds the one kernel test binary that `select` names, such as `--lib`,
+/// and returns its path. Cargo names it only in its JSON messages. An
+/// unknown `--test` name fails in cargo, which lists the valid ones.
+fn test_elf(release: bool, build: &str, select: &[&str]) -> Result<PathBuf> {
     let mut cargo_test = cargo();
     cargo_test
         .env("THISOS_BUILD", build)
         .args(["test", "-p", "thisos-kernel", "--no-run"])
+        .args(select)
         .arg("--message-format=json-render-diagnostics")
         .stderr(Stdio::inherit());
     if release {
@@ -96,16 +117,13 @@ fn test_elf(release: bool, build: &str) -> Result<PathBuf> {
             serde_json::from_str(line).with_context(|| format!("cargo message {line:?}"))?;
         if message["reason"] == "compiler-artifact"
             && message["profile"]["test"] == true
-            && message["target"]["kind"][0] == "lib"
             && let Some(elf) = message["executable"].as_str()
         {
             elfs.push(PathBuf::from(elf));
         }
     }
-    // The faulting tests in kernel/tests/ get an image each in the next work
-    // item.
     match <[PathBuf; 1]>::try_from(elfs) {
         Ok([elf]) => Ok(elf),
-        Err(elfs) => bail!("expected one kernel library test binary, cargo built {elfs:?}"),
+        Err(elfs) => bail!("expected one kernel test binary for {select:?}, cargo built {elfs:?}"),
     }
 }

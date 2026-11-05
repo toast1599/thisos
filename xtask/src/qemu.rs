@@ -9,8 +9,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use ovmf_prebuilt::{Arch, FileType, Prebuilt, Source};
 
+use crate::build::{self, Kernel};
 use crate::cmd::exec;
-use crate::{build, root};
+use crate::root;
 
 const OVMF: Source = Source::EDK2_STABLE202605_R1;
 
@@ -25,7 +26,7 @@ const TEST_SUCCESS: i32 = 33;
 /// Builds, then boots the image in QEMU with a window and serial on the
 /// terminal.
 pub fn run(release: bool, gdb: bool) -> Result<()> {
-    let image = build::build(release, false)?;
+    let image = build::build(release, Kernel::Main)?;
     let mut qemu = qemu(&image.path, &root().join("target/ovmf-vars.fd"))?;
     if gdb {
         qemu.args(["-s", "-S"]);

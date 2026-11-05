@@ -11,7 +11,9 @@ mod test;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
+
+use crate::build::Kernel;
 
 /// Build, run and test tasks for ThisOS.
 #[derive(Parser)]
@@ -29,9 +31,8 @@ enum Command {
         /// Use the release profile.
         #[arg(long)]
         release: bool,
-        /// Build the kernel's tests into target/thisos-tests.img instead.
-        #[arg(long)]
-        tests: bool,
+        #[command(flatten)]
+        tests: Tests,
     },
     /// Build, then boot the image in QEMU.
     Run {
@@ -51,9 +52,8 @@ enum Command {
         /// The stick to write, when more than one USB disk is plugged in.
         #[arg(long, value_name = "PATH")]
         device: Option<String>,
-        /// Write the test image instead.
-        #[arg(long)]
-        tests: bool,
+        #[command(flatten)]
+        tests: Tests,
     },
     /// Run the host tests, then the kernel's tests in QEMU.
     Test,
@@ -66,9 +66,32 @@ enum Command {
     QemuTest { elf: PathBuf },
 }
 
+/// The tests an image boots in place of the kernel.
+#[derive(Args)]
+struct Tests {
+    /// Build the kernel library's tests, which don't fault, into
+    /// target/thisos-tests.img instead.
+    #[arg(long)]
+    tests: bool,
+    /// Build the faulting test in kernel/tests/<NAME>.rs into
+    /// target/thisos-test-<NAME>.img instead.
+    #[arg(long, value_name = "NAME", conflicts_with = "tests")]
+    test: Option<String>,
+}
+
+impl Tests {
+    fn kernel(&self) -> Kernel<'_> {
+        match (&self.test, self.tests) {
+            (Some(name), _) => Kernel::Test(name),
+            (None, true) => Kernel::Tests,
+            (None, false) => Kernel::Main,
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let result = match Cli::parse().command {
-        Command::Build { release, tests } => build::build(release, tests).map(|image| {
+        Command::Build { release, tests } => build::build(release, tests.kernel()).map(|image| {
             println!("{}\n{}", image.path.display(), image.id);
         }),
         Command::Run { release, gdb } => qemu::run(release, gdb),
@@ -76,7 +99,7 @@ fn main() -> ExitCode {
             release,
             device,
             tests,
-        } => flash::flash(release, tests, device.as_deref()),
+        } => flash::flash(release, tests.kernel(), device.as_deref()),
         Command::Test => test::test(),
         Command::Ci => ci::ci(),
         Command::Font => font::font(),

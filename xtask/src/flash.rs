@@ -8,7 +8,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail, ensure};
 
-use crate::build::{self, BUILD_FILE};
+use crate::build::{self, BUILD_FILE, Kernel};
 use crate::cmd::{confirm, exec, output, output_bytes};
 use crate::lsblk::{Row, lsblk};
 
@@ -36,11 +36,11 @@ impl fmt::Display for Disk {
     }
 }
 
-/// Builds the image, or the test image, writes it to a USB stick with `sudo dd`, reads it back
-/// to check it, moves the backup GPT to the end of the stick and powers the
-/// stick off.
-pub fn flash(release: bool, tests: bool, device: Option<&str>) -> Result<()> {
-    let image = build::build(release, tests)?;
+/// Builds the image of `kernel`, writes it to a USB stick with `sudo dd`,
+/// reads it back to check it, moves the backup GPT to the end of the stick
+/// and powers the stick off.
+pub fn flash(release: bool, kernel: Kernel, device: Option<&str>) -> Result<()> {
+    let image = build::build(release, kernel)?;
     let data =
         fs::read(&image.path).with_context(|| format!("reading {}", image.path.display()))?;
 

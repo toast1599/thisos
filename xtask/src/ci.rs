@@ -4,8 +4,9 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Result, ensure};
 
+use crate::build::{self, Kernel};
 use crate::cmd::{cargo, exec, on_host, output};
-use crate::{banned, build, test};
+use crate::{banned, test};
 
 /// Runs the checks in CI's order and stops at the first that fails.
 pub fn ci() -> Result<()> {
@@ -86,6 +87,6 @@ pub fn ci() -> Result<()> {
         ]))?;
     }
 
-    build::build(false, false)?;
+    build::build(false, Kernel::Main)?;
     Ok(())
 }
