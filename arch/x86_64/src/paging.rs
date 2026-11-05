@@ -15,6 +15,8 @@ use x86_64::registers::control::Cr3;
 use x86_64::structures::paging::{Page, PageTableIndex, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
+use crate::heap::{self, Heap};
+
 // Page-table entry bits.
 pub const PRESENT: u64 = 1 << 0;
 pub const WRITABLE: u64 = 1 << 1;
@@ -184,8 +186,9 @@ impl Entry<'_> {
 #[derive(Debug)]
 pub struct KernelPageTables {
     tables: PageTables,
-    /// The level 4 entry `map` maps into.
+    /// The level 4 entry the heap and `map` map into.
     space: PageTableIndex,
+    heap: Heap,
 }
 
 /// Copies the loader's upper half into new tables made from `alloc`'s
@@ -225,22 +228,30 @@ pub unsafe fn take(
     // where it was. The lower half held only the loader's identity
     // mappings, which the caller guarantees nothing uses.
     unsafe { Cr3::write(frame, flags) };
+    let heap_base = space_start(space);
     Some(KernelPageTables {
         tables: PageTables {
             phys_offset,
             level_4,
         },
         space,
+        // SAFETY: The loader mapped nothing in the space entry, TAKEN makes
+        // this the only Heap, and only grow_heap maps in its range, since
+        // map stays inside kernel_space, which starts above it.
+        heap: unsafe { Heap::new(heap_base) },
     })
+}
+
+/// The first address that level 4 entry `index` maps.
+fn space_start(index: PageTableIndex) -> VirtAddr {
+    let zero = PageTableIndex::new(0);
+    Page::<Size4KiB>::from_page_table_indices(index, zero, zero, zero).start_address()
 }
 
 impl thisos_hal::PageTables for KernelPageTables {
     fn kernel_space(&self) -> Range<u64> {
-        let zero = PageTableIndex::new(0);
-        let start = Page::<Size4KiB>::from_page_table_indices(self.space, zero, zero, zero)
-            .start_address()
-            .as_u64();
-        start..start + (1 << 39)
+        let start = space_start(self.space).as_u64();
+        start + heap::SIZE..start + (1 << 39)
     }
 
     fn map(
@@ -257,32 +268,29 @@ impl thisos_hal::PageTables for KernelPageTables {
         if !self.kernel_space().contains(&page) {
             return fail(MapErrorKind::OutsideKernelSpace, frame);
         }
-        let page = Page::<Size4KiB>::containing_address(VirtAddr::new(page));
-        let mut table = self.tables.level_4;
-        for index in [page.p4_index(), page.p3_index(), page.p2_index()] {
-            let entry = self.tables.entry(table, index);
-            let mut value = entry.load();
-            if value & PRESENT == 0 {
-                let Some(new) = alloc() else {
-                    return fail(MapErrorKind::NoFrames, frame);
-                };
-                value = self.tables.new_table(new) | PRESENT | WRITABLE;
-                // SAFETY: The entry isn't present, so nothing is reached
-                // through it yet.
-                unsafe { entry.store(value) };
-            }
-            table = value & ADDRESS;
-        }
-        let leaf = self.tables.entry(table, page.p1_index());
-        if leaf.load() & PRESENT != 0 {
-            return fail(MapErrorKind::Mapped, frame);
-        }
-        let write = if writable { WRITABLE } else { 0 };
-        // SAFETY: The entry isn't present, so nothing is reached through it
-        // yet, and the frame is the caller's to give: it stays mapped here
-        // for good.
-        unsafe { leaf.store(frame.start() | PRESENT | NO_EXECUTE | write) };
-        tlb::flush(page.start_address());
+        self.map_page(
+            Page::containing_address(VirtAddr::new(page)),
+            frame,
+            writable,
+            alloc,
+        )
+    }
+
+    fn grow_heap(
+        &mut self,
+        frame: Frame,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
+    ) -> Result<(), MapError> {
+        let next = self.heap.next();
+        assert!(
+            next < space_start(self.space) + heap::SIZE,
+            "the heap's {} GiB are full",
+            heap::SIZE >> 30
+        );
+        self.map_page(Page::containing_address(next), frame, true, alloc)?;
+        // SAFETY: map_page mapped the page writable to the frame for good,
+        // and nothing else maps in the heap's range or reaches the frame.
+        unsafe { self.heap.grow() };
         Ok(())
     }
 
@@ -314,5 +322,44 @@ impl thisos_hal::PageTables for KernelPageTables {
             table = value & ADDRESS;
         }
         None
+    }
+}
+
+impl KernelPageTables {
+    /// Maps `page` to `frame` as `map` does, wherever `page` is.
+    fn map_page(
+        &mut self,
+        page: Page<Size4KiB>,
+        frame: Frame,
+        writable: bool,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
+    ) -> Result<(), MapError> {
+        let fail = |kind, frame| Err(MapError { kind, frame });
+        let mut table = self.tables.level_4;
+        for index in [page.p4_index(), page.p3_index(), page.p2_index()] {
+            let entry = self.tables.entry(table, index);
+            let mut value = entry.load();
+            if value & PRESENT == 0 {
+                let Some(new) = alloc() else {
+                    return fail(MapErrorKind::NoFrames, frame);
+                };
+                value = self.tables.new_table(new) | PRESENT | WRITABLE;
+                // SAFETY: The entry isn't present, so nothing is reached
+                // through it yet.
+                unsafe { entry.store(value) };
+            }
+            table = value & ADDRESS;
+        }
+        let leaf = self.tables.entry(table, page.p1_index());
+        if leaf.load() & PRESENT != 0 {
+            return fail(MapErrorKind::Mapped, frame);
+        }
+        let write = if writable { WRITABLE } else { 0 };
+        // SAFETY: The entry isn't present, so nothing is reached through it
+        // yet, and the frame is the caller's to give: it stays mapped here
+        // for good.
+        unsafe { leaf.store(frame.start() | PRESENT | NO_EXECUTE | write) };
+        tlb::flush(page.start_address());
+        Ok(())
     }
 }

@@ -7,6 +7,7 @@
 
 mod backtrace;
 mod framebuffer;
+mod heap;
 mod memory;
 mod once;
 mod paging;
@@ -22,7 +23,9 @@ use bootloader_api::config::Mapping;
 use bootloader_api::info::{FrameBuffer, PixelFormat};
 use once::Once;
 use thisos_frames::Frame;
-use thisos_hal::{BacktraceEnd, BootInfo, Cpu, Framebuffer, Platform, Serial, TrapHandler};
+use thisos_hal::{
+    BacktraceEnd, BootInfo, Cpu, Framebuffer, HeapStats, Platform, Serial, TrapHandler,
+};
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
 use x86_64::VirtAddr;
@@ -90,6 +93,10 @@ impl Platform for X86_64 {
         // memory, and loaded the kernel's own descriptor tables before the
         // kernel could call this.
         unsafe { paging::take(offset, alloc) }
+    }
+
+    fn heap_stats() -> HeapStats {
+        heap::stats()
     }
 
     fn guard_page() -> u64 {

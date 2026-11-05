@@ -172,6 +172,10 @@ pub trait Platform {
     /// its bytes with this one's.
     fn panic_serial() -> Option<Self::Serial>;
 
+    /// The kernel heap's counters. It takes the heap's lock, so trap
+    /// handlers never call it.
+    fn heap_stats() -> HeapStats;
+
     /// Ends a QEMU test run through QEMU's debug exit device, reporting
     /// whether the tests passed. It touches the device only when it runs
     /// under a hypervisor; on real hardware it only halts.
@@ -196,8 +200,29 @@ pub trait PageTables: Send {
         alloc: &mut dyn FnMut() -> Option<Frame>,
     ) -> Result<(), MapError>;
 
+    /// Maps `frame` at the page after the heap's last one, writable and
+    /// no-execute, and adds the page to the heap the global allocator
+    /// allocates from. The heap's pages are outside
+    /// [`PageTables::kernel_space`]. New tables on the way come from
+    /// `alloc`. Panics if the heap's range is full.
+    fn grow_heap(
+        &mut self,
+        frame: Frame,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
+    ) -> Result<(), MapError>;
+
     /// Where `addr` is mapped, or `None` if it isn't.
     fn translate(&self, addr: u64) -> Option<Translation>;
+}
+
+/// The kernel heap's counters, as [`Platform::heap_stats`] reads them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HeapStats {
+    /// Bytes in live allocations, by the sizes their layouts ask for.
+    pub allocated: usize,
+    /// Bytes [`PageTables::grow_heap`] has given the heap, less what
+    /// alignment cost.
+    pub claimed: usize,
 }
 
 /// Why [`PageTables::map`] failed. It hands the frame back.

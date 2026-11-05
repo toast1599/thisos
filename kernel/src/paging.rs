@@ -43,7 +43,7 @@ fn with<T>(f: impl FnOnce(&mut PageTables) -> T) -> T {
 /// The virtual addresses [`map`] maps into.
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "the heap will be the first user")
+    expect(dead_code, reason = "the LAPIC timer will be the first user")
 )]
 pub fn kernel_space() -> Range<u64> {
     with(|tables| tables.kernel_space())
@@ -53,10 +53,15 @@ pub fn kernel_space() -> Range<u64> {
 /// `writable`.
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "the heap will be the first user")
+    expect(dead_code, reason = "the LAPIC timer will be the first user")
 )]
 pub fn map(page: u64, frame: Frame, writable: bool) -> Result<(), MapError> {
     with(|tables| tables.map(page, frame, writable, &mut frames::alloc))
+}
+
+/// Maps `frame` at the end of the heap and adds it to the heap.
+pub fn grow_heap(frame: Frame) -> Result<(), MapError> {
+    with(|tables| tables.grow_heap(frame, &mut frames::alloc))
 }
 
 /// Where `addr` is mapped, or `None` if it isn't.

@@ -13,6 +13,8 @@ bench = false
 
 [dependencies]
 bootloader_api = "0.11"
+spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex", "lock_api"] }
+talc = { version = "5.1", features = ["counters"] }
 thisos-frames.workspace = true
 thisos-hal.workspace = true
 uart_16550 = "0.9"

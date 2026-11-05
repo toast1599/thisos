@@ -11,7 +11,10 @@
 #![test_runner(crate::testing::run)]
 #![reexport_test_harness_main = "test_main"]
 
+extern crate alloc;
+
 mod frames;
+mod heap;
 mod logger;
 mod paging;
 mod panic;
@@ -54,6 +57,7 @@ pub fn init(boot: BootInfo<Arch>) {
     }
     frames::init(boot.memory);
     paging::init();
+    heap::init();
 }
 
 /// The kernel binary's main function.
