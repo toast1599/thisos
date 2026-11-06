@@ -107,8 +107,8 @@ struct Screen<M> {
     font: &'static Font,
     cols: usize,
     rows: usize,
-    /// Rows whose pixels don't match the grid, because large text covers
-    /// them.
+    /// Rows whose pixels may not match the grid, because large text written
+    /// since the last scroll covers them or lies on both sides of them.
     stale: Range<usize>,
 }
 
@@ -169,7 +169,12 @@ impl<M: Pixels> Console<M> {
             return;
         };
         let top = self.row.saturating_sub(scale);
-        screen.stale = top..top + scale;
+        let rows = top..top + scale;
+        screen.stale = if screen.stale.is_empty() {
+            rows
+        } else {
+            screen.stale.start.min(rows.start)..screen.stale.end.max(rows.end)
+        };
         for (i, c) in text.chars().take(screen.cols / scale).enumerate() {
             let byte = u8::try_from(c)
                 .ok()
@@ -489,6 +494,19 @@ mod tests {
 
         let mut fresh = sized_console(64, PixelFormat::Bgr);
         write!(fresh, "\nx\ny\nz").unwrap();
+        assert_eq!(pixels(&scrolled), pixels(&fresh));
+    }
+
+    #[test]
+    fn large_text_from_two_writes_goes_when_the_console_scrolls() {
+        // Eight rows of the 12 px font.
+        let mut scrolled = sized_console(128, PixelFormat::Bgr);
+        scrolled.write_large("@", 2);
+        scrolled.write_large("@", 2);
+        write!(scrolled, "a\nb\nc\nd\ne").unwrap();
+
+        let mut fresh = sized_console(128, PixelFormat::Bgr);
+        write!(fresh, "\n\n\n\na\nb\nc\nd\ne").unwrap();
         assert_eq!(pixels(&scrolled), pixels(&fresh));
     }
 
