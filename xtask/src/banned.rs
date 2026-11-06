@@ -2,6 +2,7 @@
 //! lint catches: `static mut` and `&'static mut`.
 
 use std::fs;
+use std::io;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
@@ -10,8 +11,9 @@ use crate::cmd::output;
 use crate::root;
 
 /// The one place `&'static mut` is allowed: the loader's entry signature,
-/// which `bootloader_api::entry_point!` fixes. A line is exempt when it is
-/// in this file and names the loader's `BootInfo`.
+/// which `bootloader_api::entry_point!` fixes. A pattern is exempt when it
+/// is in this file and the line holding its `'static` names the loader's
+/// `BootInfo`.
 const LOADER_ENTRY: (&str, &str) = ("arch/x86_64/src/lib.rs", "bootloader_api::BootInfo");
 
 /// Fails, naming each line, if any Rust source in the repository, tracked or
@@ -26,9 +28,9 @@ pub fn check() -> Result<()> {
     ]))?;
     let mut found = Vec::new();
     for path in files.lines() {
-        let source =
-            fs::read_to_string(root().join(path)).with_context(|| format!("reading {path}"))?;
-        found.extend(scan(path, &source));
+        if let Some(source) = source(path)? {
+            found.extend(scan(path, &source));
+        }
     }
     if !found.is_empty() {
         bail!(
@@ -39,27 +41,43 @@ pub fn check() -> Result<()> {
     Ok(())
 }
 
-/// The banned patterns in `source`, one `path:line: pattern` each.
+/// The text of `path`, relative to the repository root, or `None` when it
+/// is gone: git still lists a file deleted but not yet staged.
+fn source(path: &str) -> Result<Option<String>> {
+    match fs::read_to_string(root().join(path)) {
+        Ok(text) => Ok(Some(text)),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading {path}")),
+    }
+}
+
+/// The banned patterns in `source`, one `path:line: pattern` each, naming
+/// the line of the pattern's first word. The words of a pattern may be on
+/// different lines, which rustfmt would join, but not under rustfmt::skip.
 fn scan(path: &str, source: &str) -> Vec<String> {
+    let lines: Vec<&str> = source.lines().collect();
+    let code = code(source);
+    // code keeps every line break, so its line numbers are source's.
+    let mut words = Vec::new();
+    for (i, line) in code.lines().enumerate() {
+        words.extend(
+            line.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '\''))
+                .filter(|word| !word.is_empty())
+                .map(|word| (i, word)),
+        );
+    }
     let mut found = Vec::new();
-    // code keeps every line break, so its lines pair up with source's.
-    for (i, (code, line)) in code(source).lines().zip(source.lines()).enumerate() {
-        let words: Vec<&str> = code
-            .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '\''))
-            .filter(|word| !word.is_empty())
-            .collect();
-        for pair in words.windows(2) {
-            let banned = match pair {
-                ["static", "mut"] => "static mut",
-                ["'static", "mut"]
-                    if !(path == LOADER_ENTRY.0 && line.contains(LOADER_ENTRY.1)) =>
-                {
-                    "&'static mut"
-                }
-                _ => continue,
-            };
-            found.push(format!("{path}:{}: {banned}", i + 1));
-        }
+    for pair in words.windows(2) {
+        let (i, banned) = match pair {
+            [(i, "static"), (_, "mut")] => (i, "static mut"),
+            [(i, "'static"), (_, "mut")]
+                if !(path == LOADER_ENTRY.0 && lines[*i].contains(LOADER_ENTRY.1)) =>
+            {
+                (i, "&'static mut")
+            }
+            _ => continue,
+        };
+        found.push(format!("{path}:{}: {banned}", i + 1));
     }
     found
 }
@@ -133,10 +151,11 @@ fn skipped(chars: &[char], i: usize) -> Option<usize> {
             }
             Some(chars.len())
         }
-        ['r', ..] | ['b', 'r', ..] if i == 0 || !ident(chars[i - 1]) => {
-            // A raw string, r"...", r#"..."# or br#"..."#, has no escapes and
-            // ends at a quote followed by as many #s as it started with.
-            let prefix = if rest[0] == 'b' { 2 } else { 1 };
+        ['r', ..] | ['b' | 'c', 'r', ..] if i == 0 || !ident(chars[i - 1]) => {
+            // A raw string, r"...", r#"..."#, br#"..."# or cr#"..."#, has no
+            // escapes and ends at a quote followed by as many #s as it
+            // started with.
+            let prefix = if rest[0] == 'r' { 1 } else { 2 };
             let hashes = rest[prefix..].iter().take_while(|&&c| c == '#').count();
             if rest.get(prefix + hashes) != Some(&'"') {
                 return None;
@@ -206,6 +225,10 @@ static mut E: u8 = 0;
 /* a block comment with a " and /* a nested one */ static mut */
 static mut F: u8 = 0;
 fn f<'a>(x: &'a u8, y: &'static mut u8) {}
+let c = cr"a\";
+static mut G: u8 = 0;
+let d = cr#"a "quoted" static mut"#;
+static mut H: u8 = 0;
 "##;
         assert_eq!(
             scan("kernel/src/lib.rs", source),
@@ -217,19 +240,48 @@ fn f<'a>(x: &'a u8, y: &'static mut u8) {}
                 "kernel/src/lib.rs:10: static mut",
                 "kernel/src/lib.rs:12: static mut",
                 "kernel/src/lib.rs:13: &'static mut",
+                "kernel/src/lib.rs:15: static mut",
+                "kernel/src/lib.rs:17: static mut",
+            ]
+        );
+    }
+
+    // rustfmt joins these lines, but not under rustfmt::skip.
+    #[test]
+    fn finds_patterns_split_across_lines() {
+        let source = "#[rustfmt::skip]\n\
+                      static\n\
+                      mut A: u8 = 0;\n\
+                      fn f(x: &'static // a comment\n\
+                      \x20   mut u8) {}\n";
+        assert_eq!(
+            scan("kernel/src/lib.rs", source),
+            [
+                "kernel/src/lib.rs:2: static mut",
+                "kernel/src/lib.rs:4: &'static mut",
             ]
         );
     }
 
     #[test]
+    fn skips_a_listed_file_that_is_gone() {
+        assert_eq!(source("kernel/src/no_such_file.rs").unwrap(), None);
+    }
+
+    #[test]
     fn allows_the_loader_entry_only() {
         let source = "boot: &'static mut bootloader_api::BootInfo,\n\
-                      other: &'static mut u8,\n";
+                      other: &'static mut u8,\n\
+                      split: &'static\n\
+                      mut bootloader_api::BootInfo,\n";
         assert_eq!(
             scan("arch/x86_64/src/lib.rs", source),
-            ["arch/x86_64/src/lib.rs:2: &'static mut"]
+            [
+                "arch/x86_64/src/lib.rs:2: &'static mut",
+                "arch/x86_64/src/lib.rs:3: &'static mut",
+            ]
         );
-        assert_eq!(scan("kernel/src/lib.rs", source).len(), 2);
+        assert_eq!(scan("kernel/src/lib.rs", source).len(), 3);
     }
 
     #[test]
