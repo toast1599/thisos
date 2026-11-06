@@ -76,6 +76,12 @@ pub fn translate(addr: u64) -> Option<Translation> {
     with(|tables| tables.translate(addr))
 }
 
+/// Whether anything is mapped in the lower half.
+#[cfg(test)]
+fn lower_half_mapped() -> bool {
+    with(|tables| tables.lower_half_mapped())
+}
+
 #[cfg(test)]
 mod tests {
     use core::ptr;
@@ -135,14 +141,44 @@ mod tests {
 
     #[test_case]
     fn the_lower_half_is_unmapped() {
-        for region in frames::memory() {
-            assert_eq!(
-                translate(region.start),
-                None,
-                "{:#x} is mapped at its identity address",
-                region.start
-            );
-        }
+        assert!(!lower_half_mapped());
+    }
+
+    /// Whether `trap` is the page fault on `access` that ends `probe`.
+    fn faults_on_target(probe: Probe, access: Access, trap: Trap) -> bool {
+        Arch::probe_target(probe).is_some_and(|address| trap == Trap::PageFault { address, access })
+    }
+
+    /// Checks that `probe`'s target is mapped, writable and executable as
+    /// `expected` says.
+    fn check_target(probe: Probe, expected: (bool, bool)) {
+        let Some(address) = Arch::probe_target(probe) else {
+            panic!("{probe:?} has no target");
+        };
+        let mapped = translate(address).map(|t| (t.writable, t.executable));
+        assert_eq!(mapped, Some(expected), "{probe:?} target {address:#x}");
+    }
+
+    // The entry says read-only; the fault shows the CPU enforces it, which
+    // it does in ring 0 only with CR0.WP on.
+    #[test_case]
+    fn writing_a_read_only_page_faults() {
+        check_target(Probe::WriteReadOnly, (false, false));
+        testing::expect_trap(
+            |trap| faults_on_target(Probe::WriteReadOnly, Access::Write, trap),
+            Probe::WriteReadOnly,
+        );
+    }
+
+    // The entry says no-execute; the fault shows the CPU enforces it, which
+    // it does only with EFER.NXE on.
+    #[test_case]
+    fn calling_a_no_execute_page_faults() {
+        check_target(Probe::ExecuteNoExecute, (false, false));
+        testing::expect_trap(
+            |trap| faults_on_target(Probe::ExecuteNoExecute, Access::Execute, trap),
+            Probe::ExecuteNoExecute,
+        );
     }
 
     #[test_case]

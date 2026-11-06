@@ -323,6 +323,12 @@ impl thisos_hal::PageTables for KernelPageTables {
         }
         None
     }
+
+    fn lower_half_mapped(&self) -> bool {
+        (0..UPPER_HALF)
+            .map(PageTableIndex::new)
+            .any(|i| self.tables.entry(self.tables.level_4, i).load() & PRESENT != 0)
+    }
 }
 
 impl KernelPageTables {

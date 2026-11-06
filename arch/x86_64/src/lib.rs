@@ -133,6 +133,10 @@ impl Platform for X86_64 {
         backtrace::stack_bottom() - 4096
     }
 
+    fn probe_target(probe: Probe) -> Option<u64> {
+        catch::target(probe)
+    }
+
     fn panic_framebuffer() -> Option<Framebuffer<FramebufferPixels>> {
         PANIC_FRAMEBUFFER.try_lock()?.take()
     }

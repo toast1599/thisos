@@ -26,8 +26,8 @@ const OUTPUT: u8 = 1 << 5;
 const ONE_SHOT: u8 = 0b1011_0000;
 
 /// How many TSC cycles `count` waits before deciding the PIT doesn't count:
-/// 1 to 4 s for a TSC of 1 to 4 GHz, where a count takes tens of
-/// milliseconds.
+/// 4.3 s for a TSC of 1 GHz down to 1.1 s at 4 GHz, where a count takes tens
+/// of milliseconds.
 const MAX_CYCLES: u64 = 1 << 32;
 
 /// Counts `ticks` of [`HZ`] on channel 2, with the speaker off. It calls

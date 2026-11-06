@@ -144,6 +144,14 @@ pub enum Probe {
     OverflowStack,
     /// Spins forever with interrupts as they were.
     Spin,
+    /// Reads a read-only byte of the architecture's own and writes it back,
+    /// again and again, which traps with [`Trap::PageFault`] on write at
+    /// [`Platform::probe_target`] when the CPU enforces read-only pages.
+    WriteReadOnly,
+    /// Calls a `ret` of the architecture's own in a no-execute page, again
+    /// and again, which traps with [`Trap::PageFault`] on execute at
+    /// [`Platform::probe_target`] when the CPU enforces no-execute pages.
+    ExecuteNoExecute,
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
@@ -191,6 +199,12 @@ pub trait Platform {
     /// The address of the unmapped page right below the kernel stack, which
     /// a stack overflow runs into.
     fn guard_page() -> u64;
+
+    /// The address whose page fault ends `probe`: the guard page for
+    /// [`Probe::ReadGuardPage`], and the probe's own byte for
+    /// [`Probe::WriteReadOnly`] and [`Probe::ExecuteNoExecute`]. `None` for
+    /// a probe that ends some other way. For tests.
+    fn probe_target(probe: Probe) -> Option<u64>;
 
     /// A second handle to the serial port, for a panic that finds the first
     /// one locked. It returns `Some` at most once, and `None` when no device
@@ -261,6 +275,10 @@ pub trait PageTables: Send {
 
     /// Where `addr` is mapped, or `None` if it isn't.
     fn translate(&self, addr: u64) -> Option<Translation>;
+
+    /// Whether anything is mapped in the lower half, which user space will
+    /// have. For tests.
+    fn lower_half_mapped(&self) -> bool;
 }
 
 /// The kernel heap's counters, as [`Platform::heap_stats`] reads them.

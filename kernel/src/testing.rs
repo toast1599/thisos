@@ -183,9 +183,10 @@ fn contains(message: &dyn fmt::Display, part: &str) -> bool {
             .any(|window| window == part.as_bytes())
 }
 
-/// Far more spins than 100 ms takes under TCG, and far fewer than the
-/// watchdog's 10 s on real hardware.
-const MAX_SPINS: u64 = 1 << 30;
+/// Far more spins than 100 ms takes under TCG, and well under the
+/// watchdog's 10 s on the test laptop, where a spin costs 83 to 123 TSC
+/// cycles at 2995 MHz: 3.7 to 5.5 s.
+const MAX_SPINS: u64 = 1 << 27;
 
 /// Spins until `done` holds, and panics after [`MAX_SPINS`].
 pub fn spin_until(what: &str, done: impl Fn() -> bool) {

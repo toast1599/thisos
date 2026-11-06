@@ -18,11 +18,24 @@ use crate::trap::TrapFrame;
 /// runs, and 0 otherwise.
 static SAVED_RSP: AtomicU64 = AtomicU64::new(0);
 
-// thisos_catch takes the probe's number in rdi and the guard page's address
-// in rsi. It returns only through thisos_catch_landing, where abandon sends
-// a trapped probe. The overflow probe pushes from thisos_catch's own frame
-// down, so the registers saved above it survive.
+// thisos_catch takes the probe's number in rdi and its target's address in
+// rsi. It returns only through thisos_catch_landing, where abandon sends a
+// trapped probe. The overflow probe pushes from thisos_catch's own frame
+// down, so the registers saved above it survive. The two targets are in
+// .rodata, which the loader maps read-only and no-execute, and Rust code
+// never reads them, so a write that the CPU lets through changes nothing
+// Rust relies on.
 global_asm!(
+    ".pushsection .rodata.thisos_probe, \"a\", @progbits",
+    ".globl thisos_probe_read_only",
+    ".hidden thisos_probe_read_only",
+    "thisos_probe_read_only:",
+    ".byte 0",
+    ".globl thisos_probe_ret",
+    ".hidden thisos_probe_ret",
+    "thisos_probe_ret:",
+    "ret",
+    ".popsection",
     ".pushsection .text.thisos_catch, \"ax\", @progbits",
     ".globl thisos_catch",
     ".hidden thisos_catch",
@@ -38,6 +51,10 @@ global_asm!(
     "je 2f",
     "cmp rdi, 1",
     "je 3f",
+    "cmp rdi, 3",
+    "je 4f",
+    "cmp rdi, 4",
+    "je 5f",
     "1:",
     "pause",
     "jmp 1b",
@@ -47,6 +64,13 @@ global_asm!(
     "3:",
     "push rax",
     "jmp 3b",
+    "4:",
+    "mov al, byte ptr [rsi]",
+    "mov byte ptr [rsi], al",
+    "jmp 4b",
+    "5:",
+    "call rsi",
+    "jmp 5b",
     ".globl thisos_catch_landing",
     ".hidden thisos_catch_landing",
     "thisos_catch_landing:",
@@ -64,6 +88,8 @@ global_asm!(
 
 unsafe extern "C" {
     static thisos_catch_landing: u8;
+    static thisos_probe_read_only: u8;
+    static thisos_probe_ret: u8;
 }
 
 /// Runs `probe` until a trap handler abandons it.
@@ -77,20 +103,24 @@ pub fn catch(probe: Probe) {
         Probe::ReadGuardPage => 0,
         Probe::OverflowStack => 1,
         Probe::Spin => 2,
+        Probe::WriteReadOnly => 3,
+        Probe::ExecuteNoExecute => 4,
     };
     let run = || {
         // SAFETY: thisos_catch saves and restores every callee-saved
         // register, and returns, through thisos_catch_landing, to the
         // instruction after the call with the stack pointer it was called
-        // with. The probes touch only rax and the stack below the saved
-        // registers: the guard page, which the loader leaves unmapped, so the
-        // read only traps, and stack that no frame above uses. The C ABI
-        // clobbers cover rax and the flags.
+        // with. The probes touch only rax, the stack below the saved
+        // registers and their own targets: the guard page, which the loader
+        // leaves unmapped, so the read only traps; stack that no frame above
+        // uses; the read-only byte, written back with the value it holds; and
+        // the ret, which only returns. The C ABI clobbers cover rax and the
+        // flags.
         unsafe {
             asm!(
                 "call thisos_catch",
                 in("rdi") number,
-                in("rsi") X86_64::guard_page(),
+                in("rsi") target(probe).unwrap_or(0),
                 clobber_abi("C"),
             );
         }
@@ -100,8 +130,24 @@ pub fn catch(probe: Probe) {
         // came near the guard page would overflow there itself, and abandon
         // would give up the handler along with the probe.
         Probe::OverflowStack => interrupts::without_interrupts(run),
-        Probe::ReadGuardPage | Probe::Spin => run(),
+        Probe::ReadGuardPage | Probe::Spin | Probe::WriteReadOnly | Probe::ExecuteNoExecute => {
+            run();
+        }
     }
+}
+
+/// The address whose page fault ends `probe`; see `Platform::probe_target`.
+pub fn target(probe: Probe) -> Option<u64> {
+    match probe {
+        Probe::ReadGuardPage => Some(X86_64::guard_page()),
+        Probe::WriteReadOnly => Some(address(&raw const thisos_probe_read_only)),
+        Probe::ExecuteNoExecute => Some(address(&raw const thisos_probe_ret)),
+        Probe::OverflowStack | Probe::Spin => None,
+    }
+}
+
+fn address(byte: *const u8) -> u64 {
+    VirtAddr::from_ptr(byte).as_u64()
 }
 
 /// Sends `frame` to the running catch's landing. Returns `false` when no
@@ -121,5 +167,5 @@ pub fn abandoned(frame: &TrapFrame) -> bool {
 }
 
 fn landing() -> u64 {
-    VirtAddr::from_ptr(&raw const thisos_catch_landing).as_u64()
+    address(&raw const thisos_catch_landing)
 }
