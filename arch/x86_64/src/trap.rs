@@ -141,10 +141,13 @@ impl thisos_hal::TrapFrame for TrapFrame {
 
 impl TrapFrame {
     /// Makes `iretq` continue at `rip` with stack pointer `rsp`, in place of
-    /// the trapped code.
+    /// the trapped code, in the kernel's code segment. The CS a double fault
+    /// saves is undefined, as its RIP is, and the trap gate loaded the
+    /// kernel's code selector into CS for the handler.
     pub(crate) fn resume_at(&mut self, rip: u64, rsp: u64) {
         self.rip = rip;
         self.rsp = rsp;
+        self.cs = u64::from(CS::get_reg().0);
     }
 }
 
@@ -323,6 +326,8 @@ pub unsafe fn init(handler: TrapHandler<X86_64>) {
         load_tss(tss_selector);
     }
 
+    // After the CS reload: set_handler_addr gives each entry the current CS
+    // as its code selector, and the loader's would index this GDT.
     let mut idt = InterruptDescriptorTable::new();
     install(&mut idt.divide_error, 0);
     install(&mut idt.debug, 1);

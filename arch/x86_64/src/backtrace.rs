@@ -51,9 +51,14 @@ impl Frame {
         // SAFETY: The word is aligned and inside the kernel stack, which the
         // loader maps in full and only this core uses. A volatile read makes
         // no reference, so it can't alias one. On a chain of prologues it
-        // holds the caller's rbp; on a chain broken by code without frame
-        // pointers it holds whatever bits the RAM has, which the walk only
-        // checks and prints.
+        // holds the caller's rbp. On a chain broken by code without frame
+        // pointers it can be part of a local, live or dead, or never written,
+        // and Rust's model makes reading such a word through a pointer
+        // without its provenance, or uninitialized as a u64, undefined. That
+        // is the gap ADR 0005 accepts for the kernel stack, which no pointer
+        // with provenance reaches: the read is volatile, so the compiler
+        // can't assume what it returns, and the walk only checks and prints
+        // the bits.
         unsafe { VirtAddr::new(self.0).as_ptr::<u64>().read_volatile() }
     }
 

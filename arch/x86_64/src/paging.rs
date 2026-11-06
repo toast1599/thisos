@@ -151,7 +151,9 @@ impl Entry<'_> {
         unsafe { AtomicU64::from_ptr(self.0) }.load(Ordering::Relaxed)
     }
 
-    /// Replaces the entry with `value`.
+    /// Replaces the entry with `value`. The store is Release, so that what
+    /// was written before it, such as the zeroes of a table it links, can't
+    /// be moved after it; on x86_64 that costs nothing over a plain store.
     ///
     /// # Safety
     ///
@@ -159,7 +161,7 @@ impl Entry<'_> {
     /// that nothing the kernel reaches changes underneath it.
     unsafe fn store(self, value: u64) {
         // SAFETY: As in load.
-        unsafe { AtomicU64::from_ptr(self.0) }.store(value, Ordering::Relaxed);
+        unsafe { AtomicU64::from_ptr(self.0) }.store(value, Ordering::Release);
     }
 
     /// Replaces the entry's value `v` with `f(v)` in one atomic step, so
@@ -354,6 +356,13 @@ impl KernelPageTables {
                 // through it yet.
                 unsafe { entry.store(value) };
             }
+            // Only the loader's mappings have large pages, and none is in
+            // kernel space or the heap's range, so this is a kernel bug.
+            assert!(
+                value & PS_OR_PAT == 0,
+                "a large page on the way to {:#x}",
+                page.start_address()
+            );
             table = value & ADDRESS;
         }
         let leaf = self.tables.entry(table, page.p1_index());
