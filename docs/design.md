@@ -33,7 +33,7 @@ ThisOS is 64-bit only. Architecture names follow Rust's `target_arch`.
 - **x86_64** is the only architecture built and tested for now. It runs in QEMU and on real hardware, and both must pass the same tests.
 - **aarch64** and **riscv64** are the long-term targets. They will be tested in QEMU only, which is a documented limitation. No code for them exists yet.
 
-QEMU runs the q35 machine with OVMF firmware and emulates the same devices as the test laptop: an NVMe disk and an i8042 keyboard, with no virtio. One driver per device class then serves both.
+QEMU runs the q35 machine with OVMF firmware and is to emulate the same devices as the test laptop: an NVMe disk and an i8042 keyboard, with no virtio. One driver per device class then serves both. Today it has the image as USB storage on an xHCI controller, the way the laptop boots its stick, and no NVMe disk, which comes with the NVMe driver. QEMU runs without `-nodefaults`, so q35 also adds an e1000e NIC and VGA, which no driver uses.
 
 The real-hardware target is a Lenovo 83DA laptop:
 

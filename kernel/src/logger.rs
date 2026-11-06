@@ -30,7 +30,7 @@ static LOGGER: Logger = Logger {
     }),
 };
 
-/// Installs the logger. Only `kmain` calls this, once.
+/// Installs the logger. Only `kernel::init` calls this, once.
 pub fn init(serial: Option<Serial>, framebuffer: Option<Framebuffer<Pixels>>) {
     {
         let mut sinks = LOGGER.sinks.lock();

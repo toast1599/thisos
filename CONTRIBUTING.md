@@ -4,7 +4,7 @@ This file covers how ThisOS code is written, tested and decided. What the system
 
 ## Decisions
 
-Every choice that has a reasonable alternative goes to the maintainer before its code is written. That covers implementation details as well as design. The answers then go to one of three places:
+Every choice that has a reasonable alternative goes to the maintainer before its code is written. This covers implementation details as well as design. The answers then go to one of three places:
 
 - Answers that change what the system is, or an interface between crates, update `docs/design.md`.
 - Answers that are hard to reverse also get a record in `docs/adr/`. These are the syscall ABI, the kernel's object model, IPC semantics and policies like the ones in this file.
@@ -39,7 +39,7 @@ There are two workspaces:
 ## xtask
 
 - `cargo xtask build` builds the kernel and writes a UEFI GPT disk image to `target/thisos.img` with `bootloader`'s `DiskImageBuilder`, then prints the image's path and its build ID. It uses the dev profile; `--release` builds release.
-  The build ID is `ThisOS <version> <commit> <profile> <time>`, for example `ThisOS 0.0.0 f172dcc-dirty debug 2026-11-04T09:35Z`: the commit is `git describe --always --dirty`, and the time is when xtask built it, in UTC. xtask passes everything after the version to the kernel build as `THISOS_BUILD`. The kernel logs the whole ID as its first line, or `unknown build` in place of the rest when built without xtask. The image holds the ID in `thisos-build.txt` at the root of its FAT partition. `--tests` and `--test <name>` build a laptop test image instead (see below). The ID of the first has `tests` after the profile, as in `ThisOS 0.0.0 3ddbe39 debug tests 2026-11-04T15:00Z`, and of the second `test <name>`, as in `ThisOS 0.0.0 5210fb4 debug test page_fault 2026-11-05T10:05Z`. `cargo xtask test` passes the QEMU tests the same kind of ID.
+  The build ID is `ThisOS <version> <commit> <profile> <time>`, for example `ThisOS 0.0.0 f172dcc-dirty debug 2026-11-04T09:35Z`: the commit is `git describe --always --dirty`, and the time is when xtask built it, in UTC. xtask passes everything after the version to the kernel build as `THISOS_BUILD`. The kernel logs the whole ID as its first line, or `unknown build` in place of the rest when built without xtask. The image holds the ID in `thisos-build.txt` at the root of its FAT partition. `--tests` and `--test <name>` build a laptop test image instead (see below). The ID of the first has `tests` after the profile, as in `ThisOS 0.0.0 3ddbe39 debug tests 2026-11-04T15:00Z`, and of the second `test <name>`, as in `ThisOS 0.0.0 5210fb4 debug test page_fault 2026-11-05T10:05Z`. `cargo xtask test` gives every QEMU test binary, the faulting ones included, an ID with `tests`, never `test <name>`.
 - `cargo xtask run` builds, then boots the image in QEMU with a window for the framebuffer and serial output on the terminal. QEMU's monitor is on Ctrl-Alt-2 in that window. `--gdb` starts QEMU's gdb stub on TCP port 1234 and starts the CPU paused.
 
 QEMU runs:
@@ -162,7 +162,7 @@ GitHub Actions runs on every push and pull request:
 - `cargo deny`
 - an image build
 
-`.github/workflows/ci.yml` has one job on `ubuntu-24.04` that runs `cargo xtask ci`, so CI and a local run do the same checks. It installs the toolchain from `rust-toolchain.toml` with the runner's rustup, `cargo-deny` 0.20.2 as a prebuilt binary through `taiki-e/install-action`, and QEMU from Ubuntu's `qemu-system-x86` package, which the runner image lacks. Every action is pinned to a full commit SHA, with its tag in a comment. The workflow only reads the repository, and a new push cancels a run still going on the same ref.
+`.github/workflows/ci.yml` has one job on `ubuntu-26.04` that runs `cargo xtask ci`, so CI and a local run do the same checks. It installs the toolchain from `rust-toolchain.toml` with the runner's rustup, `cargo-deny` 0.20.2 as a prebuilt binary through `taiki-e/install-action`, and QEMU from Ubuntu's `qemu-system-x86` package, which the runner image lacks. Every action is pinned to a full commit SHA, with its tag in a comment. The workflow only reads the repository, and a new push cancels a run still going on the same ref.
 
 CI caches the cargo registry and both target directories, keyed on `rust-toolchain.toml` and both `Cargo.lock` files. The cache holds `target/ovmf/` too: fetching OVMF from GitHub can take minutes, and the cache means CI pays that only when the pinned release changes.
 

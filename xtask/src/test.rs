@@ -32,8 +32,10 @@ pub fn test() -> Result<()> {
                 "CARGO_TARGET_X86_64_UNKNOWN_NONE_RUNNER",
                 format!("{xtask} qemu-test"),
             )
-            // The same as build --tests, so that switching between the two
-            // doesn't rebuild the kernel.
+            // The same kind as build --tests, so a QEMU run logs `tests` like a
+            // laptop test image. It doesn't spare a rebuild when switching
+            // between the two: the ID has the time to the minute, and the
+            // kernel's option_env! recompiles whenever it changes.
             .env("THISOS_BUILD", build::build_env(false, Kernel::Tests)?)
             .args(["test", "-p", "thisos-kernel"]),
     )
