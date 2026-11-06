@@ -43,7 +43,10 @@ fn with<T>(f: impl FnOnce(&mut PageTables) -> T) -> T {
 /// The virtual addresses [`map`] maps into.
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "the LAPIC timer will be the first user")
+    expect(
+        dead_code,
+        reason = "nothing outside the tests maps into kernel space yet"
+    )
 )]
 pub fn kernel_space() -> Range<u64> {
     with(|tables| tables.kernel_space())
@@ -53,7 +56,10 @@ pub fn kernel_space() -> Range<u64> {
 /// `writable`.
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "the LAPIC timer will be the first user")
+    expect(
+        dead_code,
+        reason = "nothing outside the tests maps into kernel space yet"
+    )
 )]
 pub fn map(page: u64, frame: Frame, writable: bool) -> Result<(), MapError> {
     with(|tables| tables.map(page, frame, writable, &mut frames::alloc))

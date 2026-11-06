@@ -6,7 +6,7 @@ use core::fmt::{self, Write};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use spin::Mutex;
 use thisos_console::{Color, Console};
-use thisos_hal::{Framebuffer, Platform};
+use thisos_hal::{Cpu, Framebuffer, Platform};
 
 use crate::Arch;
 
@@ -30,15 +30,26 @@ static LOGGER: Logger = Logger {
     }),
 };
 
+// The lock is held only with interrupts off, so an interrupt handler that
+// logs never finds it held by the code it interrupted. An exception, NMI or
+// machine check inside the logger can still find it held, which is what
+// the panic path's try_lock is for.
+fn with_sinks<R>(f: impl FnOnce(&mut Sinks) -> R) -> R {
+    Arch::without_interrupts(|| f(&mut LOGGER.sinks.lock()))
+}
+
+fn try_with_sinks<R>(f: impl FnOnce(&mut Sinks) -> R) -> Option<R> {
+    Arch::without_interrupts(|| LOGGER.sinks.try_lock().map(|mut sinks| f(&mut sinks)))
+}
+
 /// Installs the logger. Only `kernel::init` calls this, once.
 pub fn init(serial: Option<Serial>, framebuffer: Option<Framebuffer<Pixels>>) {
-    {
-        let mut sinks = LOGGER.sinks.lock();
+    with_sinks(|sinks| {
         sinks.serial = serial;
         if let Some(framebuffer) = framebuffer {
             sinks.console.attach(framebuffer);
         }
-    }
+    });
     // This fails only when a logger is already set, and this is the only
     // place that sets one.
     let _ = log::set_logger(&LOGGER);
@@ -59,13 +70,15 @@ pub fn panic(head: fmt::Arguments, body: &dyn fmt::Display) {
         .target(env!("CARGO_CRATE_NAME"))
         .args(head)
         .build();
-    if let Some(mut sinks) = LOGGER.sinks.try_lock() {
-        let Sinks { serial, console } = &mut *sinks;
+    let written = try_with_sinks(|Sinks { serial, console }| {
         if let Some(serial) = serial {
             write_serial(serial, &record, body);
         }
         write_console(console, &record, body);
-    } else if let Some(mut serial) = Arch::panic_serial() {
+    });
+    if written.is_none()
+        && let Some(mut serial) = Arch::panic_serial()
+    {
         write_serial(&mut serial, &record, body);
     }
 }
@@ -76,22 +89,20 @@ pub fn panic(head: fmt::Arguments, body: &dyn fmt::Display) {
 /// all there is.
 #[cfg(feature = "testing")]
 pub fn test_summary(body: &dyn fmt::Display, pass: bool) {
-    let Some(mut sinks) = LOGGER.sinks.try_lock() else {
-        return;
-    };
-    let Sinks { serial, console } = &mut *sinks;
     let (word, color) = if pass {
         ("PASS", Color::Green)
     } else {
         ("FAIL", Color::Red)
     };
-    if let Some(serial) = serial {
-        let _ = writeln!(serial, "{body}{word}");
-    }
-    console.set_color(Color::Gray);
-    let _ = write!(console, "{body}");
-    console.set_color(color);
-    console.write_large(word, 4);
+    try_with_sinks(|Sinks { serial, console }| {
+        if let Some(serial) = serial {
+            let _ = writeln!(serial, "{body}{word}");
+        }
+        console.set_color(Color::Gray);
+        let _ = write!(console, "{body}");
+        console.set_color(color);
+        console.write_large(word, 4);
+    });
 }
 
 // A record that fails to format has nowhere else to be reported, so this
@@ -130,12 +141,12 @@ impl Log for Logger {
     }
 
     fn log(&self, record: &Record) {
-        let mut sinks = self.sinks.lock();
-        let Sinks { serial, console } = &mut *sinks;
-        if let Some(serial) = serial {
-            write_serial(serial, record, &"");
-        }
-        write_console(console, record, &"");
+        with_sinks(|Sinks { serial, console }| {
+            if let Some(serial) = serial {
+                write_serial(serial, record, &"");
+            }
+            write_console(console, record, &"");
+        });
     }
 
     fn flush(&self) {}

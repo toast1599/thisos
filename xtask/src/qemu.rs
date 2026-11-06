@@ -103,7 +103,9 @@ fn qemu(image: &Path, vars: &Path) -> Result<Command> {
     if kvm_usable() {
         qemu.args(["-accel", "kvm", "-cpu", "host"]);
     } else {
-        qemu.args(["-accel", "tcg"]);
+        // The kernel needs x2APIC, which TCG emulates but its default
+        // qemu64 model leaves off.
+        qemu.args(["-accel", "tcg", "-cpu", "qemu64,+x2apic"]);
     }
     Ok(qemu)
 }

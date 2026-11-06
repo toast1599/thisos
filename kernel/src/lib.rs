@@ -20,6 +20,7 @@ mod paging;
 mod panic;
 #[cfg(feature = "testing")]
 pub mod testing;
+mod timer;
 mod trap;
 
 use thisos_hal::{BootInfo, Cpu};
@@ -43,7 +44,8 @@ const BUILD: &str = match option_env!("THISOS_BUILD") {
 };
 
 /// Starts logging to the devices in `boot`, and logs the build ID first.
-/// Every entry point calls this once, first.
+/// Ends by starting the timer, with interrupts on. Every entry point calls
+/// this once, first.
 pub fn init(boot: BootInfo<Arch>) {
     let has_framebuffer = boot.framebuffer.is_some();
     logger::init(boot.serial, boot.framebuffer);
@@ -58,6 +60,7 @@ pub fn init(boot: BootInfo<Arch>) {
     frames::init(boot.memory);
     paging::init();
     heap::init();
+    timer::init();
 }
 
 /// The kernel binary's main function.

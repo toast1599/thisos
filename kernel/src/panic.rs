@@ -33,11 +33,16 @@ fn panic(info: &PanicInfo) -> ! {
 /// whose backtrace would start in the handler, and for a trap on a stack of
 /// its own stop there at once.
 pub fn trap(trap: Trap, frame: &<Arch as Platform>::TrapFrame) -> ! {
+    trapped(format_args!("{trap}"), frame)
+}
+
+/// As [`trap`], with `head` in place of the trap's name.
+pub fn trapped(head: fmt::Arguments, frame: &<Arch as Platform>::TrapFrame) -> ! {
     enter();
     let mut backtrace = Backtrace::new();
     backtrace.end = frame.backtrace(|address| backtrace.frames.push(address));
     logger::panic(
-        format_args!("PANIC: {trap}"),
+        format_args!("PANIC: {head}"),
         &format_args!("{frame}{backtrace}"),
     );
     end()

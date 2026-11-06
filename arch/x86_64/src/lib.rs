@@ -5,6 +5,7 @@
 #![no_std]
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
+mod apic;
 mod backtrace;
 mod framebuffer;
 mod heap;
@@ -12,7 +13,10 @@ mod memory;
 mod once;
 mod paging;
 mod pat;
+mod pic;
+mod pit;
 mod trap;
+mod tsc;
 
 use core::arch::asm;
 use core::fmt;
@@ -24,7 +28,8 @@ use bootloader_api::info::{FrameBuffer, PixelFormat};
 use once::Once;
 use thisos_frames::Frame;
 use thisos_hal::{
-    BacktraceEnd, BootInfo, Cpu, Framebuffer, HeapStats, Platform, Serial, TrapHandler,
+    BacktraceEnd, BootInfo, Cpu, Framebuffer, HeapStats, Platform, Serial, TimerFrequencies,
+    TimerFrequency, TrapHandler,
 };
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
@@ -76,6 +81,14 @@ impl Cpu for X86_64 {
     fn breakpoint() {
         x86_64::instructions::interrupts::int3();
     }
+
+    fn enable_interrupts() {
+        x86_64::instructions::interrupts::enable();
+    }
+
+    fn without_interrupts<R>(f: impl FnOnce() -> R) -> R {
+        x86_64::instructions::interrupts::without_interrupts(f)
+    }
 }
 
 impl Platform for X86_64 {
@@ -97,6 +110,18 @@ impl Platform for X86_64 {
 
     fn heap_stats() -> HeapStats {
         heap::stats()
+    }
+
+    fn start_timer(hz: u32) -> TimerFrequency {
+        apic::start(hz)
+    }
+
+    fn timer_frequencies() -> TimerFrequencies {
+        apic::frequencies()
+    }
+
+    fn legacy_interrupts_masked() -> bool {
+        pic::masked()
     }
 
     fn guard_page() -> u64 {
@@ -206,7 +231,7 @@ pub const BOOTLOADER_CONFIG: BootloaderConfig = {
 /// # Safety
 ///
 /// Call this once, from the entry point, before anything else uses the
-/// descriptor tables or the devices: COM1's I/O ports.
+/// descriptor tables or the devices: COM1's and the legacy PICs' I/O ports.
 ///
 /// `boot` is the one `&'static mut` that CONTRIBUTING allows, because the
 /// loader's entry signature fixes it. It goes no further than this function.
@@ -223,6 +248,11 @@ pub unsafe fn boot_info(
     // segment registers or descriptor tables yet, and nothing has trapped.
     unsafe {
         trap::init(trap);
+    }
+    // SAFETY: The caller runs this once, before anything else, so interrupts
+    // are still off and nothing has used the PICs' ports.
+    unsafe {
+        pic::disable();
     }
     // SAFETY: The caller runs this once, before anything else touches COM1's
     // eight ports, and the port moves into the BootInfo, so it is the only

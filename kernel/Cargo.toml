@@ -24,6 +24,10 @@ harness = false
 name = "stack_overflow"
 harness = false
 
+[[test]]
+name = "watchdog"
+harness = false
+
 [features]
 # The test runner and the test end of the panic handler, for the tests.
 testing = []

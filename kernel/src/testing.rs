@@ -3,11 +3,12 @@
 //! large PASS or FAIL, which is all the laptop shows, then exits QEMU.
 
 use core::fmt;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use spin::Mutex;
 use thisos_hal::Platform;
 
-use crate::{Arch, logger};
+use crate::{Arch, logger, panic, timer};
 
 /// The tests and the index of the one running, or of none once all passed,
 /// for the panic handler's summary. `None` until the tests start.
@@ -17,7 +18,12 @@ static RUN: Mutex<Option<Run>> = Mutex::new(None);
 struct Run {
     tests: &'static [&'static dyn Test],
     current: usize,
+    /// The tick the running test started at.
+    started: u64,
 }
+
+/// How long a test may run, in seconds, before the watchdog stops it.
+static LIMIT: AtomicU64 = AtomicU64::new(10);
 
 /// A test: a `#[test_case]` function, or a function a faulting test passes
 /// to [`run`].
@@ -42,7 +48,11 @@ impl<T: Fn() + Sync> Test for T {
 /// and the panic handler calls [`fail`].
 pub fn run(tests: &'static [&'static dyn Test]) -> ! {
     for (current, test) in tests.iter().enumerate() {
-        *RUN.lock() = Some(Run { tests, current });
+        *RUN.lock() = Some(Run {
+            tests,
+            current,
+            started: timer::ticks(),
+        });
         log::info!("test {}", test.name());
         test.run();
     }
@@ -50,6 +60,7 @@ pub fn run(tests: &'static [&'static dyn Test]) -> ! {
     *RUN.lock() = Some(Run {
         tests,
         current: tests.len(),
+        started: timer::ticks(),
     });
     log::info!("{} tests passed", tests.len());
     finish(true)
@@ -69,6 +80,44 @@ pub fn pass() -> ! {
         run.current += 1;
     }
     finish(true)
+}
+
+/// Sets how long a test may run before the watchdog stops it, in place of
+/// 10 s. For `tests/watchdog.rs`, so that it doesn't wait that long.
+pub fn set_watchdog(seconds: u64) {
+    LIMIT.store(seconds, Ordering::Relaxed);
+}
+
+/// Whether the running test has run past the watchdog's limit. For a test
+/// that passes when the watchdog fires.
+pub fn watchdog_expired() -> bool {
+    overdue().is_some()
+}
+
+/// Stops the running test with a report of where it was, once it has run
+/// past the watchdog's limit. The kernel's trap handler calls this on every
+/// timer interrupt.
+pub(crate) fn watchdog(frame: &<Arch as Platform>::TrapFrame) {
+    if let Some(test) = overdue() {
+        panic::trapped(
+            format_args!(
+                "test {} timed out after {} s",
+                test.name(),
+                LIMIT.load(Ordering::Relaxed)
+            ),
+            frame,
+        );
+    }
+}
+
+/// The running test, if it has run past the watchdog's limit. Through
+/// `try_lock`, because it runs in the timer's handler, which may interrupt
+/// `run` holding the lock; that tick then doesn't check.
+fn overdue() -> Option<&'static dyn Test> {
+    let run = (*RUN.try_lock()?)?;
+    let test = *run.tests.get(run.current)?;
+    let limit = LIMIT.load(Ordering::Relaxed) * u64::from(timer::HZ);
+    (timer::ticks() - run.started >= limit).then_some(test)
 }
 
 fn finish(pass: bool) -> ! {

@@ -16,7 +16,7 @@ use x86_64::structures::idt::{Entry, EntryOptions, InterruptDescriptorTable};
 use x86_64::structures::tss::TaskStateSegment;
 
 use crate::once::Once;
-use crate::{X86_64, backtrace};
+use crate::{X86_64, apic, backtrace};
 
 // Each stub sits 16 bytes after the one before it, so that the IDT can find
 // stub n at thisos_trap_stubs + 16n. The .org fails to assemble if a stub
@@ -26,20 +26,25 @@ use crate::{X86_64, backtrace};
 // pushes the general registers to complete the TrapFrame, calls trap_entry
 // with it, and undoes all of that. The CPU aligns the stack to 16 bytes
 // before it pushes its five words, so after the stub's two and the fifteen
-// registers it is aligned again for the call, as the C ABI wants.
+// registers it is aligned again for the call, as the C ABI wants. The
+// vector is pushed as hand-encoded push imm32, because Intel syntax reads a
+// bare symbol such as .Lvector as a memory operand.
 global_asm!(
     ".pushsection .text.thisos_trap, \"ax\", @progbits",
     ".p2align 4",
     ".globl thisos_trap_stubs",
     ".hidden thisos_trap_stubs",
     "thisos_trap_stubs:",
-    ".irp v, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31",
-    ".if !(\\v == 8 || (\\v >= 10 && \\v <= 14) || \\v == 17 || \\v == 21 || \\v == 29 || \\v == 30)",
+    ".set .Lvector, 0",
+    ".rept 256",
+    ".if !(.Lvector == 8 || (.Lvector >= 10 && .Lvector <= 14) || .Lvector == 17 || .Lvector == 21 || .Lvector == 29 || .Lvector == 30)",
     "push 0",
     ".endif",
-    "push \\v",
+    ".byte 0x68",
+    ".long .Lvector",
     "jmp .Ltrap_common",
-    ".org thisos_trap_stubs + 16 * (\\v + 1), 0xcc",
+    ".org thisos_trap_stubs + 16 * (.Lvector + 1), 0xcc",
+    ".set .Lvector, .Lvector + 1",
     ".endr",
     ".Ltrap_common:",
     "push rax",
@@ -84,7 +89,7 @@ global_asm!(
 );
 
 unsafe extern "C" {
-    static thisos_trap_stubs: [u8; 32 * 16];
+    static thisos_trap_stubs: [u8; 256 * 16];
 }
 
 /// The registers when the CPU trapped, as the stubs and the CPU push them.
@@ -203,10 +208,15 @@ extern "C" fn trap_entry(frame: &mut TrapFrame) {
                 access,
             }
         }
-        vector => Trap::Other {
-            // The stubs push only vectors below 32.
+        // The stubs push only vectors below 256, so the low byte is all of
+        // it.
+        vector @ 0..32 => Trap::Other {
             vector: vector.to_le_bytes()[0],
             error: frame.error,
+        },
+        apic::TIMER_VECTOR => Trap::Timer,
+        vector => Trap::Stray {
+            vector: vector.to_le_bytes()[0],
         },
     };
     // init stores the handler before it loads the IDT, the only way here.
@@ -214,8 +224,10 @@ extern "C" fn trap_entry(frame: &mut TrapFrame) {
         X86_64::halt();
     };
     handler(trap, frame);
-    if frame.vector == DOUBLE_FAULT || frame.vector == MACHINE_CHECK {
-        X86_64::halt();
+    match frame.vector {
+        DOUBLE_FAULT | MACHINE_CHECK => X86_64::halt(),
+        apic::TIMER_VECTOR => apic::eoi(),
+        _ => {}
     }
 }
 
@@ -319,6 +331,9 @@ pub unsafe fn init(handler: TrapHandler<X86_64>) {
     install(&mut idt.hv_injection_exception, 28);
     install(&mut idt.vmm_communication_exception, 29);
     install(&mut idt.security_exception, 30);
+    for vector in 32..=u8::MAX {
+        install(&mut idt[vector], vector);
+    }
     IDT.init(idt).load();
 }
 

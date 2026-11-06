@@ -113,6 +113,14 @@ pub trait Cpu {
     /// Traps with [`Trap::Breakpoint`], and returns once the trap handler
     /// does.
     fn breakpoint();
+
+    /// Lets interrupts reach the trap handler. They are off until this
+    /// runs.
+    fn enable_interrupts();
+
+    /// Runs `f` with interrupts off, then turns them back on if they were
+    /// on before.
+    fn without_interrupts<R>(f: impl FnOnce() -> R) -> R;
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
@@ -176,6 +184,21 @@ pub trait Platform {
     /// handlers never call it.
     fn heap_stats() -> HeapStats;
 
+    /// Starts the timer, which traps with [`Trap::Timer`] `hz` times a
+    /// second once interrupts are on, and returns how fast it counts and
+    /// how that was found. Call it once. Panics if the CPU lacks the timer
+    /// or nothing gives its frequency.
+    fn start_timer(hz: u32) -> TimerFrequency;
+
+    /// The timer's frequency from each source the architecture has: the
+    /// one the CPU reports, and one measured again against another clock,
+    /// with the timer stopped meanwhile. For tests.
+    fn timer_frequencies() -> TimerFrequencies;
+
+    /// Whether every line of the legacy interrupt controller is masked, or
+    /// `true` where there is none. For tests.
+    fn legacy_interrupts_masked() -> bool;
+
     /// Ends a QEMU test run through QEMU's debug exit device, reporting
     /// whether the tests passed. It touches the device only when it runs
     /// under a hypervisor; on real hardware it only halts.
@@ -223,6 +246,26 @@ pub struct HeapStats {
     /// Bytes [`PageTables::grow_heap`] has given the heap, less what
     /// alignment cost.
     pub claimed: usize,
+}
+
+/// How fast the timer counts, as [`Platform::start_timer`] found it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TimerFrequency {
+    /// Counts per second.
+    pub hz: u64,
+    /// Where the frequency came from, such as "CPUID leaf 0x15".
+    pub source: &'static str,
+}
+
+/// The timer's frequency from each source, as
+/// [`Platform::timer_frequencies`] finds it, or `None` from a source that
+/// gave none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TimerFrequencies {
+    /// What the CPU reports.
+    pub reported: Option<u64>,
+    /// What a measurement against another clock gives, and which clock.
+    pub measured: Option<TimerFrequency>,
 }
 
 /// Why [`PageTables::map`] failed. It hands the frame back.
@@ -283,6 +326,15 @@ pub enum Trap {
     /// A fault while the CPU was starting the handler of another, such as
     /// a page fault on a full stack.
     DoubleFault,
+    /// A tick of the timer [`Platform::start_timer`] started.
+    Timer,
+    /// An interrupt the kernel never asked for, by the architecture's
+    /// vector number: a stray legacy line, a spurious interrupt or any
+    /// other.
+    Stray {
+        /// The vector number.
+        vector: u8,
+    },
     /// Any other exception, by the architecture's vector number and the
     /// error code it pushed, or 0 when it pushes none.
     Other {
@@ -301,6 +353,8 @@ impl fmt::Display for Trap {
                 write!(f, "page fault on {access} at {address:#x}")
             }
             Trap::DoubleFault => write!(f, "double fault"),
+            Trap::Timer => write!(f, "timer interrupt"),
+            Trap::Stray { vector } => write!(f, "stray interrupt on vector {vector:#x}"),
             Trap::Other { vector, error } => {
                 write!(f, "exception {vector}, error code {error:#x}")
             }
