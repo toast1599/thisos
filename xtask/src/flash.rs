@@ -161,7 +161,8 @@ fn pick<'a>(disks: &'a [Disk], device: Option<&str>) -> Result<(&'a Disk, &'a st
 }
 
 /// Reads the build ID from the first FAT partition on `device`, mounting it
-/// for the read when it isn't mounted already.
+/// read-only for the read when it isn't mounted already: the user hasn't
+/// yet said this is the disk to erase.
 fn stick_build(device: &str) -> Result<Option<String>> {
     let rows = lsblk(&["-o", "PATH,TYPE,FSTYPE", device])?;
     let Some(partition) = rows
@@ -174,7 +175,7 @@ fn stick_build(device: &str) -> Result<Option<String>> {
     let mut dir = mountpoint(path)?;
     let mounted_here = dir.is_empty();
     if mounted_here {
-        output(Command::new("udisksctl").args(["mount", "-b", path]))?;
+        output(Command::new("udisksctl").args(["mount", "-o", "ro", "-b", path]))?;
         dir = mountpoint(path)?;
         ensure!(
             !dir.is_empty(),
