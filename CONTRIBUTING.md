@@ -124,7 +124,7 @@ xtask uses clippy's defaults, plus its own `[lints.clippy]` table that denies th
 
 ## Real hardware
 
-Anything that passes in QEMU must also pass on the test laptop described in `docs/design.md`. Laptop runs happen at every milestone and after any change to arch or driver code. A milestone isn't done until it passes there.
+Anything that passes in QEMU must also pass on the test laptop described in `docs/design.md`. Laptop runs happen at every milestone and after any change to arch or driver code. A milestone isn't done until it passes there. Each run's result goes in a comment on its work item's issue: the build ID the screen shows first, PASS or FAIL with the test that failed, and anything the run showed about the hardware.
 
 `cargo xtask flash` writes the image to a USB stick, erasing it. It takes `--release`, `--tests` and `--device PATH`. It runs as you, and runs `dd` and `sgdisk` through `sudo`. It:
 
