@@ -27,7 +27,7 @@ pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
 mod tests {
     use thisos_hal::{Cpu, Platform, Probe, Trap};
 
-    use crate::{Arch, testing};
+    use crate::{Arch, testing, timer};
 
     // Passes by returning: with no IDT entry the CPU triple-faults, and a
     // handler that panics fails the run.
@@ -43,9 +43,14 @@ mod tests {
 
     // The CPU can't push the page fault's frame onto a full stack, so the
     // overflow reaches the handler as a double fault, on a stack of its own.
-    // The tests after this one show the kernel carries on after it.
+    // The tests after this one show the kernel carries on after it. The
+    // probe runs with interrupts off, and the timer ticking after it shows
+    // they came back on, and that no timer handler was abandoned before its
+    // EOI.
     #[test_case]
     fn a_stack_overflow_double_faults() {
         testing::expect_trap(|trap| trap == Trap::DoubleFault, Probe::OverflowStack);
+        let start = timer::ticks();
+        testing::spin_until("a tick after the overflow", || timer::ticks() > start);
     }
 }

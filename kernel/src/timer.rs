@@ -42,16 +42,12 @@ pub fn tick() {
 
 #[cfg(test)]
 mod tests {
-    use core::hint::spin_loop;
     use core::sync::atomic::{AtomicBool, Ordering};
 
     use thisos_hal::Platform;
 
     use crate::Arch;
-
-    /// Far more spins than 100 ms takes under TCG, and far fewer than the
-    /// watchdog's 10 s on real hardware.
-    const MAX_SPINS: u64 = 1 << 30;
+    use crate::testing::spin_until;
 
     static LOG_NEXT: AtomicBool = AtomicBool::new(false);
     static LOGGED: AtomicBool = AtomicBool::new(false);
@@ -61,17 +57,6 @@ mod tests {
             log::info!("logged from the timer interrupt at tick {}", super::ticks());
             LOGGED.store(true, Ordering::Relaxed);
         }
-    }
-
-    /// Spins until `done` holds, and panics after [`MAX_SPINS`].
-    fn spin_until(what: &str, done: impl Fn() -> bool) {
-        for _ in 0..MAX_SPINS {
-            if done() {
-                return;
-            }
-            spin_loop();
-        }
-        panic!("{what} didn't happen within {MAX_SPINS} spins");
     }
 
     #[test_case]

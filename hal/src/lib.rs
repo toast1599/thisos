@@ -123,8 +123,8 @@ pub trait Cpu {
     fn without_interrupts<R>(f: impl FnOnce() -> R) -> R;
 
     /// Runs `probe`, which never returns by itself, and returns once a trap
-    /// handler calls [`TrapFrame::abandon`] on a trap it caused. Panics if
-    /// a catch is running already. For tests.
+    /// handler calls [`TrapFrame::abandon`]. Panics if a catch is running
+    /// already. For tests.
     fn catch(probe: Probe);
 }
 
@@ -138,7 +138,9 @@ pub enum Probe {
     ReadGuardPage,
     /// Pushes onto the kernel stack until it runs into the guard page. The
     /// CPU can't push the page fault's frame there, so it traps with
-    /// [`Trap::DoubleFault`].
+    /// [`Trap::DoubleFault`]. It runs with interrupts off, so that no
+    /// interrupt handler runs on the stack it fills and overflows there
+    /// itself.
     OverflowStack,
     /// Spins forever with interrupts as they were.
     Spin,
@@ -424,6 +426,7 @@ pub trait TrapFrame: fmt::Display {
     /// Gives up the probe the running [`Cpu::catch`] runs: once the handler
     /// returns, the CPU carries on where that catch returns, even after a
     /// [`Trap::DoubleFault`]. Returns `false`, and changes nothing, when no
-    /// catch is running.
+    /// catch is running. It can't tell a trap the probe caused from one in
+    /// a handler that interrupted the probe, and gives up that handler too.
     fn abandon(&mut self) -> bool;
 }

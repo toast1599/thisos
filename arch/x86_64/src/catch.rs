@@ -9,6 +9,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 
 use thisos_hal::{Platform, Probe, TrapFrame as _};
 use x86_64::VirtAddr;
+use x86_64::instructions::interrupts;
 
 use crate::X86_64;
 use crate::trap::TrapFrame;
@@ -77,19 +78,29 @@ pub fn catch(probe: Probe) {
         Probe::OverflowStack => 1,
         Probe::Spin => 2,
     };
-    // SAFETY: thisos_catch saves and restores every callee-saved register,
-    // and returns, through thisos_catch_landing, to the instruction after
-    // the call with the stack pointer it was called with. The probes touch
-    // only rax and the stack below the saved registers: the guard page,
-    // which the loader leaves unmapped, so the read only traps, and stack
-    // that no frame above uses. The C ABI clobbers cover rax and the flags.
-    unsafe {
-        asm!(
-            "call thisos_catch",
-            in("rdi") number,
-            in("rsi") X86_64::guard_page(),
-            clobber_abi("C"),
-        );
+    let run = || {
+        // SAFETY: thisos_catch saves and restores every callee-saved
+        // register, and returns, through thisos_catch_landing, to the
+        // instruction after the call with the stack pointer it was called
+        // with. The probes touch only rax and the stack below the saved
+        // registers: the guard page, which the loader leaves unmapped, so the
+        // read only traps, and stack that no frame above uses. The C ABI
+        // clobbers cover rax and the flags.
+        unsafe {
+            asm!(
+                "call thisos_catch",
+                in("rdi") number,
+                in("rsi") X86_64::guard_page(),
+                clobber_abi("C"),
+            );
+        }
+    };
+    match probe {
+        // Interrupt handlers run on the stack the probe fills, so one that
+        // came near the guard page would overflow there itself, and abandon
+        // would give up the handler along with the probe.
+        Probe::OverflowStack => interrupts::without_interrupts(run),
+        Probe::ReadGuardPage | Probe::Spin => run(),
     }
 }
 

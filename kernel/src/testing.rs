@@ -3,6 +3,7 @@
 //! laptop shows, then exits QEMU.
 
 use core::fmt::{self, Write};
+use core::hint::spin_loop;
 
 use spin::Mutex;
 use thisos_hal::{Cpu, Platform, Probe, Trap, TrapFrame};
@@ -182,9 +183,24 @@ fn contains(message: &dyn fmt::Display, part: &str) -> bool {
             .any(|window| window == part.as_bytes())
 }
 
+/// Far more spins than 100 ms takes under TCG, and far fewer than the
+/// watchdog's 10 s on real hardware.
+const MAX_SPINS: u64 = 1 << 30;
+
+/// Spins until `done` holds, and panics after [`MAX_SPINS`].
+pub fn spin_until(what: &str, done: impl Fn() -> bool) {
+    for _ in 0..MAX_SPINS {
+        if done() {
+            return;
+        }
+        spin_loop();
+    }
+    panic!("{what} didn't happen within {MAX_SPINS} spins");
+}
+
 /// Runs `probe`, and returns once it traps with a trap `expected` accepts.
 /// Any other trap fails the test as usual, and a probe that never traps
-/// runs into the watchdog.
+/// runs into the watchdog, except one that runs with interrupts off.
 pub fn expect_trap(expected: fn(Trap) -> bool, probe: Probe) {
     catch(Expectation::Trap(expected), probe);
 }
