@@ -1,7 +1,6 @@
 //! The ThisOS kernel. It is generic: it reaches the hardware only through
 //! `thisos-hal`'s traits, and never names an architecture's types. The
-//! kernel binary and the faulting tests in `tests/` are entry points into
-//! this library.
+//! kernel binary and the library's test binary are its entry points.
 
 #![no_std]
 #![cfg_attr(test, no_main)]
@@ -18,8 +17,8 @@ mod heap;
 mod logger;
 mod paging;
 mod panic;
-#[cfg(feature = "testing")]
-pub mod testing;
+#[cfg(test)]
+mod testing;
 mod timer;
 mod trap;
 
@@ -46,7 +45,7 @@ const BUILD: &str = match option_env!("THISOS_BUILD") {
 /// Starts logging to the devices in `boot`, and logs the build ID first.
 /// Ends by starting the timer, with interrupts on. Every entry point calls
 /// this once, first.
-pub fn init(boot: BootInfo<Arch>) {
+fn init(boot: BootInfo<Arch>) {
     let has_framebuffer = boot.framebuffer.is_some();
     logger::init(boot.serial, boot.framebuffer);
     log::info!("ThisOS {} {BUILD}", env!("CARGO_PKG_VERSION"));

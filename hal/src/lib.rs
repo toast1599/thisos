@@ -121,6 +121,27 @@ pub trait Cpu {
     /// Runs `f` with interrupts off, then turns them back on if they were
     /// on before.
     fn without_interrupts<R>(f: impl FnOnce() -> R) -> R;
+
+    /// Runs `probe`, which never returns by itself, and returns once a trap
+    /// handler calls [`TrapFrame::abandon`] on a trap it caused. Panics if
+    /// a catch is running already. For tests.
+    fn catch(probe: Probe);
+}
+
+/// Code the architecture runs under [`Cpu::catch`] to make a trap. Each is
+/// the architecture's own, written so that abandoning it skips nothing
+/// with a destructor, which abandoning a Rust closure can't promise.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Probe {
+    /// Reads the first byte of [`Platform::guard_page`] again and again,
+    /// which traps with [`Trap::PageFault`].
+    ReadGuardPage,
+    /// Pushes onto the kernel stack until it runs into the guard page. The
+    /// CPU can't push the page fault's frame there, so it traps with
+    /// [`Trap::DoubleFault`].
+    OverflowStack,
+    /// Spins forever with interrupts as they were.
+    Spin,
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
@@ -168,11 +189,6 @@ pub trait Platform {
     /// The address of the unmapped page right below the kernel stack, which
     /// a stack overflow runs into.
     fn guard_page() -> u64;
-
-    /// Reads the first byte of [`Platform::guard_page`], which traps with
-    /// [`Trap::PageFault`]. A trap handler that returns makes it fault
-    /// again. For tests.
-    fn read_guard_page() -> !;
 
     /// A second handle to the serial port, for a panic that finds the first
     /// one locked. It returns `Some` at most once, and `None` when no device
@@ -308,7 +324,8 @@ pub trait Serial: fmt::Write + Send {}
 /// The kernel's trap handler, which the architecture calls on every trap.
 /// When it returns, the trapped code resumes, and a fault runs the faulting
 /// instruction again; after a [`Trap::DoubleFault`] or a trap that can't
-/// resume, the architecture halts instead.
+/// resume, the architecture halts instead, unless the handler called
+/// [`TrapFrame::abandon`] after a double fault.
 pub type TrapHandler<P> = fn(Trap, &mut <P as Platform>::TrapFrame);
 
 /// Why the CPU trapped.
@@ -396,4 +413,10 @@ pub trait TrapFrame: fmt::Display {
     /// Calls `f` with the link address of the trapped instruction, then
     /// walks the trapped code's frame pointers as [`Cpu::backtrace`] does.
     fn backtrace(&self, f: impl FnMut(u64)) -> BacktraceEnd;
+
+    /// Gives up the probe the running [`Cpu::catch`] runs: once the handler
+    /// returns, the CPU carries on where that catch returns, even after a
+    /// [`Trap::DoubleFault`]. Returns `false`, and changes nothing, when no
+    /// catch is running.
+    fn abandon(&mut self) -> bool;
 }

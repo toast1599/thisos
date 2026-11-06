@@ -119,7 +119,6 @@ dependencies = [
  "thisos-console",
  "thisos-frames",
  "thisos-hal",
- "thisos-kernel",
 ]
 
 [[package]]

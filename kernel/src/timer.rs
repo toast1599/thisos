@@ -25,7 +25,7 @@ pub fn init() {
 /// The ticks since [`init`]. Ticks that come while interrupts are off,
 /// as they are while a record is logged, count as one.
 #[cfg_attr(
-    not(feature = "testing"),
+    not(test),
     expect(dead_code, reason = "only the test watchdog reads the ticks so far")
 )]
 pub fn ticks() -> u64 {

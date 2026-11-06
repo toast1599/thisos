@@ -1,12 +1,11 @@
-//! The test runner for the kernel's `#[test_case]` functions, and for the
-//! faulting tests in `tests/`. It ends on a summary of the results with a
-//! large PASS or FAIL, which is all the laptop shows, then exits QEMU.
+//! The test runner for the kernel's `#[test_case]` functions. It ends on a
+//! summary of the results with a large PASS or FAIL, which is all the
+//! laptop shows, then exits QEMU.
 
 use core::fmt;
-use core::sync::atomic::{AtomicU64, Ordering};
 
 use spin::Mutex;
-use thisos_hal::Platform;
+use thisos_hal::{Cpu, Platform, Probe, Trap, TrapFrame};
 
 use crate::{Arch, logger, panic, timer};
 
@@ -23,10 +22,20 @@ struct Run {
 }
 
 /// How long a test may run, in seconds, before the watchdog stops it.
-static LIMIT: AtomicU64 = AtomicU64::new(10);
+const LIMIT: u64 = 10;
 
-/// A test: a `#[test_case]` function, or a function a faulting test passes
-/// to [`run`].
+/// What ends the probe the running test runs, set while it runs.
+static EXPECTED: Mutex<Option<Expectation>> = Mutex::new(None);
+
+#[derive(Clone, Copy)]
+enum Expectation {
+    /// A trap the function accepts.
+    Trap(fn(Trap) -> bool),
+    /// The first timer interrupt at or after this tick.
+    Timeout(u64),
+}
+
+/// A `#[test_case]` function.
 pub trait Test: Sync {
     /// The function's path.
     fn name(&self) -> &'static str;
@@ -71,27 +80,39 @@ pub fn fail() -> ! {
     finish(false)
 }
 
-/// Ends the run with the running test passed and the rest not run. A test
-/// that passes by faulting calls this from its trap handler.
-pub fn pass() -> ! {
-    if let Some(mut run) = RUN.try_lock()
-        && let Some(run) = &mut *run
-    {
-        run.current += 1;
-    }
-    finish(true)
+/// Runs `probe`, and returns once it traps with a trap `expected` accepts.
+/// Any other trap fails the test as usual, and a probe that never traps
+/// runs into the watchdog.
+pub fn expect_trap(expected: fn(Trap) -> bool, probe: Probe) {
+    catch(Expectation::Trap(expected), probe);
 }
 
-/// Sets how long a test may run before the watchdog stops it, in place of
-/// 10 s. For `tests/watchdog.rs`, so that it doesn't wait that long.
-pub fn set_watchdog(seconds: u64) {
-    LIMIT.store(seconds, Ordering::Relaxed);
+/// Runs `probe`, and returns once it has run for `seconds`, as the watchdog
+/// would stop a hung test.
+pub fn expect_timeout(seconds: u64, probe: Probe) {
+    let at = timer::ticks() + seconds * u64::from(timer::HZ);
+    catch(Expectation::Timeout(at), probe);
 }
 
-/// Whether the running test has run past the watchdog's limit. For a test
-/// that passes when the watchdog fires.
-pub fn watchdog_expired() -> bool {
-    overdue().is_some()
+fn catch(expectation: Expectation, probe: Probe) {
+    *EXPECTED.lock() = Some(expectation);
+    Arch::catch(probe);
+    *EXPECTED.lock() = None;
+}
+
+/// Abandons the running probe when `trap` is what its test expects, and
+/// returns whether it did. The kernel's trap handler calls this first.
+/// Through `try_lock`, because a timer interrupt can come while `catch`
+/// holds the lock; no probe runs then.
+pub(crate) fn caught(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) -> bool {
+    let Some(expected) = EXPECTED.try_lock().and_then(|expected| *expected) else {
+        return false;
+    };
+    let matches = match expected {
+        Expectation::Trap(accepts) => accepts(trap),
+        Expectation::Timeout(at) => trap == Trap::Timer && timer::ticks() >= at,
+    };
+    matches && frame.abandon()
 }
 
 /// Stops the running test with a report of where it was, once it has run
@@ -100,11 +121,7 @@ pub fn watchdog_expired() -> bool {
 pub(crate) fn watchdog(frame: &<Arch as Platform>::TrapFrame) {
     if let Some(test) = overdue() {
         panic::trapped(
-            format_args!(
-                "test {} timed out after {} s",
-                test.name(),
-                LIMIT.load(Ordering::Relaxed)
-            ),
+            format_args!("test {} timed out after {LIMIT} s", test.name()),
             frame,
         );
     }
@@ -116,7 +133,7 @@ pub(crate) fn watchdog(frame: &<Arch as Platform>::TrapFrame) {
 fn overdue() -> Option<&'static dyn Test> {
     let run = (*RUN.try_lock()?)?;
     let test = *run.tests.get(run.current)?;
-    let limit = LIMIT.load(Ordering::Relaxed) * u64::from(timer::HZ);
+    let limit = LIMIT * u64::from(timer::HZ);
     (timer::ticks() - run.started >= limit).then_some(test)
 }
 
@@ -158,5 +175,17 @@ impl fmt::Display for Summary {
             writeln!(f, "  panic after the last test")?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use thisos_hal::Probe;
+
+    // The watchdog's own report ends the run, so this stands in a 1 s
+    // timeout for its 10 s one and checks the timer stops the probe.
+    #[test_case]
+    fn the_watchdog_stops_a_hung_test() {
+        super::expect_timeout(1, Probe::Spin);
     }
 }

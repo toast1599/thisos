@@ -81,9 +81,10 @@ mod tests {
     use core::ptr;
     use core::sync::atomic::AtomicU64;
 
-    use thisos_hal::MapErrorKind;
+    use thisos_hal::{Access, MapErrorKind, Probe, Trap};
 
     use super::*;
+    use crate::testing;
 
     static PROBE: AtomicU64 = AtomicU64::new(0);
 
@@ -117,6 +118,19 @@ mod tests {
     #[test_case]
     fn the_guard_page_is_unmapped() {
         assert_eq!(translate(Arch::guard_page()), None);
+    }
+
+    #[test_case]
+    fn reading_the_guard_page_faults() {
+        testing::expect_trap(
+            |trap| {
+                trap == Trap::PageFault {
+                    address: Arch::guard_page(),
+                    access: Access::Read,
+                }
+            },
+            Probe::ReadGuardPage,
+        );
     }
 
     #[test_case]

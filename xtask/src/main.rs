@@ -66,25 +66,21 @@ enum Command {
     QemuTest { elf: PathBuf },
 }
 
-/// The tests an image boots in place of the kernel.
+/// Whether an image boots the kernel's tests in place of the kernel.
 #[derive(Args)]
 struct Tests {
-    /// Build the kernel library's tests, which don't fault, into
-    /// target/thisos-tests.img instead.
+    /// Build the kernel library's test binary, which holds every kernel
+    /// test, into target/thisos-tests.img instead.
     #[arg(long)]
     tests: bool,
-    /// Build the faulting test in kernel/tests/<NAME>.rs into
-    /// target/thisos-test-<NAME>.img instead.
-    #[arg(long, value_name = "NAME", conflicts_with = "tests")]
-    test: Option<String>,
 }
 
 impl Tests {
-    fn kernel(&self) -> Kernel<'_> {
-        match (&self.test, self.tests) {
-            (Some(name), _) => Kernel::Test(name),
-            (None, true) => Kernel::Tests,
-            (None, false) => Kernel::Main,
+    fn kernel(&self) -> Kernel {
+        if self.tests {
+            Kernel::Tests
+        } else {
+            Kernel::Main
         }
     }
 }

@@ -16,7 +16,7 @@ use x86_64::structures::idt::{Entry, EntryOptions, InterruptDescriptorTable};
 use x86_64::structures::tss::TaskStateSegment;
 
 use crate::once::Once;
-use crate::{X86_64, apic, backtrace};
+use crate::{X86_64, apic, backtrace, catch};
 
 // Each stub sits 16 bytes after the one before it, so that the IDT can find
 // stub n at thisos_trap_stubs + 16n. The .org fails to assemble if a stub
@@ -133,6 +133,19 @@ impl thisos_hal::TrapFrame for TrapFrame {
         f(backtrace::link_address(self.rip));
         backtrace::walk(self.rbp, f)
     }
+
+    fn abandon(&mut self) -> bool {
+        catch::abandon(self)
+    }
+}
+
+impl TrapFrame {
+    /// Makes `iretq` continue at `rip` with stack pointer `rsp`, in place of
+    /// the trapped code.
+    pub(crate) fn resume_at(&mut self, rip: u64, rsp: u64) {
+        self.rip = rip;
+        self.rsp = rsp;
+    }
 }
 
 /// The exceptions' mnemonics, by vector, with "" for the reserved ones.
@@ -225,7 +238,10 @@ extern "C" fn trap_entry(frame: &mut TrapFrame) {
     };
     handler(trap, frame);
     match frame.vector {
-        DOUBLE_FAULT | MACHINE_CHECK => X86_64::halt(),
+        // A double fault the handler abandoned resumes in the catch, from
+        // registers it saved itself, not from the state the fault left.
+        DOUBLE_FAULT if !catch::abandoned(frame) => X86_64::halt(),
+        MACHINE_CHECK => X86_64::halt(),
         apic::TIMER_VECTOR => apic::eoi(),
         _ => {}
     }

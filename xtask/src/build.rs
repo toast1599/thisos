@@ -14,14 +14,11 @@ pub const BUILD_FILE: &str = "thisos-build.txt";
 
 /// What an image boots.
 #[derive(Clone, Copy)]
-pub enum Kernel<'a> {
+pub enum Kernel {
     /// The kernel itself.
     Main,
-    /// The kernel library's test binary, which holds the tests that don't
-    /// fault.
+    /// The kernel library's test binary, which holds every kernel test.
     Tests,
-    /// The faulting test in `kernel/tests/<name>.rs`.
-    Test(&'a str),
 }
 
 /// A disk image `build` wrote.
@@ -62,12 +59,8 @@ pub fn build(release: bool, kernel: Kernel) -> Result<Image> {
             )
         }
         Kernel::Tests => (
-            test_elf(release, &build, &["--lib"])?,
+            test_elf(release, &build)?,
             root().join("target/thisos-tests.img"),
-        ),
-        Kernel::Test(name) => (
-            test_elf(release, &build, &["--test", name])?,
-            root().join(format!("target/thisos-test-{name}.img")),
         ),
     };
 
@@ -78,8 +71,8 @@ pub fn build(release: bool, kernel: Kernel) -> Result<Image> {
     Ok(Image { path, id })
 }
 
-/// `THISOS_BUILD` for a kernel build: `<commit> <profile>[ tests| test
-/// <name>] <time>`. The kernel logs "ThisOS <version> " followed by this.
+/// `THISOS_BUILD` for a kernel build: `<commit> <profile>[ tests] <time>`.
+/// The kernel logs "ThisOS <version> " followed by this.
 pub fn build_env(release: bool, kernel: Kernel) -> Result<String> {
     let profile = if release { "release" } else { "debug" };
     let commit = output(
@@ -89,22 +82,19 @@ pub fn build_env(release: bool, kernel: Kernel) -> Result<String> {
     )?;
     let time = output(Command::new("date").args(["-u", "+%Y-%m-%dT%H:%MZ"]))?;
     let kind = match kernel {
-        Kernel::Main => String::new(),
-        Kernel::Tests => " tests".into(),
-        Kernel::Test(name) => format!(" test {name}"),
+        Kernel::Main => "",
+        Kernel::Tests => " tests",
     };
     Ok(format!("{} {profile}{kind} {}", commit.trim(), time.trim()))
 }
 
-/// Builds the one kernel test binary that `select` names, such as `--lib`,
-/// and returns its path. Cargo names it only in its JSON messages. An
-/// unknown `--test` name fails in cargo, which lists the valid ones.
-fn test_elf(release: bool, build: &str, select: &[&str]) -> Result<PathBuf> {
+/// Builds the kernel library's test binary and returns its path. Cargo
+/// names it only in its JSON messages.
+fn test_elf(release: bool, build: &str) -> Result<PathBuf> {
     let mut cargo_test = cargo();
     cargo_test
         .env("THISOS_BUILD", build)
-        .args(["test", "-p", "thisos-kernel", "--no-run"])
-        .args(select)
+        .args(["test", "-p", "thisos-kernel", "--no-run", "--lib"])
         .arg("--message-format=json-render-diagnostics")
         .stderr(Stdio::inherit());
     if release {
@@ -124,6 +114,6 @@ fn test_elf(release: bool, build: &str, select: &[&str]) -> Result<PathBuf> {
     }
     match <[PathBuf; 1]>::try_from(elfs) {
         Ok([elf]) => Ok(elf),
-        Err(elfs) => bail!("expected one kernel test binary for {select:?}, cargo built {elfs:?}"),
+        Err(elfs) => bail!("expected one kernel test binary, cargo built {elfs:?}"),
     }
 }

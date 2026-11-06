@@ -7,6 +7,7 @@
 
 mod apic;
 mod backtrace;
+mod catch;
 mod framebuffer;
 mod heap;
 mod memory;
@@ -28,7 +29,7 @@ use bootloader_api::info::{FrameBuffer, PixelFormat};
 use once::Once;
 use thisos_frames::Frame;
 use thisos_hal::{
-    BacktraceEnd, BootInfo, Cpu, Framebuffer, HeapStats, Platform, Serial, TimerFrequencies,
+    BacktraceEnd, BootInfo, Cpu, Framebuffer, HeapStats, Platform, Probe, Serial, TimerFrequencies,
     TimerFrequency, TrapHandler,
 };
 use uart_16550::backend::PioBackend;
@@ -89,6 +90,10 @@ impl Cpu for X86_64 {
     fn without_interrupts<R>(f: impl FnOnce() -> R) -> R {
         x86_64::instructions::interrupts::without_interrupts(f)
     }
+
+    fn catch(probe: Probe) {
+        catch::catch(probe);
+    }
 }
 
 impl Platform for X86_64 {
@@ -126,24 +131,6 @@ impl Platform for X86_64 {
 
     fn guard_page() -> u64 {
         backtrace::stack_bottom() - 4096
-    }
-
-    fn read_guard_page() -> ! {
-        let page = Self::guard_page();
-        loop {
-            // SAFETY: The loader maps nothing at the guard page, so the load
-            // reads nothing and only traps. It is assembly rather than a
-            // volatile read, because Rust makes reading unmapped memory
-            // undefined behavior even where the hardware only traps.
-            unsafe {
-                asm!(
-                    "mov {}, byte ptr [{}]",
-                    out(reg_byte) _,
-                    in(reg) page,
-                    options(nostack, readonly, preserves_flags),
-                );
-            }
-        }
     }
 
     fn panic_serial() -> Option<Com1> {

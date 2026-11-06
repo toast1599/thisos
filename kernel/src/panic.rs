@@ -57,14 +57,14 @@ fn enter() {
 }
 
 fn end() -> ! {
-    #[cfg(feature = "testing")]
+    #[cfg(test)]
     crate::testing::fail();
-    #[cfg(not(feature = "testing"))]
+    #[cfg(not(test))]
     Arch::halt();
 }
 
 fn stop() -> ! {
-    if cfg!(feature = "testing") {
+    if cfg!(test) {
         Arch::exit_qemu(false);
     }
     Arch::halt()

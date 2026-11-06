@@ -87,7 +87,7 @@ pub fn panic(head: fmt::Arguments, body: &dyn fmt::Display) {
 /// times the font's size on the console, plain on serial. When the lock is
 /// held, a panic came from inside the logger, and its report on serial is
 /// all there is.
-#[cfg(feature = "testing")]
+#[cfg(test)]
 pub fn test_summary(body: &dyn fmt::Display, pass: bool) {
     let (word, color) = if pass {
         ("PASS", Color::Green)
