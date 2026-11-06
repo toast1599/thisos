@@ -196,6 +196,13 @@ pub trait Platform {
     /// its bytes with this one's.
     fn panic_serial() -> Option<Self::Serial>;
 
+    /// A second handle to the framebuffer in [`BootInfo`], for a panic that
+    /// can't use the first: the first is locked, or not handed to the
+    /// logger yet. It returns `Some` at most once, and `None` when there is
+    /// no framebuffer. Anything still drawing through the first mixes its
+    /// pixels with this one's.
+    fn panic_framebuffer() -> Option<Framebuffer<Self::Pixels>>;
+
     /// The kernel heap's counters. It takes the heap's lock, so trap
     /// handlers never call it.
     fn heap_stats() -> HeapStats;

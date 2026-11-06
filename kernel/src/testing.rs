@@ -2,7 +2,7 @@
 //! summary of the results with a large PASS or FAIL, which is all the
 //! laptop shows, then exits QEMU.
 
-use core::fmt;
+use core::fmt::{self, Write};
 
 use spin::Mutex;
 use thisos_hal::{Cpu, Platform, Probe, Trap, TrapFrame};
@@ -17,6 +17,8 @@ static RUN: Mutex<Option<Run>> = Mutex::new(None);
 struct Run {
     tests: &'static [&'static dyn Test],
     current: usize,
+    /// The test that expects a panic, which runs after all the others.
+    last: Option<usize>,
     /// The tick the running test started at.
     started: u64,
 }
@@ -35,12 +37,43 @@ enum Expectation {
     Timeout(u64),
 }
 
-/// A `#[test_case]` function.
+/// A `#[test_case]` function, or an [`ExpectPanic`].
 pub trait Test: Sync {
     /// The function's path.
     fn name(&self) -> &'static str;
     /// Calls the function.
     fn run(&self);
+    /// What the message of the panic the test passes by contains, for a
+    /// test that passes by panicking.
+    fn expected_panic(&self) -> Option<&'static str> {
+        None
+    }
+}
+
+/// A `#[test_case]` const for a test that passes by panicking with a
+/// message that contains `message`. A panic ends the run, so the runner
+/// runs it after every other test, and allows only one.
+pub struct ExpectPanic {
+    /// The test's path, as a function's would read.
+    pub name: &'static str,
+    /// The test.
+    pub run: fn(),
+    /// Part of the panic message it expects.
+    pub message: &'static str,
+}
+
+impl Test for ExpectPanic {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn run(&self) {
+        (self.run)();
+    }
+
+    fn expected_panic(&self) -> Option<&'static str> {
+        Some(self.message)
+    }
 }
 
 impl<T: Fn() + Sync> Test for T {
@@ -53,22 +86,40 @@ impl<T: Fn() + Sync> Test for T {
     }
 }
 
-/// Runs the tests in order, then reports success. A failing test panics,
-/// and the panic handler calls [`fail`].
+/// Runs the tests in order, the one that expects a panic last, then reports
+/// success. A failing test panics, and the panic handler calls
+/// [`panicked`].
 pub fn run(tests: &'static [&'static dyn Test]) -> ! {
-    for (current, test) in tests.iter().enumerate() {
+    let mut panics = (0..tests.len()).filter(|&i| {
+        tests
+            .get(i)
+            .is_some_and(|test| test.expected_panic().is_some())
+    });
+    let last = panics.next();
+    assert!(
+        panics.next().is_none(),
+        "at most one test may expect a panic, since a panic ends the run"
+    );
+    let order = (0..tests.len()).filter(|&i| Some(i) != last).chain(last);
+    for (current, test) in order.filter_map(|i| Some((i, *tests.get(i)?))) {
         *RUN.lock() = Some(Run {
             tests,
             current,
+            last,
             started: timer::ticks(),
         });
         log::info!("test {}", test.name());
         test.run();
+        assert!(
+            Some(current) != last,
+            "the test returned without the panic it expects"
+        );
     }
     // Before the log line, so that a panic in it doesn't blame the last test.
     *RUN.lock() = Some(Run {
         tests,
         current: tests.len(),
+        last,
         started: timer::ticks(),
     });
     log::info!("{} tests passed", tests.len());
@@ -78,6 +129,57 @@ pub fn run(tests: &'static [&'static dyn Test]) -> ! {
 /// Names the failed test after its panic report, then reports failure.
 pub fn fail() -> ! {
     finish(false)
+}
+
+/// Ends the run after a panic's report: with success when the running test
+/// expects a panic whose message contains what it names, which also makes
+/// it the last, and with failure otherwise.
+pub fn panicked(message: &dyn fmt::Display) -> ! {
+    let passed = RUN.try_lock().is_some_and(|mut run| {
+        let Some(run) = run.as_mut() else {
+            return false;
+        };
+        let expected = run
+            .tests
+            .get(run.current)
+            .and_then(|test| test.expected_panic());
+        let passed = expected.is_some_and(|expected| contains(message, expected));
+        if passed {
+            run.current = run.tests.len();
+        }
+        passed
+    });
+    finish(passed)
+}
+
+/// Whether `message`, as far as its first 256 bytes, contains `part`.
+/// Without the heap, which a panic may have left locked.
+fn contains(message: &dyn fmt::Display, part: &str) -> bool {
+    struct Prefix {
+        bytes: [u8; 256],
+        len: usize,
+    }
+    impl Write for Prefix {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            for &byte in s.as_bytes() {
+                if let Some(slot) = self.bytes.get_mut(self.len) {
+                    *slot = byte;
+                    self.len += 1;
+                }
+            }
+            Ok(())
+        }
+    }
+    let mut prefix = Prefix {
+        bytes: [0; 256],
+        len: 0,
+    };
+    let _ = write!(prefix, "{message}");
+    let written = prefix.bytes.get(..prefix.len).unwrap_or_default();
+    part.is_empty()
+        || written
+            .windows(part.len())
+            .any(|window| window == part.as_bytes())
 }
 
 /// Runs `probe`, and returns once it traps with a trap `expected` accepts.
@@ -164,17 +266,28 @@ impl fmt::Display for Summary {
             return writeln!(f, "  panic before the tests started");
         };
         for (i, test) in run.tests.iter().enumerate() {
-            let result = match i.cmp(&run.current) {
-                core::cmp::Ordering::Less => "ok",
-                core::cmp::Ordering::Equal => "FAILED",
-                core::cmp::Ordering::Greater => "not run",
-            };
-            writeln!(f, "  {result} {}", test.name())?;
+            writeln!(f, "  {} {}", run.result(i), test.name())?;
         }
         if !self.pass && run.current == run.tests.len() {
             writeln!(f, "  panic after the last test")?;
         }
         Ok(())
+    }
+}
+
+impl Run {
+    /// What the summary says of test `i`. The tests ran in order, except the
+    /// one that expects a panic, which ran last.
+    fn result(&self, i: usize) -> &'static str {
+        if self.current == self.tests.len() {
+            "ok"
+        } else if i == self.current {
+            "FAILED"
+        } else if Some(self.current) == self.last || (i < self.current && Some(i) != self.last) {
+            "ok"
+        } else {
+            "not run"
+        }
     }
 }
 

@@ -133,6 +133,10 @@ impl Platform for X86_64 {
         backtrace::stack_bottom() - 4096
     }
 
+    fn panic_framebuffer() -> Option<Framebuffer<FramebufferPixels>> {
+        PANIC_FRAMEBUFFER.try_lock()?.take()
+    }
+
     fn panic_serial() -> Option<Com1> {
         static TAKEN: AtomicBool = AtomicBool::new(false);
         if TAKEN.swap(true, Ordering::Relaxed) {
@@ -231,6 +235,9 @@ pub unsafe fn boot_info(
         boot.kernel_stack_bottom..boot.kernel_stack_bottom + boot.kernel_stack_len,
         boot.kernel_image_offset,
     );
+    // Before the IDT, so that a panic from the first trap on finds the
+    // panic path's handle to the screen.
+    let framebuffer = boot.framebuffer.take().and_then(framebuffer);
     // SAFETY: The caller runs this once, first, so nothing has used the
     // segment registers or descriptor tables yet, and nothing has trapped.
     unsafe {
@@ -247,7 +254,6 @@ pub unsafe fn boot_info(
     let tty = unsafe { Uart16550Tty::new_port(COM1_PORT, COM1_CONFIG) };
     // No device answering is normal: the laptop has no serial port.
     let serial = tty.ok().map(Com1);
-    let framebuffer = boot.framebuffer.take().and_then(framebuffer);
     let phys_offset = boot.physical_memory_offset.into_option().map(VirtAddr::new);
     if let Some(offset) = phys_offset {
         PHYS_OFFSET.init(offset);
@@ -289,15 +295,22 @@ fn framebuffer(mut fb: FrameBuffer) -> Option<Framebuffer<FramebufferPixels>> {
     // boot_info, which runs once, takes this FrameBuffer from the loader's
     // BootInfo and hands it to nothing else, and no kernel code reads or
     // writes the framebuffer's frames through the physical-memory mapping.
-    let pixels = unsafe { FramebufferPixels::new(fb.buffer_mut().as_mut_ptr_range())? };
-    Some(Framebuffer {
+    let [pixels, panic_pixels] =
+        unsafe { FramebufferPixels::new(fb.buffer_mut().as_mut_ptr_range())? };
+    let framebuffer = |pixels| Framebuffer {
         pixels,
         width: info.width,
         height: info.height,
         stride: info.stride,
         format,
-    })
+    };
+    *PANIC_FRAMEBUFFER.lock() = Some(framebuffer(panic_pixels));
+    Some(framebuffer(pixels))
 }
+
+/// The second framebuffer handle, until a panic takes it.
+static PANIC_FRAMEBUFFER: spin::Mutex<Option<Framebuffer<FramebufferPixels>>> =
+    spin::Mutex::new(None);
 
 /// Defines the kernel's entry point: `entry!(kmain, trap)` makes the boot
 /// loader call `kmain(thisos_hal::BootInfo<X86_64>) -> !`, after making

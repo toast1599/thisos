@@ -25,7 +25,10 @@ fn panic(info: &PanicInfo) -> ! {
         ),
         None => logger::panic(format_args!("PANIC: {}", info.message()), &backtrace),
     }
-    end()
+    #[cfg(test)]
+    crate::testing::panicked(&info.message());
+    #[cfg(not(test))]
+    Arch::halt();
 }
 
 /// Reports `trap` as a panic, with the registers in `frame` and a backtrace

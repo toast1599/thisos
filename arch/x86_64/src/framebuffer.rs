@@ -10,36 +10,41 @@ use x86_64::VirtAddr;
 
 /// The framebuffer's pixels. Only `new` makes one, so `base` is aligned
 /// and the `len` pixels from it are the framebuffer, mapped for the rest of
-/// the kernel's life and reached through nothing else. It points at pixel
-/// pairs, which have the strictest alignment of the stores.
+/// the kernel's life and reached through nothing but the two handles `new`
+/// makes. It points at pixel pairs, which have the strictest alignment of
+/// the stores.
 #[derive(Debug)]
 pub struct FramebufferPixels {
     base: *mut u64,
     len: usize,
 }
 
-// SAFETY: The pixels are reached only through this value, so moving it to
-// another thread moves the only access with it.
+// SAFETY: The pixels are reached only through this value and the one other
+// handle `new` makes, through volatile stores alone, so moving either to
+// another thread moves no reference with it.
 unsafe impl Send for FramebufferPixels {}
 
 impl FramebufferPixels {
-    /// The pixels in `range`, or `None` when it doesn't start 8-byte
-    /// aligned, which pair stores need.
+    /// Two handles to the pixels in `range`: one for the kernel's console
+    /// and one for a panic that can't use it. `None` when the range doesn't
+    /// start 8-byte aligned, which pair stores need. Both only store, so
+    /// two of them interleave pixels but never break each other's stores.
     ///
     /// # Safety
     ///
     /// `range` is the framebuffer, mapped for the rest of the kernel's life,
     /// and nothing else in the kernel reads or writes it, through this
     /// mapping or any other. Call this at most once.
-    pub unsafe fn new(range: Range<*mut u8>) -> Option<Self> {
+    pub unsafe fn new(range: Range<*mut u8>) -> Option<[Self; 2]> {
         if range.start.addr() % 8 != 0 {
             return None;
         }
         let len = range.end.addr().checked_sub(range.start.addr())? / 4;
-        Some(Self {
+        let pixels = || Self {
             base: range.start.cast(),
             len,
-        })
+        };
+        Some([pixels(), pixels()])
     }
 
     /// The pixels' virtual addresses.
