@@ -58,6 +58,7 @@ fn init(boot: BootInfo<Arch>) {
     }
     frames::init(boot.memory);
     paging::init();
+    trap::init();
     heap::init();
     timer::init();
 }

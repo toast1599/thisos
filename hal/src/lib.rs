@@ -196,6 +196,16 @@ pub trait Platform {
     /// they were taken already. Panics if `alloc` runs out of frames.
     fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<Self::PageTables>;
 
+    /// Moves the stacks the CPU switches to for some traps, which start out
+    /// with nothing unmapped below them, onto stacks `stack` maps. For each
+    /// it calls `stack(size)`, which returns the address just past a stack
+    /// of `size` bytes with an unmapped page below it. Call it once, after
+    /// [`Platform::take_page_tables`].
+    fn move_trap_stacks(stack: &mut dyn FnMut(usize) -> u64);
+
+    /// The stacks the CPU switches to for some traps. For tests.
+    fn trap_stacks() -> impl Iterator<Item = Range<u64>>;
+
     /// The address of the unmapped page right below the kernel stack, which
     /// a stack overflow runs into.
     fn guard_page() -> u64;

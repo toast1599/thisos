@@ -15,7 +15,15 @@ use crate::{Arch, frames};
 
 type PageTables = <Arch as Platform>::PageTables;
 
-static PAGE_TABLES: Mutex<Option<PageTables>> = Mutex::new(None);
+static PAGE_TABLES: Mutex<Option<Kernel>> = Mutex::new(None);
+
+/// The kernel's page tables, and what of kernel space is taken.
+struct Kernel {
+    tables: PageTables,
+    /// The lowest kernel-space address no stack has taken, which
+    /// [`map_stack`] moves up.
+    stacks: u64,
+}
 
 /// Switches to page tables of the kernel's own. `kernel::init` calls this
 /// once, after `frames::init`.
@@ -29,15 +37,18 @@ pub fn init() {
         space.start,
         space.end
     );
-    *PAGE_TABLES.lock() = Some(tables);
+    *PAGE_TABLES.lock() = Some(Kernel {
+        tables,
+        stacks: space.start,
+    });
 }
 
-fn with<T>(f: impl FnOnce(&mut PageTables) -> T) -> T {
-    let mut tables = PAGE_TABLES.lock();
-    let Some(tables) = tables.as_mut() else {
+fn with<T>(f: impl FnOnce(&mut Kernel) -> T) -> T {
+    let mut kernel = PAGE_TABLES.lock();
+    let Some(kernel) = kernel.as_mut() else {
         panic!("paging::init didn't run");
     };
-    f(tables)
+    f(kernel)
 }
 
 /// The virtual addresses [`map`] maps into.
@@ -49,7 +60,7 @@ fn with<T>(f: impl FnOnce(&mut PageTables) -> T) -> T {
     )
 )]
 pub fn kernel_space() -> Range<u64> {
-    with(|tables| tables.kernel_space())
+    with(|kernel| kernel.tables.kernel_space())
 }
 
 /// Maps the page at `page` to `frame` for good, no-execute, and writable if
@@ -62,24 +73,47 @@ pub fn kernel_space() -> Range<u64> {
     )
 )]
 pub fn map(page: u64, frame: Frame, writable: bool) -> Result<(), MapError> {
-    with(|tables| tables.map(page, frame, writable, &mut frames::alloc))
+    with(|kernel| kernel.tables.map(page, frame, writable, &mut frames::alloc))
+}
+
+/// Maps a stack of `size` bytes, rounded up to whole pages, in kernel space
+/// for good, writable and no-execute, with an unmapped page below it that
+/// an overflow runs into. Returns its addresses. Panics if kernel space or
+/// the frames run out.
+pub fn map_stack(size: usize) -> Range<u64> {
+    let Ok(size) = u64::try_from(size.next_multiple_of(4096)) else {
+        panic!("a stack of {size:#x} bytes doesn't fit a u64");
+    };
+    with(|kernel| {
+        let stack = kernel.stacks + 4096..kernel.stacks + 4096 + size;
+        for page in stack.clone().step_by(4096) {
+            let Some(frame) = frames::alloc() else {
+                panic!("no free frame for a stack");
+            };
+            if let Err(e) = kernel.tables.map(page, frame, true, &mut frames::alloc) {
+                panic!("mapping a stack page at {page:#x} failed: {:?}", e.kind);
+            }
+        }
+        kernel.stacks = stack.end;
+        stack
+    })
 }
 
 /// Maps `frame` at the end of the heap and adds it to the heap.
 pub fn grow_heap(frame: Frame) -> Result<(), MapError> {
-    with(|tables| tables.grow_heap(frame, &mut frames::alloc))
+    with(|kernel| kernel.tables.grow_heap(frame, &mut frames::alloc))
 }
 
 /// Where `addr` is mapped, or `None` if it isn't.
 #[cfg(test)]
 pub fn translate(addr: u64) -> Option<Translation> {
-    with(|tables| tables.translate(addr))
+    with(|kernel| kernel.tables.translate(addr))
 }
 
 /// Whether anything is mapped in the lower half.
 #[cfg(test)]
 fn lower_half_mapped() -> bool {
-    with(|tables| tables.lower_half_mapped())
+    with(|kernel| kernel.tables.lower_half_mapped())
 }
 
 #[cfg(test)]

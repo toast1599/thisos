@@ -2,9 +2,12 @@
 //! on, the IDT, and the stubs that save the registers in a [`TrapFrame`]
 //! and call the kernel's handler.
 
-use core::arch::global_asm;
+use core::arch::{asm, global_asm};
 use core::cell::UnsafeCell;
 use core::fmt;
+use core::mem::offset_of;
+use core::ops::Range;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use thisos_hal::{Access, BacktraceEnd, Cpu, Trap, TrapHandler};
 use x86_64::VirtAddr;
@@ -257,11 +260,16 @@ static HANDLER: Once<TrapHandler<X86_64>> = Once::new();
 const DOUBLE_FAULT_IST: u16 = 0;
 const NMI_IST: u16 = 1;
 const MACHINE_CHECK_IST: u16 = 2;
+const IST_SLOTS: [u16; 3] = [DOUBLE_FAULT_IST, NMI_IST, MACHINE_CHECK_IST];
 
-/// A stack the CPU switches to for one vector. Rust code never reads or
-/// writes its bytes; the CPU does, through the TSS.
+/// The size of each IST stack, the boot stacks' and the guarded ones'.
+const IST_STACK_SIZE: usize = 20 * 1024;
+
+/// A stack the CPU switches to for one vector until `move_stacks` replaces
+/// it, with nothing unmapped below it. Rust code never reads or writes its
+/// bytes; the CPU does, through the TSS.
 #[repr(align(16))]
-struct Stack(UnsafeCell<[u8; 20 * 1024]>);
+struct Stack(UnsafeCell<[u8; IST_STACK_SIZE]>);
 
 // SAFETY: Rust code only takes the stack's address, which is the same on
 // every thread. The CPU uses the bytes for the one vector whose IST slot
@@ -271,14 +279,57 @@ unsafe impl Sync for Stack {}
 impl Stack {
     /// The address just past the stack, where a stack that grows down
     /// starts.
-    fn top(&self) -> VirtAddr {
-        VirtAddr::from_ptr(self.0.get().wrapping_add(1))
+    fn top(&self) -> u64 {
+        VirtAddr::from_ptr(self.0.get().wrapping_add(1)).as_u64()
     }
 }
 
-static IST_STACKS: [Stack; 3] = [const { Stack(UnsafeCell::new([0; 20 * 1024])) }; 3];
+static IST_STACKS: [Stack; 3] = [const { Stack(UnsafeCell::new([0; IST_STACK_SIZE])) }; 3];
 
-static TSS: Once<TaskStateSegment> = Once::new();
+/// The TSS, 4 bytes into an 8-aligned block. The x86_64 crate's TSS is
+/// packed, with RSP0 and the IST slots 4 bytes past an 8-byte boundary, so
+/// here each of them is 8-aligned, and one atomic store writes it whole:
+/// an NMI never finds half of a stack address in a slot.
+#[repr(C, align(8))]
+struct Tss {
+    _align: u32,
+    tss: UnsafeCell<TaskStateSegment>,
+}
+
+// SAFETY: Rust code reaches the TSS's fields only through `slot`, whose
+// atomics make every read and write whole. The CPU reads the TSS when it
+// takes a trap, and never writes a 64-bit one.
+unsafe impl Sync for Tss {}
+
+impl Tss {
+    /// IST slot `index`, as an atomic.
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "Tss's layout puts every IST slot on an 8-byte boundary, which the assert below checks"
+    )]
+    fn slot(&self, index: u16) -> &AtomicU64 {
+        let offset = offset_of!(TaskStateSegment, interrupt_stack_table) + 8 * usize::from(index);
+        let slot = self
+            .tss
+            .get()
+            .cast::<u8>()
+            .wrapping_add(offset)
+            .cast::<u64>();
+        // SAFETY: slot is one of the TSS's IST slots, inside the static TSS,
+        // so it lives as long as the reference returned. It is 8-aligned,
+        // as Tss's layout makes every slot. Rust code reaches it only
+        // through atomics, since Tss hands out no other reference.
+        unsafe { AtomicU64::from_ptr(slot) }
+    }
+}
+
+const _: () =
+    assert!((offset_of!(Tss, tss) + offset_of!(TaskStateSegment, interrupt_stack_table)) % 8 == 0);
+
+static TSS: Tss = Tss {
+    _align: 0,
+    tss: UnsafeCell::new(TaskStateSegment::new()),
+};
 static GDT: Once<GlobalDescriptorTable> = Once::new();
 static IDT: Once<InterruptDescriptorTable> = Once::new();
 
@@ -292,17 +343,24 @@ static IDT: Once<InterruptDescriptorTable> = Once::new();
 pub unsafe fn init(handler: TrapHandler<X86_64>) {
     HANDLER.init(handler);
 
-    let mut tss = TaskStateSegment::new();
-    for slot in [DOUBLE_FAULT_IST, NMI_IST, MACHINE_CHECK_IST] {
-        let slot = usize::from(slot);
-        tss.interrupt_stack_table[slot] = IST_STACKS[slot].top();
+    for slot in IST_SLOTS {
+        TSS.slot(slot)
+            .store(IST_STACKS[usize::from(slot)].top(), Ordering::Relaxed);
     }
-    // The CPU never writes a 64-bit TSS.
-    let tss = TSS.init(tss);
 
+    // SYSCALL loads SS from the selector after the kernel's code, and
+    // SYSRET loads SS and CS from the two after the kernel's data, in that
+    // order. There is no 32-bit user code, so no slot for it.
     let mut gdt = GlobalDescriptorTable::new();
     let code = gdt.append(Descriptor::kernel_code_segment());
-    let tss_selector = gdt.append(Descriptor::tss_segment(tss));
+    gdt.append(Descriptor::kernel_data_segment());
+    gdt.append(Descriptor::user_data_segment());
+    gdt.append(Descriptor::user_code_segment());
+    // SAFETY: TSS is a static, so the descriptor's address stays valid for
+    // as long as the GDT, also a static, is loaded. The safe tss_segment
+    // would need a &'static TaskStateSegment, which the atomic writes
+    // through Tss::slot would alias.
+    let tss_selector = gdt.append(unsafe { Descriptor::tss_segment_unchecked(TSS.tss.get()) });
     // The CPU sets the TSS descriptor's busy bit when load_tss runs, but the
     // x86_64 crate keeps each entry in an atomic, so that write doesn't
     // break the shared reference's rules.
@@ -319,6 +377,21 @@ pub unsafe fn init(handler: TrapHandler<X86_64>) {
     // reloads SS from the trap frame.
     unsafe {
         SS::set_reg(SegmentSelector::NULL);
+    }
+    // The loader's selectors in these index this GDT too, and name whatever
+    // its layout puts there.
+    // SAFETY: 64-bit mode ignores DS and ES, and nothing in the kernel
+    // addresses memory through FS or GS, so a null selector in each changes
+    // nothing the kernel relies on.
+    unsafe {
+        asm!(
+            "mov ds, {0:e}",
+            "mov es, {0:e}",
+            "mov fs, {0:e}",
+            "mov gs, {0:e}",
+            in(reg) 0u32,
+            options(nostack, preserves_flags),
+        );
     }
     // SAFETY: tss_selector selects the TSS descriptor of the GDT just
     // loaded, for a TSS that lives for the rest of the kernel's life.
@@ -372,9 +445,33 @@ fn install<F>(entry: &mut Entry<F>, vector: u8) -> &mut EntryOptions {
 fn install_on<F>(entry: &mut Entry<F>, vector: u8, ist: u16) {
     let options = install(entry, vector);
     // SAFETY: ist is one of the slots init fills with a stack of its own in
-    // IST_STACKS, and init passes each to one vector only, so no two traps
-    // share one.
+    // IST_STACKS, which move_stacks replaces with another of its own, and
+    // init passes each to one vector only, so no two traps share one.
     unsafe {
         options.set_stack_index(ist);
     }
+}
+
+/// Moves each IST slot to a stack `stack` maps: `stack(size)` returns the
+/// address just past a stack of `size` bytes with an unmapped page below
+/// it.
+pub fn move_stacks(stack: &mut dyn FnMut(usize) -> u64) {
+    for slot in IST_SLOTS {
+        let top = stack(IST_STACK_SIZE);
+        // The CPU reads the slot on this core, which sees its own stores in
+        // order, and the boot stack it held stays valid, so a trap meanwhile
+        // takes either stack.
+        TSS.slot(slot).store(top, Ordering::Relaxed);
+    }
+}
+
+/// The stacks the IST slots hold.
+pub fn stacks() -> impl Iterator<Item = Range<u64>> {
+    let Ok(size) = u64::try_from(IST_STACK_SIZE) else {
+        panic!("{IST_STACK_SIZE:#x} doesn't fit a u64");
+    };
+    IST_SLOTS.into_iter().map(move |slot| {
+        let top = TSS.slot(slot).load(Ordering::Relaxed);
+        top - size..top
+    })
 }

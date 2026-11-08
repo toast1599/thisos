@@ -2,7 +2,19 @@
 
 use thisos_hal::{Platform, Trap};
 
-use crate::{Arch, panic, timer};
+use crate::{Arch, paging, panic, timer};
+
+/// Moves the stacks the CPU takes double faults, NMIs and machine checks
+/// on to stacks in kernel space with an unmapped page below each.
+/// `kernel::init` calls this once, after `paging::init`.
+pub fn init() {
+    let mut count = 0;
+    Arch::move_trap_stacks(&mut |size| {
+        count += 1;
+        paging::map_stack(size).end
+    });
+    log::info!("trap stacks: {count}, each with a guard page");
+}
 
 /// The kernel's trap handler, which every entry point passes to `entry!`.
 /// A breakpoint returns, and a timer interrupt counts a tick. Until the
@@ -27,7 +39,7 @@ pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
 mod tests {
     use thisos_hal::{Cpu, Platform, Probe, Trap};
 
-    use crate::{Arch, testing, timer};
+    use crate::{Arch, paging, testing, timer};
 
     // Passes by returning: with no IDT entry the CPU triple-faults, and a
     // handler that panics fails the run.
@@ -39,6 +51,23 @@ mod tests {
     #[test_case]
     fn legacy_interrupts_stay_masked() {
         assert!(Arch::legacy_interrupts_masked());
+    }
+
+    #[test_case]
+    fn trap_stacks_have_guard_pages() {
+        let mut count = 0;
+        for stack in Arch::trap_stacks() {
+            count += 1;
+            let guard = stack.start - 4096;
+            assert_eq!(paging::translate(guard), None, "guard page {guard:#x}");
+            for page in stack.step_by(4096) {
+                let Some(t) = paging::translate(page) else {
+                    panic!("trap stack page {page:#x} isn't mapped");
+                };
+                assert!(t.writable && !t.executable, "{page:#x}: {t:?}");
+            }
+        }
+        assert!(count > 0, "no trap stacks");
     }
 
     // The CPU can't push the page fault's frame onto a full stack, so the

@@ -21,6 +21,7 @@ mod tsc;
 
 use core::arch::asm;
 use core::fmt;
+use core::ops::Range;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use bootloader_api::BootloaderConfig;
@@ -111,6 +112,14 @@ impl Platform for X86_64 {
         // memory, and loaded the kernel's own descriptor tables before the
         // kernel could call this.
         unsafe { paging::take(offset, alloc) }
+    }
+
+    fn move_trap_stacks(stack: &mut dyn FnMut(usize) -> u64) {
+        trap::move_stacks(stack);
+    }
+
+    fn trap_stacks() -> impl Iterator<Item = Range<u64>> {
+        trap::stacks()
     }
 
     fn heap_stats() -> HeapStats {
