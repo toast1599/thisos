@@ -33,6 +33,13 @@ pub type Arch = thisos_arch_x86_64::X86_64;
 #[cfg(target_arch = "x86_64")]
 pub use thisos_arch_x86_64::entry;
 
+/// The architecture the kernel is built for.
+#[cfg(target_arch = "aarch64")]
+pub type Arch = thisos_arch_aarch64::Aarch64;
+
+#[cfg(target_arch = "aarch64")]
+pub use thisos_arch_aarch64::entry;
+
 #[cfg(test)]
 entry!(test_kmain, trap);
 

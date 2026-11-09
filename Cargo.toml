@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["kernel", "hal", "arch/x86_64", "lib/console", "lib/frames"]
+members = ["kernel", "hal", "arch/x86_64", "arch/aarch64", "lib/console", "lib/frames"]
 
 [workspace.package]
 version = "0.0.0"
@@ -12,6 +12,7 @@ publish = false
 [workspace.dependencies]
 thisos-hal = { path = "hal" }
 thisos-arch-x86_64 = { path = "arch/x86_64" }
+thisos-arch-aarch64 = { path = "arch/aarch64" }
 thisos-console = { path = "lib/console" }
 thisos-frames = { path = "lib/frames" }
 

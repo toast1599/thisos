@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Result, ensure};
 
-use crate::build::{self, Kernel};
+use crate::build::{self, Arch, Kernel};
 use crate::cmd::{cargo, exec, on_host, output};
 use crate::{banned, test};
 
@@ -64,7 +64,7 @@ pub fn ci() -> Result<()> {
         "xtask/Cargo.toml",
     ])))?;
 
-    test::test()?;
+    test::test(Arch::X86_64)?;
     // cargo miri takes host-tuple as a target name and fails to build a
     // sysroot for it, so it gets the host's actual tuple.
     let host = output(Command::new("rustc").args(["--print", "host-tuple"]))?;
@@ -87,6 +87,6 @@ pub fn ci() -> Result<()> {
         ]))?;
     }
 
-    build::build(false, Kernel::Main)?;
+    build::build(Arch::X86_64, false, Kernel::Main)?;
     Ok(())
 }

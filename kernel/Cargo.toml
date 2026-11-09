@@ -25,5 +25,8 @@ thisos-hal.workspace = true
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 thisos-arch-x86_64.workspace = true
 
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+thisos-arch-aarch64.workspace = true
+
 [lints]
 workspace = true

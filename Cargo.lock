@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "aarch64-cpu"
+version = "11.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44171e22925ec72b63d86747bc3655c7849a5b8d865c980222128839f45ac034"
+dependencies = [
+ "tock-registers",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -31,6 +40,12 @@ name = "const_fn"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413d67b29ef1021b4d60f4aa1e925ca031751e213832b4b1d588fae623c05c60"
+
+[[package]]
+name = "limine"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29363c0f37e66e18575fadf7141c56ee7ea04ae5fecbeb25eff303f77af203a9"
 
 [[package]]
 name = "lock_api"
@@ -79,6 +94,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "thisos-arch-aarch64"
+version = "0.0.0"
+dependencies = [
+ "aarch64-cpu",
+ "limine",
+ "spin",
+ "talc",
+ "thisos-frames",
+ "thisos-hal",
+]
+
+[[package]]
 name = "thisos-arch-x86_64"
 version = "0.0.0"
 dependencies = [
@@ -115,11 +142,18 @@ version = "0.0.0"
 dependencies = [
  "log",
  "spin",
+ "thisos-arch-aarch64",
  "thisos-arch-x86_64",
  "thisos-console",
  "thisos-frames",
  "thisos-hal",
 ]
+
+[[package]]
+name = "tock-registers"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d2d250f87fb3fb6f225c907cf54381509f47b40b74b1d1f12d2dccbc915bdfe"
 
 [[package]]
 name = "uart_16550"

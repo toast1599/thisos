@@ -979,9 +979,15 @@ dependencies = [
  "anyhow",
  "bootloader",
  "clap",
+ "fatfs",
  "fontdue",
+ "gpt",
+ "lzma-rs",
  "ovmf-prebuilt",
  "serde_json",
+ "sha2",
+ "tar",
+ "ureq",
 ]
 
 [[package]]

@@ -1,16 +1,68 @@
 //! Building the kernel and its disk image.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
 use crate::cmd::{cargo, exec, output};
-use crate::root;
+use crate::{limine, root};
 
 /// The file in the image's FAT partition that holds the build ID.
 pub const BUILD_FILE: &str = "thisos-build.txt";
+
+/// The architecture a kernel is built for.
+#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Arch {
+    #[value(name = "x86_64")]
+    X86_64,
+    Aarch64,
+}
+
+impl Arch {
+    /// Its name on xtask's command line.
+    pub fn name(self) -> &'static str {
+        match self {
+            Arch::X86_64 => "x86_64",
+            Arch::Aarch64 => "aarch64",
+        }
+    }
+
+    /// The Rust target the kernel builds for.
+    pub fn target(self) -> &'static str {
+        match self {
+            Arch::X86_64 => "x86_64-unknown-none",
+            Arch::Aarch64 => "aarch64-unknown-none-softfloat",
+        }
+    }
+
+    /// Writes the disk image that boots the kernel ELF at `elf` to `path`,
+    /// with `id` in [`BUILD_FILE`] when it is `Some`.
+    pub fn write_image(self, elf: &Path, id: Option<&str>, path: &Path) -> Result<()> {
+        match self {
+            Arch::X86_64 => {
+                let mut builder = bootloader::DiskImageBuilder::new(elf.to_path_buf());
+                if let Some(id) = id {
+                    builder.set_file_contents(BUILD_FILE.into(), format!("{id}\n").into_bytes());
+                }
+                builder
+                    .create_uefi_image(path)
+                    .with_context(|| format!("writing {}", path.display()))
+            }
+            Arch::Aarch64 => limine::write_image(elf, id, path),
+        }
+    }
+
+    /// What follows `thisos` in the names of its files in `target/`:
+    /// nothing for x86_64, which came first.
+    pub fn suffix(self) -> &'static str {
+        match self {
+            Arch::X86_64 => "",
+            Arch::Aarch64 => "-aarch64",
+        }
+    }
+}
 
 /// What an image boots.
 #[derive(Clone, Copy)]
@@ -29,7 +81,7 @@ pub struct Image {
 }
 
 /// Builds `kernel` and writes its UEFI disk image.
-pub fn build(release: bool, kernel: Kernel) -> Result<Image> {
+pub fn build(arch: Arch, release: bool, kernel: Kernel) -> Result<Image> {
     let profile = if release { "release" } else { "debug" };
     let pkgid = output(cargo().args(["pkgid", "-p", "thisos-kernel"]))?;
     let version = pkgid
@@ -43,31 +95,33 @@ pub fn build(release: bool, kernel: Kernel) -> Result<Image> {
     let (elf, path) = match kernel {
         Kernel::Main => {
             let mut cargo_build = cargo();
-            cargo_build
-                .env("THISOS_BUILD", &build)
-                .args(["build", "-p", "thisos-kernel"]);
+            cargo_build.env("THISOS_BUILD", &build).args([
+                "build",
+                "-p",
+                "thisos-kernel",
+                "--target",
+                arch.target(),
+            ]);
             if release {
                 cargo_build.arg("--release");
             }
             exec(&mut cargo_build)?;
             (
                 root()
-                    .join("target/x86_64-unknown-none")
+                    .join("target")
+                    .join(arch.target())
                     .join(profile)
                     .join("thisos-kernel"),
-                root().join("target/thisos.img"),
+                root().join(format!("target/thisos{}.img", arch.suffix())),
             )
         }
         Kernel::Tests => (
-            test_elf(release, &build)?,
-            root().join("target/thisos-tests.img"),
+            test_elf(arch, release, &build)?,
+            root().join(format!("target/thisos{}-tests.img", arch.suffix())),
         ),
     };
 
-    bootloader::DiskImageBuilder::new(elf)
-        .set_file_contents(BUILD_FILE.into(), format!("{id}\n").into_bytes())
-        .create_uefi_image(&path)
-        .with_context(|| format!("writing {}", path.display()))?;
+    arch.write_image(&elf, Some(&id), &path)?;
     Ok(Image { path, id })
 }
 
@@ -90,11 +144,12 @@ pub fn build_env(release: bool, kernel: Kernel) -> Result<String> {
 
 /// Builds the kernel library's test binary and returns its path. Cargo
 /// names it only in its JSON messages.
-fn test_elf(release: bool, build: &str) -> Result<PathBuf> {
+fn test_elf(arch: Arch, release: bool, build: &str) -> Result<PathBuf> {
     let mut cargo_test = cargo();
     cargo_test
         .env("THISOS_BUILD", build)
         .args(["test", "-p", "thisos-kernel", "--no-run", "--lib"])
+        .args(["--target", arch.target()])
         .arg("--message-format=json-render-diagnostics")
         .stderr(Stdio::inherit());
     if release {

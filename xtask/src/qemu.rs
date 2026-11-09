@@ -7,9 +7,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use ovmf_prebuilt::{Arch, FileType, Prebuilt, Source};
+use ovmf_prebuilt::{FileType, Prebuilt, Source};
 
-use crate::build::{self, Kernel};
+use crate::build::{self, Arch, Kernel};
 use crate::cmd::exec;
 use crate::root;
 
@@ -19,15 +19,17 @@ const OVMF: Source = Source::EDK2_STABLE202605_R1;
 /// runner boots OVMF in well under this.
 const TEST_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// The status QEMU exits with when the kernel reports success through
-/// isa-debug-exit: (0x10 << 1) | 1.
+/// The status QEMU exits with when the kernel reports success: through
+/// isa-debug-exit, (0x10 << 1) | 1, and through semihosting the same number,
+/// so that one constant covers both.
 const TEST_SUCCESS: i32 = 33;
 
 /// Builds, then boots the image in QEMU with a window and serial on the
 /// terminal.
-pub fn run(release: bool, gdb: bool) -> Result<()> {
-    let image = build::build(release, Kernel::Main)?;
-    let mut qemu = qemu(&image.path, &root().join("target/ovmf-vars.fd"))?;
+pub fn run(arch: Arch, release: bool, gdb: bool) -> Result<()> {
+    let image = build::build(arch, release, Kernel::Main)?;
+    let vars = root().join(format!("target/ovmf-vars{}.fd", arch.suffix()));
+    let mut qemu = qemu(arch, &image.path, &vars)?;
     if gdb {
         qemu.args(["-s", "-S"]);
     }
@@ -36,19 +38,24 @@ pub fn run(release: bool, gdb: bool) -> Result<()> {
 
 /// Boots a kernel test ELF headless, as cargo's runner, and fails unless the
 /// kernel reports success before the timeout.
-pub fn test(elf: &Path) -> Result<()> {
+pub fn test(arch: Arch, elf: &Path) -> Result<()> {
     let image = with_extension(elf, "img");
-    bootloader::DiskImageBuilder::new(elf.to_path_buf())
-        .create_uefi_image(&image)
-        .with_context(|| format!("writing {}", image.display()))?;
+    arch.write_image(elf, None, &image)?;
 
-    let mut qemu = qemu(&image, &with_extension(elf, "vars.fd"))?;
-    qemu.args(["-display", "none"])
-        .args(["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04"])
-        // QEMU would otherwise put the terminal in raw mode, and a kill on
-        // timeout leaves it that way.
-        .stdin(Stdio::null());
-    let mut child = qemu.spawn().context("running qemu-system-x86_64")?;
+    let mut qemu = qemu(arch, &image, &with_extension(elf, "vars.fd"))?;
+    qemu.args(["-display", "none"]);
+    match arch {
+        Arch::X86_64 => qemu.args(["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04"]),
+        // target=native lets the guest open host files too, which only our
+        // own test kernels get to do.
+        Arch::Aarch64 => qemu.args(["-semihosting-config", "enable=on,target=native"]),
+    };
+    // QEMU would otherwise put the terminal in raw mode, and a kill on
+    // timeout leaves it that way.
+    qemu.stdin(Stdio::null());
+    let mut child = qemu
+        .spawn()
+        .with_context(|| format!("running {}", qemu.get_program().display()))?;
     let deadline = Instant::now() + TEST_TIMEOUT;
     let status = loop {
         if let Some(status) = child.try_wait().context("waiting for QEMU")? {
@@ -77,14 +84,44 @@ pub fn test(elf: &Path) -> Result<()> {
 /// A QEMU command that boots `image` under OVMF, with serial on standard
 /// output. The firmware writes its variables, so each boot starts from a
 /// fresh copy at `vars`.
-fn qemu(image: &Path, vars: &Path) -> Result<Command> {
+fn qemu(arch: Arch, image: &Path, vars: &Path) -> Result<Command> {
+    let firmware = match arch {
+        Arch::X86_64 => ovmf_prebuilt::Arch::X64,
+        Arch::Aarch64 => ovmf_prebuilt::Arch::Aarch64,
+    };
     let ovmf = Prebuilt::fetch(OVMF, root().join("target/ovmf")).context("fetching OVMF")?;
-    let code = ovmf.get_file(Arch::X64, FileType::Code);
-    fs::copy(ovmf.get_file(Arch::X64, FileType::Vars), vars)
+    let code = ovmf.get_file(firmware, FileType::Code);
+    fs::copy(ovmf.get_file(firmware, FileType::Vars), vars)
         .with_context(|| format!("copying OVMF vars to {}", vars.display()))?;
 
-    let mut qemu = Command::new("qemu-system-x86_64");
-    qemu.args(["-machine", "q35", "-m", "512M", "-smp", "1"])
+    let mut qemu = match arch {
+        Arch::X86_64 => {
+            let mut qemu = Command::new("qemu-system-x86_64");
+            qemu.args(["-machine", "q35"]);
+            if kvm_usable() {
+                qemu.args(["-accel", "kvm", "-cpu", "host"]);
+            } else {
+                // The kernel needs x2APIC, SMEP and SMAP, which TCG emulates
+                // but its default qemu64 model leaves off.
+                qemu.args(["-accel", "tcg", "-cpu", "qemu64,+x2apic,+smep,+smap"]);
+            }
+            qemu
+        }
+        Arch::Aarch64 => {
+            // The host is x86_64, so aarch64 always runs under TCG. ramfb
+            // is a plain framebuffer that edk2 hands on as GOP, with no
+            // virtio.
+            let mut qemu = Command::new("qemu-system-aarch64");
+            qemu.args(["-machine", "virt,gic-version=3"]).args([
+                "-cpu",
+                "cortex-a76",
+                "-device",
+                "ramfb",
+            ]);
+            qemu
+        }
+    };
+    qemu.args(["-m", "512M", "-smp", "1"])
         .arg("-drive")
         .arg(format!(
             "if=pflash,format=raw,readonly=on,file={}",
@@ -100,13 +137,6 @@ fn qemu(image: &Path, vars: &Path) -> Result<Command> {
         ))
         .args(["-device", "usb-storage,bus=xhci.0,drive=stick"])
         .args(["-serial", "stdio", "-no-reboot"]);
-    if kvm_usable() {
-        qemu.args(["-accel", "kvm", "-cpu", "host"]);
-    } else {
-        // The kernel needs x2APIC, SMEP and SMAP, which TCG emulates but
-        // its default qemu64 model leaves off.
-        qemu.args(["-accel", "tcg", "-cpu", "qemu64,+x2apic,+smep,+smap"]);
-    }
     Ok(qemu)
 }
 

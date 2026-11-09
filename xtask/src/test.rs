@@ -5,13 +5,13 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, ensure};
 
-use crate::build::{self, Kernel};
+use crate::build::{self, Arch, Kernel};
 use crate::cmd::{cargo, exec, on_host};
 use crate::root;
 
-/// Runs the host tests of every `lib/*` crate, then the kernel's tests in
-/// QEMU.
-pub fn test() -> Result<()> {
+/// Runs the host tests of every `lib/*` crate, then the kernel's tests for
+/// `arch` in QEMU.
+pub fn test(arch: Arch) -> Result<()> {
     for manifest in libs()? {
         exec(on_host(
             cargo().arg("test").arg("--manifest-path").arg(&manifest),
@@ -26,18 +26,19 @@ pub fn test() -> Result<()> {
         !xtask.contains(char::is_whitespace),
         "cargo splits its runner on whitespace, and the xtask path {xtask:?} has some"
     );
+    let runner = format!(
+        "CARGO_TARGET_{}_RUNNER",
+        arch.target().to_uppercase().replace('-', "_")
+    );
     exec(
         cargo()
-            .env(
-                "CARGO_TARGET_X86_64_UNKNOWN_NONE_RUNNER",
-                format!("{xtask} qemu-test"),
-            )
+            .env(runner, format!("{xtask} qemu-test --arch {}", arch.name()))
             // The same kind as build --tests, so a QEMU run logs `tests` like a
             // laptop test image. It doesn't spare a rebuild when switching
             // between the two: the ID has the time to the minute, and the
             // kernel's option_env! recompiles whenever it changes.
             .env("THISOS_BUILD", build::build_env(false, Kernel::Tests)?)
-            .args(["test", "-p", "thisos-kernel"]),
+            .args(["test", "-p", "thisos-kernel", "--target", arch.target()]),
     )
 }
 

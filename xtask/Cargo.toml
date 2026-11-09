@@ -20,6 +20,12 @@ mem_forget = "deny"
 anyhow = "1"
 bootloader = { version = "0.11", default-features = false, features = ["uefi"] }
 clap = { version = "4", features = ["derive"] }
+fatfs = { version = "0.3", default-features = false, features = ["std", "alloc"] }
 fontdue = "0.9"
+gpt = "3.1"
+lzma-rs = "0.3"
 ovmf-prebuilt = "0.2"
 serde_json = "1"
+sha2 = "0.11"
+tar = "0.4"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
