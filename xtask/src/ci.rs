@@ -31,7 +31,17 @@ pub fn ci() -> Result<()> {
         "--check",
     ]))?;
 
-    exec(cargo().args(["clippy", "--workspace", "--", "-D", "warnings"]))?;
+    // The aarch64 arch crate's assembly doesn't build for x86_64; it gets
+    // its own passes below.
+    exec(cargo().args([
+        "clippy",
+        "--workspace",
+        "--exclude",
+        "thisos-arch-aarch64",
+        "--",
+        "-D",
+        "warnings",
+    ]))?;
     // Not --workspace --all-targets: that builds thisos-console's tests,
     // which need std, for x86_64-unknown-none.
     exec(cargo().args([
@@ -39,6 +49,30 @@ pub fn ci() -> Result<()> {
         "-p",
         "thisos-kernel",
         "--tests",
+        "--",
+        "-D",
+        "warnings",
+    ]))?;
+    let aarch64 = Arch::Aarch64.target();
+    exec(cargo().args([
+        "clippy",
+        "-p",
+        "thisos-kernel",
+        "-p",
+        "thisos-arch-aarch64",
+        "--target",
+        aarch64,
+        "--",
+        "-D",
+        "warnings",
+    ]))?;
+    exec(cargo().args([
+        "clippy",
+        "-p",
+        "thisos-kernel",
+        "--tests",
+        "--target",
+        aarch64,
         "--",
         "-D",
         "warnings",

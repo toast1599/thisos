@@ -1,9 +1,12 @@
 //! The kernel heap: talc, as the global allocator. It has no memory until
-//! page tables are ported, so every allocation fails until then.
+//! `grow_heap` is ported, so every allocation fails until then.
 
 use talc::TalcLock;
 use talc::source::Manual;
 use thisos_hal::HeapStats;
+
+/// The heap's share of the reserved level 0 entry, from its start.
+pub const SIZE: u64 = 64 << 30;
 
 #[global_allocator]
 static TALC: TalcLock<spin::Mutex<()>, Manual> = TalcLock::new(Manual);

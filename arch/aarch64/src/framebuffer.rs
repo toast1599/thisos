@@ -45,6 +45,18 @@ impl FramebufferPixels {
         };
         Some([pixels(), pixels()])
     }
+
+    /// The pixels' virtual addresses.
+    pub fn range(&self) -> Range<u64> {
+        let start = crate::to_u64(self.base.addr());
+        let Some(end) = u64::try_from(self.len)
+            .ok()
+            .and_then(|len| start.checked_add(4 * len))
+        else {
+            unreachable!("new made the range from a pointer range");
+        };
+        start..end
+    }
 }
 
 impl Pixels for FramebufferPixels {

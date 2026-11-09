@@ -15,6 +15,7 @@ mod boot;
 mod framebuffer;
 mod heap;
 mod memory;
+mod paging;
 mod unported;
 
 use core::arch::asm;
@@ -30,7 +31,8 @@ use thisos_hal::{
 
 pub use framebuffer::FramebufferPixels;
 pub use memory::MemoryMap;
-pub use unported::{KernelPageTables, NoSerial, TrapFrame};
+pub use paging::{KernelPageTables, UserSpace};
+pub use unported::{NoSerial, TrapFrame};
 
 /// The aarch64 architecture, as the kernel sees it through `thisos-hal`.
 #[derive(Debug)]
@@ -88,8 +90,13 @@ impl Platform for Aarch64 {
     type MemoryMap = MemoryMap;
     type PageTables = KernelPageTables;
 
-    fn take_page_tables(_alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<KernelPageTables> {
-        not_ported("Platform::take_page_tables")
+    fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<KernelPageTables> {
+        // SAFETY: boot_info recorded where Limine mapped all physical memory.
+        // The guard page lies in the boot stack's section, which nothing
+        // uses below the stack, and the lower half holds only Limine's
+        // identity mapping, which nothing uses once _start has left
+        // Limine's stack.
+        unsafe { paging::take(boot::phys_offset(), Self::guard_page(), alloc) }
     }
 
     fn move_trap_stacks(_stack: &mut dyn FnMut(usize) -> u64) {
@@ -132,12 +139,12 @@ impl Platform for Aarch64 {
         not_ported("Platform::legacy_interrupts_masked")
     }
 
-    fn translate_active(_addr: u64) -> Option<Translation> {
-        not_ported("Platform::translate_active")
+    fn translate_active(addr: u64) -> Option<Translation> {
+        paging::translate_active(boot::phys_offset(), addr)
     }
 
-    fn write_return(_frame: &Frame) {
-        not_ported("Platform::write_return");
+    fn write_return(frame: &Frame) {
+        paging::write_return(boot::phys_offset(), frame);
     }
 
     fn exit_qemu(_success: bool) -> ! {

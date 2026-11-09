@@ -3,14 +3,15 @@
 
 use core::arch::global_asm;
 use core::ptr::addr_of;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use limine::BaseRevision;
-use limine::request::{FramebufferRequest, MemmapRequest};
+use limine::request::{FramebufferRequest, HhdmRequest, MemmapRequest};
 use thisos_hal::{BootInfo, Framebuffer, PixelFormat, TrapHandler};
 
 use crate::framebuffer::FramebufferPixels;
 use crate::memory::MemoryMap;
-use crate::{Aarch64, backtrace, ptr_at, to_u64};
+use crate::{Aarch64, backtrace, paging, ptr_at, to_u64};
 
 // Limine finds these by their magic numbers anywhere in the kernel's
 // writable data, and writes its answers into them before it jumps to
@@ -19,6 +20,18 @@ use crate::{Aarch64, backtrace, ptr_at, to_u64};
 static BASE_REVISION: BaseRevision = BaseRevision::new();
 static MEMORY_MAP: MemmapRequest = MemmapRequest::new();
 static FRAMEBUFFER: FramebufferRequest = FramebufferRequest::new();
+static HHDM: HhdmRequest = HhdmRequest::new();
+
+/// Where Limine mapped all physical memory, which `boot_info` records. Zero
+/// until then: Limine's mapping is in the upper half, never at 0.
+static PHYS_OFFSET: AtomicU64 = AtomicU64::new(0);
+
+/// Where Limine mapped all physical memory.
+pub(crate) fn phys_offset() -> u64 {
+    let offset = PHYS_OFFSET.load(Ordering::Relaxed);
+    assert!(offset != 0, "Limine didn't map physical memory");
+    offset
+}
 
 /// The boot stack's size. Its base is aligned to twice this, so that the
 /// exception vectors can tell an overflow by one bit of SP.
@@ -96,10 +109,20 @@ pub unsafe fn boot_info(_trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
     let Some(memory) = MEMORY_MAP.response() else {
         panic!("Limine gave no memory map");
     };
+    let Some(hhdm) = HHDM.response() else {
+        panic!("Limine didn't map physical memory");
+    };
+    PHYS_OFFSET.store(hhdm.offset, Ordering::Relaxed);
+    let framebuffer_write_combining = framebuffer.as_ref().is_some_and(|fb| {
+        // SAFETY: hhdm.offset is where Limine mapped all physical memory,
+        // the range is the framebuffer's, and the caller runs this once,
+        // before anything else, so nothing else uses Limine's tables.
+        unsafe { paging::write_combine(hhdm.offset, fb.pixels.range()) }
+    });
     BootInfo {
         serial: None,
         framebuffer,
-        framebuffer_write_combining: false,
+        framebuffer_write_combining,
         memory: MemoryMap::new(memory.entries()),
     }
 }
