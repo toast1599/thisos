@@ -10,8 +10,10 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use thisos_hal::{Platform, Probe, TrapFrame as _};
 use x86_64::VirtAddr;
 use x86_64::instructions::interrupts;
+use x86_64::registers::control::{Cr4, Cr4Flags};
 
 use crate::X86_64;
+use crate::paging::USER_SPACE;
 use crate::trap::TrapFrame;
 
 /// The stack pointer `thisos_catch` saved the registers at while a catch
@@ -100,12 +102,18 @@ pub fn catch(probe: Probe) {
         "a catch is running already"
     );
     let number: u64 = match probe {
-        Probe::ReadGuardPage => 0,
+        Probe::ReadGuardPage | Probe::ReadUser => 0,
         Probe::OverflowStack => 1,
         Probe::Spin => 2,
         Probe::WriteReadOnly => 3,
-        Probe::ExecuteNoExecute => 4,
+        Probe::ExecuteNoExecute | Probe::ExecuteUser => 4,
     };
+    if probe == Probe::ExecuteUser {
+        assert!(
+            Cr4::read().contains(Cr4Flags::SUPERVISOR_MODE_EXECUTION_PROTECTION),
+            "ExecuteUser before SMEP is on"
+        );
+    }
     let run = || {
         // SAFETY: thisos_catch saves and restores every callee-saved
         // register, and returns, through thisos_catch_landing, to the
@@ -113,9 +121,10 @@ pub fn catch(probe: Probe) {
         // with. The probes touch only rax, the stack below the saved
         // registers and their own targets: the guard page, which the loader
         // leaves unmapped, so the read only traps; stack that no frame above
-        // uses; the read-only byte, written back with the value it holds; and
-        // the ret, which only returns. The C ABI clobbers cover rax and the
-        // flags.
+        // uses; the read-only byte, written back with the value it holds;
+        // the ret, which only returns; and the user probe page, which the
+        // read can't change, and which the call can't run, since SMEP is on.
+        // The C ABI clobbers cover rax and the flags.
         unsafe {
             asm!(
                 "call thisos_catch",
@@ -130,9 +139,12 @@ pub fn catch(probe: Probe) {
         // came near the guard page would overflow there itself, and abandon
         // would give up the handler along with the probe.
         Probe::OverflowStack => interrupts::without_interrupts(run),
-        Probe::ReadGuardPage | Probe::Spin | Probe::WriteReadOnly | Probe::ExecuteNoExecute => {
-            run();
-        }
+        Probe::ReadGuardPage
+        | Probe::Spin
+        | Probe::WriteReadOnly
+        | Probe::ExecuteNoExecute
+        | Probe::ReadUser
+        | Probe::ExecuteUser => run(),
     }
 }
 
@@ -142,6 +154,7 @@ pub fn target(probe: Probe) -> Option<u64> {
         Probe::ReadGuardPage => Some(X86_64::guard_page()),
         Probe::WriteReadOnly => Some(address(&raw const thisos_probe_read_only)),
         Probe::ExecuteNoExecute => Some(address(&raw const thisos_probe_ret)),
+        Probe::ReadUser | Probe::ExecuteUser => Some(USER_SPACE.start),
         Probe::OverflowStack | Probe::Spin => None,
     }
 }

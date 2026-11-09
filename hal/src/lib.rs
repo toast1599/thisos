@@ -152,6 +152,16 @@ pub enum Probe {
     /// and again, which traps with [`Trap::PageFault`] on execute at
     /// [`Platform::probe_target`] when the CPU enforces no-execute pages.
     ExecuteNoExecute,
+    /// Reads a fixed user address, [`Platform::probe_target`], again and
+    /// again, which traps with [`Trap::PageFault`] on read there: because
+    /// nothing is mapped there, or because the kernel may not read user
+    /// pages.
+    ReadUser,
+    /// Calls the same user address as [`Probe::ReadUser`] again and again,
+    /// which traps with [`Trap::PageFault`] on execute there: because
+    /// nothing is mapped there, or because the kernel may not run user
+    /// code.
+    ExecuteUser,
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
@@ -212,8 +222,10 @@ pub trait Platform {
 
     /// The address whose page fault ends `probe`: the guard page for
     /// [`Probe::ReadGuardPage`], and the probe's own byte for
-    /// [`Probe::WriteReadOnly`] and [`Probe::ExecuteNoExecute`]. `None` for
-    /// a probe that ends some other way. For tests.
+    /// [`Probe::WriteReadOnly`] and [`Probe::ExecuteNoExecute`], and a page
+    /// in [`AddressSpace::user_space`] for [`Probe::ReadUser`] and
+    /// [`Probe::ExecuteUser`]. `None` for a probe that ends some other way.
+    /// For tests.
     fn probe_target(probe: Probe) -> Option<u64>;
 
     /// A second handle to the serial port, for a panic that finds the first
@@ -248,22 +260,34 @@ pub trait Platform {
     /// `true` where there is none. For tests.
     fn legacy_interrupts_masked() -> bool;
 
+    /// Where `addr` is mapped in the page tables the CPU uses now, or
+    /// `None` if it isn't. For tests.
+    fn translate_active(addr: u64) -> Option<Translation>;
+
+    /// Writes code that only returns at the start of `frame`, for
+    /// [`Probe::ExecuteUser`] to find if the CPU ever let it run. For
+    /// tests.
+    fn write_return(frame: &Frame);
+
     /// Ends a QEMU test run through QEMU's debug exit device, reporting
     /// whether the tests passed. It touches the device only when it runs
     /// under a hypervisor; on real hardware it only halts.
     fn exit_qemu(success: bool) -> !;
 }
 
-/// The page tables the CPU uses, of which there is one set for now. Pages
-/// are 4 KiB.
+/// The kernel's own page tables: the upper half every address space
+/// shares, with nothing mapped in the lower half. Pages are 4 KiB.
 pub trait PageTables: Send {
+    /// A user address space.
+    type AddressSpace: AddressSpace;
+
     /// The virtual addresses [`PageTables::map`] maps into. The loader
     /// mapped nothing there.
     fn kernel_space(&self) -> Range<u64>;
 
     /// Maps the page at `page` to `frame`, no-execute, and writable if
-    /// `writable`. New tables on the way come from `alloc`. The frame stays
-    /// mapped for good.
+    /// `writable`. New tables on the way come from `alloc`. The tables hold
+    /// the frame until [`PageTables::unmap`].
     fn map(
         &mut self,
         page: u64,
@@ -272,11 +296,17 @@ pub trait PageTables: Send {
         alloc: &mut dyn FnMut() -> Option<Frame>,
     ) -> Result<(), MapError>;
 
+    /// Unmaps the page at `page` in [`PageTables::kernel_space`], and
+    /// returns the frame it mapped, or `None` if nothing was mapped there.
+    /// Kernel-space addresses are never mapped again after this, so code
+    /// that still uses the page faults and reaches no other memory.
+    fn unmap(&mut self, page: u64) -> Option<Frame>;
+
     /// Maps `frame` at the page after the heap's last one, writable and
     /// no-execute, and adds the page to the heap the global allocator
     /// allocates from. The heap's pages are outside
-    /// [`PageTables::kernel_space`]. New tables on the way come from
-    /// `alloc`. Panics if the heap's range is full.
+    /// [`PageTables::kernel_space`], and stay mapped for good. New tables
+    /// on the way come from `alloc`. Panics if the heap's range is full.
     fn grow_heap(
         &mut self,
         frame: Frame,
@@ -286,9 +316,67 @@ pub trait PageTables: Send {
     /// Where `addr` is mapped, or `None` if it isn't.
     fn translate(&self, addr: u64) -> Option<Translation>;
 
-    /// Whether anything is mapped in the lower half, which user space will
-    /// have. For tests.
+    /// Whether anything is mapped in the lower half. For tests.
     fn lower_half_mapped(&self) -> bool;
+
+    /// A new address space with nothing in its lower half, sharing this
+    /// upper half, with its first table from `alloc`. `None` if `alloc` has
+    /// no frame.
+    fn new_space(&self, alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<Self::AddressSpace>;
+
+    /// Makes the CPU use these tables, with an empty lower half, in place
+    /// of whichever address space it used.
+    fn activate(&self);
+}
+
+/// A user address space: a lower half of its own, and the upper half of
+/// the kernel's [`PageTables`]. Dropping one without
+/// [`AddressSpace::destroy`] leaks its frames and its tables, as dropping a
+/// [`Frame`] does.
+pub trait AddressSpace: Send {
+    /// The virtual addresses [`AddressSpace::map`] maps into: the lower
+    /// half, apart from the first pages, which stay unmapped so that a
+    /// null pointer plus a small offset always faults.
+    fn user_space(&self) -> Range<u64>;
+
+    /// Maps the page at `page` to `frame` for user code, with `protection`.
+    /// New tables on the way come from `alloc`. The space holds the frame
+    /// until [`AddressSpace::unmap`] or [`AddressSpace::destroy`].
+    fn map(
+        &mut self,
+        page: u64,
+        frame: Frame,
+        protection: Protection,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
+    ) -> Result<(), MapError>;
+
+    /// Unmaps the page at `page`, and returns the frame it mapped, or
+    /// `None` if nothing was mapped there. Tables it leaves empty stay
+    /// until [`AddressSpace::destroy`].
+    fn unmap(&mut self, page: u64) -> Option<Frame>;
+
+    /// Where `addr` is mapped in this space, or `None` if it isn't.
+    fn translate(&self, addr: u64) -> Option<Translation>;
+
+    /// Makes the CPU use this space.
+    fn activate(&self);
+
+    /// Ends the space: calls `mapped` with each frame still mapped, and
+    /// `free` with each frame of its tables. If the CPU uses this space, it
+    /// switches to the kernel's [`PageTables`] first.
+    fn destroy(self, mapped: &mut dyn FnMut(Frame), free: &mut dyn FnMut(Frame));
+}
+
+/// What user code may do with a page. No page is both writable and
+/// executable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Protection {
+    /// Reads only.
+    ReadOnly,
+    /// Reads and writes.
+    ReadWrite,
+    /// Reads and instruction fetches.
+    ReadExecute,
 }
 
 /// The kernel heap's counters, as [`Platform::heap_stats`] reads them.
@@ -321,7 +409,8 @@ pub struct TimerFrequencies {
     pub measured: Option<TimerFrequency>,
 }
 
-/// Why [`PageTables::map`] failed. It hands the frame back.
+/// Why [`PageTables::map`] or [`AddressSpace::map`] failed. It hands the
+/// frame back.
 #[derive(Debug)]
 pub struct MapError {
     /// What was wrong.
@@ -330,13 +419,15 @@ pub struct MapError {
     pub frame: Frame,
 }
 
-/// What was wrong with a [`PageTables::map`].
+/// What was wrong with a [`PageTables::map`] or [`AddressSpace::map`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MapErrorKind {
     /// The page isn't 4 KiB aligned.
     Unaligned,
     /// The page is outside [`PageTables::kernel_space`].
     OutsideKernelSpace,
+    /// The page is outside [`AddressSpace::user_space`].
+    OutsideUserSpace,
     /// The page is mapped already.
     Mapped,
     /// `alloc` had no frame for a table.
@@ -352,6 +443,8 @@ pub struct Translation {
     pub writable: bool,
     /// Whether instruction fetches are allowed.
     pub executable: bool,
+    /// Whether user code may reach it.
+    pub user: bool,
 }
 
 /// A serial port the kernel writes text to. Writing `\n` starts a new line

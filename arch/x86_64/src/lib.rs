@@ -31,7 +31,7 @@ use once::Once;
 use thisos_frames::Frame;
 use thisos_hal::{
     BacktraceEnd, BootInfo, Cpu, Framebuffer, HeapStats, Platform, Probe, Serial, TimerFrequencies,
-    TimerFrequency, TrapHandler,
+    TimerFrequency, Translation, TrapHandler,
 };
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
@@ -105,13 +105,10 @@ impl Platform for X86_64 {
     type PageTables = KernelPageTables;
 
     fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<KernelPageTables> {
-        let Some(&offset) = PHYS_OFFSET.get() else {
-            panic!("the loader didn't map physical memory");
-        };
         // SAFETY: boot_info recorded where the loader mapped all physical
         // memory, and loaded the kernel's own descriptor tables before the
         // kernel could call this.
-        unsafe { paging::take(offset, alloc) }
+        unsafe { paging::take(phys_offset(), alloc) }
     }
 
     fn move_trap_stacks(stack: &mut dyn FnMut(usize) -> u64) {
@@ -136,6 +133,14 @@ impl Platform for X86_64 {
 
     fn legacy_interrupts_masked() -> bool {
         pic::masked()
+    }
+
+    fn translate_active(addr: u64) -> Option<Translation> {
+        paging::translate_active(phys_offset(), addr)
+    }
+
+    fn write_return(frame: &Frame) {
+        paging::write_return(phys_offset(), frame);
     }
 
     fn guard_page() -> u64 {
@@ -194,6 +199,13 @@ fn under_hypervisor() -> bool {
 
 /// Where the loader mapped all physical memory, which `boot_info` records.
 static PHYS_OFFSET: Once<VirtAddr> = Once::new();
+
+fn phys_offset() -> VirtAddr {
+    let Some(&offset) = PHYS_OFFSET.get() else {
+        panic!("the loader didn't map physical memory");
+    };
+    offset
+}
 
 /// The I/O port xtask gives QEMU's isa-debug-exit device.
 const DEBUG_EXIT_PORT: u16 = 0xf4;

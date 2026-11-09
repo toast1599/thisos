@@ -59,10 +59,19 @@ pub fn alloc() -> Option<Frame> {
 /// Makes `frame` free again.
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "nothing frees a frame until unmap in M3")
+    expect(
+        dead_code,
+        reason = "nothing outside the tests frees a frame until threads exit"
+    )
 )]
 pub fn free(frame: Frame) {
     FRAMES.lock().free(frame);
+}
+
+/// The number of free frames.
+#[cfg(test)]
+pub fn free_frames() -> usize {
+    FRAMES.lock().free_frames()
 }
 
 /// The memory map `init` was given.

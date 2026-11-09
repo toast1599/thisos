@@ -4,7 +4,9 @@
 //! any to allocate from.
 
 #![no_std]
-#![forbid(unsafe_code)]
+// Denied, not forbidden, for `Frame::reclaim` alone, which declares an
+// unsafe function and has no unsafe block.
+#![deny(unsafe_code)]
 
 use core::ops::Range;
 
@@ -16,7 +18,8 @@ pub const FRAME_SIZE: u64 = 4096;
 pub const FLOOR: u64 = 0x10_0000;
 
 /// A frame of physical memory, which its holder may use. Only [`Frames`]
-/// makes one, and it never hands out a frame that is already held.
+/// makes one, and it never hands out a frame that is already held, apart
+/// from [`Frame::reclaim`], which gives back one that page tables held.
 /// Dropping a `Frame` without [`Frames::free`] leaks the frame.
 #[derive(Debug)]
 #[must_use = "dropping a Frame leaks it"]
@@ -26,6 +29,29 @@ impl Frame {
     /// The frame's physical address.
     pub fn start(&self) -> u64 {
         self.0
+    }
+
+    /// Gives up the `Frame` for its physical address, for a holder that
+    /// keeps only the address, as a page-table entry does. Only
+    /// [`Frame::reclaim`] makes a `Frame` of it again.
+    pub fn into_start(self) -> u64 {
+        self.0
+    }
+
+    /// The frame at `start` again, from a holder that kept only its
+    /// address.
+    ///
+    /// # Safety
+    ///
+    /// `start` must come from [`Frame::into_start`], and nothing may hold
+    /// the frame any more: no other `Frame` for it exists, and the holder
+    /// that kept the address no longer uses it.
+    #[expect(
+        unsafe_code,
+        reason = "reclaiming makes a Frame that Frames didn't hand out, so the caller has to show nothing else holds it"
+    )]
+    pub unsafe fn reclaim(start: u64) -> Self {
+        Self(start)
     }
 }
 
