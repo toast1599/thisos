@@ -202,7 +202,8 @@ pub trait Platform {
 
     /// Builds page tables of the kernel's own, with frames from `alloc`,
     /// that map everything the loader mapped for the kernel at the same
-    /// addresses and nothing else, and switches to them. Returns `None` if
+    /// addresses, and nothing else but the registers of devices the
+    /// architecture drives itself, and switches to them. Returns `None` if
     /// they were taken already. Panics if `alloc` runs out of frames.
     fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<Self::PageTables>;
 

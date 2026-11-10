@@ -101,6 +101,7 @@ dependencies = [
  "limine",
  "spin",
  "talc",
+ "thisos-fdt",
  "thisos-frames",
  "thisos-hal",
 ]
@@ -124,6 +125,10 @@ version = "0.0.0"
 dependencies = [
  "thisos-hal",
 ]
+
+[[package]]
+name = "thisos-fdt"
+version = "0.0.0"
 
 [[package]]
 name = "thisos-frames"

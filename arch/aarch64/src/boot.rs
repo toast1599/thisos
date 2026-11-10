@@ -7,12 +7,13 @@ use core::ptr::addr_of;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use limine::BaseRevision;
-use limine::request::{FramebufferRequest, HhdmRequest, MemmapRequest};
+use limine::request::{DtbRequest, FramebufferRequest, HhdmRequest, MemmapRequest};
+use thisos_fdt::{Fdt, HEADER_SIZE};
 use thisos_hal::{BootInfo, Framebuffer, PixelFormat, TrapHandler};
 
 use crate::framebuffer::FramebufferPixels;
 use crate::memory::MemoryMap;
-use crate::{Aarch64, backtrace, ptr_at, to_u64, trap};
+use crate::{Aarch64, backtrace, devices, ptr_at, to_u64, trap};
 
 // Limine finds these by their magic numbers anywhere in the kernel's
 // writable data, and writes its answers into them before it jumps to
@@ -22,6 +23,7 @@ static BASE_REVISION: BaseRevision = BaseRevision::new();
 static MEMORY_MAP: MemmapRequest = MemmapRequest::new();
 static FRAMEBUFFER: FramebufferRequest = FramebufferRequest::new();
 static HHDM: HhdmRequest = HhdmRequest::new();
+static DEVICE_TREE: DtbRequest = DtbRequest::new();
 
 /// Where Limine mapped all physical memory, which `boot_info` records. Zero
 /// until then: Limine's mapping is in the upper half, never at 0.
@@ -135,6 +137,12 @@ pub unsafe fn boot_info(trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
         panic!("Limine didn't map physical memory");
     };
     PHYS_OFFSET.store(hhdm.offset, Ordering::Relaxed);
+    // edk2 hands Limine a device tree only when QEMU gives it no ACPI
+    // tables.
+    let Some(tree) = DEVICE_TREE.response() else {
+        panic!("Limine gave no device tree; QEMU needs -machine acpi=off");
+    };
+    devices::init(&device_tree(tree.dtb_ptr.cast()));
     if let Some(fb) = &framebuffer {
         let range = fb.pixels.range();
         FRAMEBUFFER_START.store(range.start, Ordering::Relaxed);
@@ -147,6 +155,25 @@ pub unsafe fn boot_info(trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
         framebuffer_write_combining: framebuffer.is_some(),
         framebuffer,
         memory: MemoryMap::new(memory.entries()),
+    }
+}
+
+/// The device tree at `start`, where Limine put it.
+fn device_tree(start: *const u8) -> Fdt<'static> {
+    // SAFETY: Limine maps the device tree, a header and more, in its mapping
+    // of physical memory, which the kernel keeps for good, in memory that
+    // the frame allocator never hands out and nothing writes.
+    let header = unsafe { core::slice::from_raw_parts(start, HEADER_SIZE) };
+    let size = match thisos_fdt::total_size(header) {
+        Ok(size) => size,
+        Err(e) => panic!("the device tree's header is bad: {e:?}"),
+    };
+    // SAFETY: As for the header, for the whole tree, whose size the header
+    // gives.
+    let blob = unsafe { core::slice::from_raw_parts(start, size) };
+    match Fdt::new(blob) {
+        Ok(fdt) => fdt,
+        Err(e) => panic!("the device tree is malformed: {e:?}"),
     }
 }
 

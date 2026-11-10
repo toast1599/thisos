@@ -110,14 +110,11 @@ fn qemu(arch: Arch, image: &Path, vars: &Path) -> Result<Command> {
         Arch::Aarch64 => {
             // The host is x86_64, so aarch64 always runs under TCG. ramfb
             // is a plain framebuffer that edk2 hands on as GOP, with no
-            // virtio.
+            // virtio. Without ACPI tables, edk2 hands Limine the device tree
+            // instead, which the kernel finds its devices in.
             let mut qemu = Command::new("qemu-system-aarch64");
-            qemu.args(["-machine", "virt,gic-version=3"]).args([
-                "-cpu",
-                "cortex-a76",
-                "-device",
-                "ramfb",
-            ]);
+            qemu.args(["-machine", "virt,gic-version=3,acpi=off"])
+                .args(["-cpu", "cortex-a76", "-device", "ramfb"]);
             qemu
         }
     };

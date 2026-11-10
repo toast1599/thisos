@@ -13,11 +13,14 @@
 mod backtrace;
 mod boot;
 mod catch;
+mod devices;
 mod framebuffer;
+mod gic;
 mod heap;
 mod memory;
 mod once;
 mod paging;
+mod timer;
 mod trap;
 mod unported;
 
@@ -103,7 +106,8 @@ impl Platform for Aarch64 {
 
     fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<KernelPageTables> {
         // SAFETY: boot_info recorded where Limine mapped all physical memory
-        // and the framebuffer, and linker.ld puts every function in .text.
+        // and the framebuffer, and found the GIC's registers in the device
+        // tree, and linker.ld puts every function in .text.
         // Limine's TTBR0 maps nothing the kernel uses: _start left Limine's
         // stack, and everything else is in the upper half.
         unsafe {
@@ -112,6 +116,7 @@ impl Platform for Aarch64 {
                 Self::guard_page(),
                 boot::text(),
                 boot::framebuffer_range(),
+                &devices::get().registers(),
                 alloc,
             )
         }
@@ -145,16 +150,24 @@ impl Platform for Aarch64 {
         heap::stats()
     }
 
-    fn start_timer(_hz: u32) -> TimerFrequency {
-        not_ported("Platform::start_timer")
+    fn start_timer(hz: u32) -> TimerFrequency {
+        let devices = devices::get();
+        gic::init(boot::phys_offset(), &devices);
+        timer::start(hz, devices.timer)
     }
 
+    // CNTFRQ_EL0 is all there is: QEMU's virt machine has no second clock
+    // fine enough to check it against.
     fn timer_frequencies() -> TimerFrequencies {
-        not_ported("Platform::timer_frequencies")
+        TimerFrequencies {
+            reported: None,
+            measured: None,
+        }
     }
 
+    // The GIC is the only interrupt controller.
     fn legacy_interrupts_masked() -> bool {
-        not_ported("Platform::legacy_interrupts_masked")
+        true
     }
 
     fn translate_active(addr: u64) -> Option<Translation> {

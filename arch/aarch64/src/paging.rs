@@ -28,6 +28,9 @@ const ATTR_INDEX: u64 = 7 << 2;
 /// Attribute index 2, which Limine leaves unused and the kernel gives the
 /// framebuffer.
 const ATTR_NON_CACHEABLE: u64 = 2 << 2;
+/// Attribute index 3, which Limine leaves unused and the kernel gives
+/// device registers.
+const ATTR_DEVICE: u64 = 3 << 2;
 /// AP[1]: EL0 may reach the page.
 const EL0: u64 = 1 << 6;
 /// AP[2]: nothing may write the page.
@@ -57,6 +60,9 @@ pub const USER_SPACE: Range<u64> = 0x1_0000..1 << 48;
 /// `MAIR_EL1`'s attribute 2 as normal memory, non-cacheable inner and outer,
 /// so that the CPU gathers stores to it as x86_64's write-combining does.
 const MAIR_NON_CACHEABLE: u64 = 0x44;
+/// `MAIR_EL1`'s attribute 3 as Device-nGnRE: no gathering or reordering,
+/// with early write acknowledgement, as Linux maps device registers.
+const MAIR_DEVICE: u64 = 0x04;
 
 /// The page tables at `level_0`. Whoever makes one is the only user of the
 /// tables while it lives, apart from the CPU's page walker.
@@ -193,7 +199,31 @@ impl PageTables {
         flags: u64,
         alloc: &mut dyn FnMut() -> Option<Frame>,
     ) -> Result<(), MapError> {
-        let fail = |kind, frame| Err(MapError { kind, frame });
+        // SAFETY: The frame is the caller's to give, and on success the
+        // leaf holds it until unmap reclaims it.
+        match unsafe { self.map_address(page, frame.start(), flags, alloc) } {
+            Ok(()) => {
+                let _ = frame.into_start();
+                Ok(())
+            }
+            Err(kind) => Err(MapError { kind, frame }),
+        }
+    }
+
+    /// Maps `page` to the physical address `phys` with leaf bits `flags`,
+    /// and links any new table on the way, from `alloc`.
+    ///
+    /// # Safety
+    ///
+    /// `phys` must be a frame the caller hands to these tables, or device
+    /// registers.
+    unsafe fn map_address(
+        &self,
+        page: u64,
+        phys: u64,
+        flags: u64,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
+    ) -> Result<(), MapErrorKind> {
         let [i0, i1, i2, i3] = indices(page);
         let mut table = self.level_0;
         for index in [i0, i1, i2] {
@@ -201,7 +231,7 @@ impl PageTables {
             let mut value = entry.load();
             if value & VALID == 0 {
                 let Some(new) = alloc() else {
-                    return fail(MapErrorKind::NoFrames, frame);
+                    return Err(MapErrorKind::NoFrames);
                 };
                 value = self.new_table(new) | TABLE;
                 // SAFETY: The entry isn't valid, so nothing is reached
@@ -209,8 +239,8 @@ impl PageTables {
                 unsafe { entry.store(value) };
             }
             // Only Limine's mappings have blocks, and none is in kernel
-            // space, the heap's range or the lower half, so this is a
-            // kernel bug.
+            // space, the heap's range, the lower half or device registers,
+            // so this is a kernel bug.
             assert!(
                 value & TABLE_OR_PAGE != 0,
                 "a block on the way to {page:#x}"
@@ -219,12 +249,11 @@ impl PageTables {
         }
         let leaf = self.entry(table, i3);
         if leaf.load() & VALID != 0 {
-            return fail(MapErrorKind::Mapped, frame);
+            return Err(MapErrorKind::Mapped);
         }
         // SAFETY: The entry isn't valid, so nothing is reached through it
-        // yet, and the frame is the caller's to give: the entry holds it
-        // until unmap reclaims it.
-        unsafe { leaf.store(frame.into_start() | flags) };
+        // yet, and the caller vouches for phys.
+        unsafe { leaf.store(phys | flags) };
         // An invalid entry is never in a TLB, so the new one needs no
         // flush, only to reach the walker before the page is used.
         barrier::dsb(ISHST);
@@ -470,22 +499,25 @@ fn kernel_leaf(
 
 /// Copies Limine's upper half into new tables made from `alloc`'s frames,
 /// letting EL1 execute only the kernel's `text` and making the framebuffer
-/// at `fb` normal non-cacheable memory. Then switches to them, empties the
-/// lower half and turns on PAN. Returns `None` after the first call.
-/// Panics if the CPU lacks PAN, if Limine's `TCR_EL1` isn't what this
-/// module assumes, or if Limine mapped the boot stack's guard page at
-/// `guard`.
+/// at `fb` normal non-cacheable memory, and maps the physical `devices` as
+/// device memory in the physical-memory mapping. Then switches to them,
+/// empties the lower half and turns on PAN. Returns `None` after the first
+/// call. Panics if the CPU lacks PAN, if Limine's `TCR_EL1` isn't what this
+/// module assumes, if Limine mapped the boot stack's guard page at `guard`,
+/// or if it mapped any of `devices`.
 ///
 /// # Safety
 ///
 /// `phys_offset` must be where Limine mapped all physical memory, `text`
 /// must hold all of the kernel's code, `fb` must be the framebuffer or
-/// empty, and nothing may use the lower half.
+/// empty, `devices` must be device registers and no memory, and nothing
+/// may use the lower half.
 pub unsafe fn take(
     phys_offset: u64,
     guard: u64,
     text: Range<u64>,
     fb: Range<u64>,
+    devices: &[Range<u64>],
     alloc: &mut dyn FnMut() -> Option<Frame>,
 ) -> Option<KernelPageTables> {
     static TAKEN: AtomicBool = AtomicBool::new(false);
@@ -543,10 +575,17 @@ pub unsafe fn take(
     let level_1 = tables.kernel_table(alloc);
     // SAFETY: The new tables aren't in use yet.
     unsafe { tables.entry(level_0, space).store(level_1 | TABLE) };
-    let mair = MAIR_EL1.get();
+    for page in devices.iter().flat_map(|range| pages(range).step_by(4096)) {
+        let flags = VALID | TABLE_OR_PAGE | ACCESSED | ATTR_DEVICE | PXN | UXN;
+        // SAFETY: The caller guarantees the page holds device registers.
+        if let Err(kind) = unsafe { tables.map_address(phys_offset + page, page, flags, alloc) } {
+            panic!("mapping the device page {page:#x} failed: {kind:?}");
+        }
+    }
+    let mair = MAIR_EL1.get() & !(0xffff << 16);
     // SAFETY: Limine's tables use attributes 0 and 1 alone, so changing 2
-    // changes no live mapping.
-    unsafe { write_mair((mair & !(0xff << 16)) | (MAIR_NON_CACHEABLE << 16)) };
+    // and 3 changes no live mapping.
+    unsafe { write_mair(mair | (MAIR_NON_CACHEABLE << 16) | (MAIR_DEVICE << 24)) };
     // SAFETY: The new tables map every upper-half address to the same frame
     // as Limine's, with the same attributes apart from the global bit,
     // EL0 access, execute permissions and the framebuffer's cacheability,

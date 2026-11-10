@@ -12,8 +12,9 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use thisos_hal::{Access, BacktraceEnd, Cpu, Trap, TrapHandler};
 
 use crate::boot::STACK_SIZE;
+use crate::gic::{self, Acknowledged, Group};
 use crate::once::Once;
-use crate::{Aarch64, backtrace, catch, not_ported, to_u64};
+use crate::{Aarch64, backtrace, catch, timer, to_u64};
 
 // The vector table: 16 entries of 0x80 bytes, for a synchronous exception,
 // an IRQ, an FIQ and an SError, taken from EL1 on SP_EL0, from EL1 on
@@ -336,12 +337,18 @@ extern "C" fn trap_entry(frame: &mut TrapFrame) {
     if frame.overflowed() && on_overflow_stack(frame.sp) {
         Aarch64::halt();
     }
+    let mut acknowledged = None;
     let trap = if frame.overflowed() {
         Trap::DoubleFault
     } else {
         match frame.entry() % 4 {
             SYNC => sync(frame),
-            IRQ | FIQ => not_ported("an interrupt"),
+            kind @ (IRQ | FIQ) => {
+                let group = if kind == IRQ { Group::One } else { Group::Zero };
+                let (trap, interrupt) = interrupt(group);
+                acknowledged = interrupt;
+                trap
+            }
             _ => Trap::Other {
                 vector: class(frame.esr),
                 error: frame.esr,
@@ -349,6 +356,11 @@ extern "C" fn trap_entry(frame: &mut TrapFrame) {
         }
     };
     handler(trap, frame);
+    // After the handler, as x86_64's EOI, so that the next tick can't come
+    // while this one is still handled. An abandoned handler ends it too.
+    if let Some(interrupt) = acknowledged {
+        interrupt.end();
+    }
     let resumes = if frame.overflowed() {
         // An overflow the handler abandoned resumes in the catch, from
         // registers it saved itself, not from the state the overflow left.
@@ -358,6 +370,26 @@ extern "C" fn trap_entry(frame: &mut TrapFrame) {
     };
     if !resumes {
         Aarch64::halt();
+    }
+}
+
+/// Acknowledges the interrupt in `group` that the CPU took, and returns
+/// the trap it is, with the interrupt to end after the handler: none for a
+/// special interrupt ID, such as 1023 for one that went away. The timer's
+/// next tick is set up first, which lowers its interrupt.
+fn interrupt(group: Group) -> (Trap, Option<Acknowledged>) {
+    match gic::acknowledge(group) {
+        Ok(interrupt) if matches!(group, Group::One) && timer::is_timer(interrupt.intid()) => {
+            timer::rearm();
+            (Trap::Timer, Some(interrupt))
+        }
+        Ok(interrupt) => (
+            Trap::Stray {
+                vector: interrupt.intid(),
+            },
+            Some(interrupt),
+        ),
+        Err(special) => (Trap::Stray { vector: special }, None),
     }
 }
 

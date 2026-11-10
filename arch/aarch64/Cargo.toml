@@ -16,6 +16,7 @@ aarch64-cpu = "11"
 limine = "0.6"
 spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex", "lock_api"] }
 talc = { version = "5.1", features = ["counters"] }
+thisos-fdt.workspace = true
 thisos-frames.workspace = true
 thisos-hal.workspace = true
 
