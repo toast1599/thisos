@@ -58,6 +58,8 @@ mod tests {
         let mut count = 0;
         for stack in Arch::trap_stacks() {
             count += 1;
+            let align = (2 * (stack.end - stack.start)).next_power_of_two();
+            assert_eq!(stack.start % align, 0, "stack {stack:#x?} alignment");
             let guard = stack.start - 4096;
             assert_eq!(paging::translate(guard), None, "guard page {guard:#x}");
             for page in stack.step_by(4096) {

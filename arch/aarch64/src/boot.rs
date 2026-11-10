@@ -12,7 +12,7 @@ use thisos_hal::{BootInfo, Framebuffer, PixelFormat, TrapHandler};
 
 use crate::framebuffer::FramebufferPixels;
 use crate::memory::MemoryMap;
-use crate::{Aarch64, backtrace, ptr_at, to_u64};
+use crate::{Aarch64, backtrace, ptr_at, to_u64, trap};
 
 // Limine finds these by their magic numbers anywhere in the kernel's
 // writable data, and writes its answers into them before it jumps to
@@ -50,9 +50,10 @@ pub(crate) fn text() -> Range<u64> {
     to_u64(addr_of!(__text_start).addr())..to_u64(addr_of!(__text_end).addr())
 }
 
-/// The boot stack's size. Its base is aligned to twice this, so that the
-/// exception vectors can tell an overflow by one bit of SP.
-const STACK_SIZE: usize = 64 << 10;
+/// The size of every stack EL1 runs on. Each one's base is aligned to twice
+/// this, so that the exception vectors can tell an overflow by one bit of
+/// SP.
+pub(crate) const STACK_SIZE: usize = 64 << 10;
 
 // Limine enters at EL1 with the MMU on, interrupts masked and SP_EL0 on a
 // stack of its own, which has nothing unmapped below it. _start moves to
@@ -107,7 +108,7 @@ pub(crate) static PANIC_FRAMEBUFFER: spin::Mutex<Option<Framebuffer<FramebufferP
 /// Call this once, from the entry point, on the boot stack, before anything
 /// else reads Limine's answers or uses the devices they name.
 #[doc(hidden)]
-pub unsafe fn boot_info(_trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
+pub unsafe fn boot_info(trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
     let bottom = addr_of!(__boot_stack_bottom).addr();
     let top = addr_of!(__boot_stack_top).addr();
     backtrace::init(to_u64(bottom)..to_u64(top));
@@ -117,6 +118,11 @@ pub unsafe fn boot_info(_trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
         .response()
         .and_then(|response| response.framebuffers().first().copied())
         .and_then(framebuffer);
+    // SAFETY: The caller runs this once, first, and nothing before here
+    // traps.
+    unsafe {
+        trap::init(trap);
+    }
     assert!(
         BASE_REVISION.is_supported(),
         "Limine doesn't support base revision {}",

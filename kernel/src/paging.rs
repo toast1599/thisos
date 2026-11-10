@@ -117,14 +117,18 @@ pub fn activate() {
 
 /// Maps a stack of `size` bytes, rounded up to whole pages, in kernel space
 /// for good, writable and no-execute, with an unmapped page below it that
-/// an overflow runs into. Returns its addresses. Panics if kernel space or
-/// the frames run out.
+/// an overflow runs into. Its start is aligned to the power of two at or
+/// above twice its size, so that an architecture can tell an overflow by
+/// one bit of the stack pointer. Returns its addresses. Panics if kernel
+/// space or the frames run out.
 pub fn map_stack(size: usize) -> Range<u64> {
     let Ok(size) = u64::try_from(size.next_multiple_of(4096)) else {
         panic!("a stack of {size:#x} bytes doesn't fit a u64");
     };
+    let align = (2 * size).next_power_of_two();
     with(|kernel| {
-        let stack = kernel.stacks + 4096..kernel.stacks + 4096 + size;
+        let start = (kernel.stacks + 4096).next_multiple_of(align);
+        let stack = start..start + size;
         for page in stack.clone().step_by(4096) {
             let Some(frame) = frames::alloc() else {
                 panic!("no free frame for a stack");

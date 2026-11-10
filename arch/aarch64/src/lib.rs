@@ -12,10 +12,13 @@
 
 mod backtrace;
 mod boot;
+mod catch;
 mod framebuffer;
 mod heap;
 mod memory;
+mod once;
 mod paging;
+mod trap;
 mod unported;
 
 use core::arch::asm;
@@ -32,7 +35,8 @@ use thisos_hal::{
 pub use framebuffer::FramebufferPixels;
 pub use memory::MemoryMap;
 pub use paging::{KernelPageTables, UserSpace};
-pub use unported::{NoSerial, TrapFrame};
+pub use trap::TrapFrame;
+pub use unported::NoSerial;
 
 /// The aarch64 architecture, as the kernel sees it through `thisos-hal`.
 #[derive(Debug)]
@@ -64,7 +68,11 @@ impl Cpu for Aarch64 {
     }
 
     fn breakpoint() {
-        not_ported("Cpu::breakpoint");
+        // SAFETY: brk traps, and the trap handler returns past it with
+        // every register as it was.
+        unsafe {
+            asm!("brk #0xf000", options(nomem, nostack, preserves_flags));
+        }
     }
 
     fn enable_interrupts() {
@@ -81,8 +89,8 @@ impl Cpu for Aarch64 {
         r
     }
 
-    fn catch(_probe: Probe) {
-        not_ported("Cpu::catch");
+    fn catch(probe: Probe) {
+        catch::catch(probe);
     }
 }
 
@@ -109,20 +117,20 @@ impl Platform for Aarch64 {
         }
     }
 
-    fn move_trap_stacks(_stack: &mut dyn FnMut(usize) -> u64) {
-        not_ported("Platform::move_trap_stacks");
+    fn move_trap_stacks(stack: &mut dyn FnMut(usize) -> u64) {
+        trap::move_stack(stack);
     }
 
     fn trap_stacks() -> impl Iterator<Item = Range<u64>> {
-        core::iter::from_fn::<Range<u64>, _>(|| not_ported("Platform::trap_stacks"))
+        trap::stacks()
     }
 
     fn guard_page() -> u64 {
         backtrace::stack_bottom() - 4096
     }
 
-    fn probe_target(_probe: Probe) -> Option<u64> {
-        not_ported("Platform::probe_target")
+    fn probe_target(probe: Probe) -> Option<u64> {
+        catch::target(probe)
     }
 
     fn panic_serial() -> Option<NoSerial> {
@@ -198,9 +206,9 @@ pub use boot::boot_info;
 
 /// Defines the kernel's entry point: `entry!(kmain, trap)` makes the arch
 /// crate's `_start` call `kmain(thisos_hal::BootInfo<Aarch64>) -> !` on the
-/// boot stack. `trap` is the `thisos_hal::TrapHandler`, which nothing calls
-/// until exceptions are ported. The kernel uses this macro so that it never
-/// names the boot loader's types.
+/// boot stack, with `trap`, a `thisos_hal::TrapHandler`, as the handler for
+/// every trap. The kernel uses this macro so that it never names the boot
+/// loader's types.
 #[macro_export]
 macro_rules! entry {
     ($main:path, $trap:path) => {

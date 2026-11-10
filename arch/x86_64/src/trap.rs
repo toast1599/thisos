@@ -235,7 +235,7 @@ extern "C" fn trap_entry(frame: &mut TrapFrame) {
         },
         apic::TIMER_VECTOR => Trap::Timer,
         vector => Trap::Stray {
-            vector: vector.to_le_bytes()[0],
+            vector: u32::from(vector.to_le_bytes()[0]),
         },
     };
     // init stores the handler before it loads the IDT, the only way here.

@@ -136,8 +136,8 @@ pub enum Probe {
     /// Reads the first byte of [`Platform::guard_page`] again and again,
     /// which traps with [`Trap::PageFault`].
     ReadGuardPage,
-    /// Pushes onto the kernel stack until it runs into the guard page. The
-    /// CPU can't push the page fault's frame there, so it traps with
+    /// Pushes onto the kernel stack until it runs into the guard page, where
+    /// the page fault's handler has no stack to run on, so it traps with
     /// [`Trap::DoubleFault`]. It runs with interrupts off, so that no
     /// interrupt handler runs on the stack it fills and overflows there
     /// itself.
@@ -209,8 +209,9 @@ pub trait Platform {
     /// Moves the stacks the CPU switches to for some traps, which start out
     /// with nothing unmapped below them, onto stacks `stack` maps. For each
     /// it calls `stack(size)`, which returns the address just past a stack
-    /// of `size` bytes with an unmapped page below it. Call it once, after
-    /// [`Platform::take_page_tables`].
+    /// of `size` bytes with an unmapped page below it, and its start
+    /// aligned to the power of two at or above twice its size. Call it
+    /// once, after [`Platform::take_page_tables`].
     fn move_trap_stacks(stack: &mut dyn FnMut(usize) -> u64);
 
     /// The stacks the CPU switches to for some traps. For tests.
@@ -471,23 +472,24 @@ pub enum Trap {
         access: Access,
     },
     /// A fault while the CPU was starting the handler of another, such as
-    /// a page fault on a full stack.
+    /// a page fault on a full stack, or a trap taken with the stack pointer
+    /// below the bottom of its stack.
     DoubleFault,
     /// A tick of the timer [`Platform::start_timer`] started.
     Timer,
     /// An interrupt the kernel never asked for, by the architecture's
-    /// vector number: a stray legacy line, a spurious interrupt or any
+    /// number for it: a stray legacy line, a spurious interrupt or any
     /// other.
     Stray {
-        /// The vector number.
-        vector: u8,
+        /// The vector number on x86_64, the interrupt ID on aarch64.
+        vector: u32,
     },
-    /// Any other exception, by the architecture's vector number and the
-    /// error code it pushed, or 0 when it pushes none.
+    /// Any other exception, by the architecture's number for it and the
+    /// error code it gave, or 0 when it gives none.
     Other {
-        /// The vector number.
+        /// The vector number on x86_64, the exception class on aarch64.
         vector: u8,
-        /// The error code.
+        /// The error code on x86_64, the syndrome register on aarch64.
         error: u64,
     },
 }
