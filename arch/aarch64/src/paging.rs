@@ -16,7 +16,8 @@ use aarch64_cpu::registers::{ID_AA64MMFR1_EL1, MAIR_EL1, Readable, TCR_EL1, TTBR
 use thisos_frames::Frame;
 use thisos_hal::{MapError, MapErrorKind, Protection, Translation};
 
-use crate::{heap, ptr_at};
+use crate::heap::{self, Heap};
+use crate::ptr_at;
 
 // Descriptor bits, for the 4 KiB granule.
 const VALID: u64 = 1 << 0;
@@ -428,6 +429,7 @@ pub struct KernelPageTables {
     tables: PageTables,
     /// The level 0 entry the heap and `map` map into.
     space: u64,
+    heap: Heap,
 }
 
 /// Whether `range` and the `size` bytes from `va` share an address.
@@ -564,7 +566,14 @@ pub unsafe fn take(
     // none yet; the kernel never reaches one but through user copies, which
     // will clear PSTATE.PAN for it.
     unsafe { enable_pan() };
-    Some(KernelPageTables { tables, space })
+    Some(KernelPageTables {
+        tables,
+        space,
+        // SAFETY: Limine mapped nothing in the space entry, TAKEN makes
+        // this the only Heap, and only grow_heap maps in its range, since
+        // map stays inside kernel_space, which starts above it.
+        heap: unsafe { Heap::new(space_start(space)) },
+    })
 }
 
 /// Makes TTBR1 point at the level 0 table at `level_0`, and drops every
@@ -703,10 +712,21 @@ impl thisos_hal::PageTables for KernelPageTables {
 
     fn grow_heap(
         &mut self,
-        _frame: Frame,
-        _alloc: &mut dyn FnMut() -> Option<Frame>,
+        frame: Frame,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
     ) -> Result<(), MapError> {
-        crate::not_ported("PageTables::grow_heap")
+        let next = self.heap.next();
+        assert!(
+            next < space_start(self.space) + heap::SIZE,
+            "the heap's {} GiB are full",
+            heap::SIZE >> 30
+        );
+        self.tables.map_page(next, frame, LEAF | PXN | UXN, alloc)?;
+        // SAFETY: map_page mapped the page writable to the frame, and
+        // nothing unmaps in the heap's range, maps there or reaches the
+        // frame otherwise.
+        unsafe { self.heap.grow() };
+        Ok(())
     }
 
     fn translate(&self, addr: u64) -> Option<Translation> {

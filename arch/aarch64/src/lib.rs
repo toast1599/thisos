@@ -181,10 +181,11 @@ fn not_ported(call: &str) -> ! {
 
 /// The pointer at `addr`. The one place the crate turns an integer into a
 /// pointer, for an address that reaches it as an integer from a register,
-/// from the loader, or from a symbol the crate's own assembly defines.
+/// from the loader, from a symbol the crate's own assembly defines, or from
+/// the page tables, as the heap's base does.
 #[expect(
     clippy::disallowed_methods,
-    reason = "the address comes from the hardware or the loader, never from a Rust pointer"
+    reason = "the address comes from the hardware, the loader or the page tables, never from a Rust pointer"
 )]
 fn ptr_at<T>(addr: u64) -> *mut T {
     let Ok(addr) = usize::try_from(addr) else {
