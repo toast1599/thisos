@@ -91,12 +91,21 @@ impl Platform for Aarch64 {
     type PageTables = KernelPageTables;
 
     fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<KernelPageTables> {
-        // SAFETY: boot_info recorded where Limine mapped all physical memory.
+        // SAFETY: boot_info recorded where Limine mapped all physical memory
+        // and the framebuffer, and linker.ld puts every function in .text.
         // The guard page lies in the boot stack's section, which nothing
         // uses below the stack, and the lower half holds only Limine's
         // identity mapping, which nothing uses once _start has left
         // Limine's stack.
-        unsafe { paging::take(boot::phys_offset(), Self::guard_page(), alloc) }
+        unsafe {
+            paging::take(
+                boot::phys_offset(),
+                Self::guard_page(),
+                boot::text(),
+                boot::framebuffer_range(),
+                alloc,
+            )
+        }
     }
 
     fn move_trap_stacks(_stack: &mut dyn FnMut(usize) -> u64) {

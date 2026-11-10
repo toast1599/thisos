@@ -122,5 +122,8 @@ pub fn ci() -> Result<()> {
     }
 
     build::build(Arch::X86_64, false, Kernel::Main)?;
+    // Clippy stops before codegen, so only this assembles and links the
+    // aarch64 kernel.
+    build::build(Arch::Aarch64, false, Kernel::Main)?;
     Ok(())
 }

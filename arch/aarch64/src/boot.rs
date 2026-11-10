@@ -2,6 +2,7 @@
 //! stack it switches to, and the kernel's `BootInfo` built from the answers.
 
 use core::arch::global_asm;
+use core::ops::Range;
 use core::ptr::addr_of;
 use core::sync::atomic::{AtomicU64, Ordering};
 
@@ -11,7 +12,7 @@ use thisos_hal::{BootInfo, Framebuffer, PixelFormat, TrapHandler};
 
 use crate::framebuffer::FramebufferPixels;
 use crate::memory::MemoryMap;
-use crate::{Aarch64, backtrace, paging, ptr_at, to_u64};
+use crate::{Aarch64, backtrace, ptr_at, to_u64};
 
 // Limine finds these by their magic numbers anywhere in the kernel's
 // writable data, and writes its answers into them before it jumps to
@@ -31,6 +32,22 @@ pub(crate) fn phys_offset() -> u64 {
     let offset = PHYS_OFFSET.load(Ordering::Relaxed);
     assert!(offset != 0, "Limine didn't map physical memory");
     offset
+}
+
+// The framebuffer's virtual addresses, which boot_info records. Empty when
+// there is no framebuffer the console draws, as before then.
+static FRAMEBUFFER_START: AtomicU64 = AtomicU64::new(0);
+static FRAMEBUFFER_END: AtomicU64 = AtomicU64::new(0);
+
+/// The framebuffer's virtual addresses, or an empty range without one.
+pub(crate) fn framebuffer_range() -> Range<u64> {
+    FRAMEBUFFER_START.load(Ordering::Relaxed)..FRAMEBUFFER_END.load(Ordering::Relaxed)
+}
+
+/// The kernel's code, between the symbols linker.ld defines around
+/// `.text`.
+pub(crate) fn text() -> Range<u64> {
+    to_u64(addr_of!(__text_start).addr())..to_u64(addr_of!(__text_end).addr())
 }
 
 /// The boot stack's size. Its base is aligned to twice this, so that the
@@ -77,6 +94,8 @@ unsafe extern "C" {
     // Only their addresses are used.
     safe static __boot_stack_bottom: u8;
     safe static __boot_stack_top: u8;
+    safe static __text_start: u8;
+    safe static __text_end: u8;
 }
 
 /// The second framebuffer handle, until a panic takes it.
@@ -113,16 +132,17 @@ pub unsafe fn boot_info(_trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
         panic!("Limine didn't map physical memory");
     };
     PHYS_OFFSET.store(hhdm.offset, Ordering::Relaxed);
-    let framebuffer_write_combining = framebuffer.as_ref().is_some_and(|fb| {
-        // SAFETY: hhdm.offset is where Limine mapped all physical memory,
-        // the range is the framebuffer's, and the caller runs this once,
-        // before anything else, so nothing else uses Limine's tables.
-        unsafe { paging::write_combine(hhdm.offset, fb.pixels.range()) }
-    });
+    if let Some(fb) = &framebuffer {
+        let range = fb.pixels.range();
+        FRAMEBUFFER_START.store(range.start, Ordering::Relaxed);
+        FRAMEBUFFER_END.store(range.end, Ordering::Relaxed);
+    }
     BootInfo {
         serial: None,
+        // take_page_tables makes it normal non-cacheable, which gathers
+        // stores as write-combining does.
+        framebuffer_write_combining: framebuffer.is_some(),
         framebuffer,
-        framebuffer_write_combining,
         memory: MemoryMap::new(memory.entries()),
     }
 }
@@ -141,7 +161,7 @@ fn framebuffer(fb: &limine::framebuffer::Framebuffer) -> Option<Framebuffer<Fram
     let width = usize::try_from(fb.width).ok()?;
     let height = usize::try_from(fb.height).ok()?;
     let pitch = usize::try_from(fb.pitch).ok()?;
-    if pitch % 4 != 0 {
+    if pitch % 4 != 0 || width > pitch / 4 {
         return None;
     }
     let size = pitch.checked_mul(height)?;

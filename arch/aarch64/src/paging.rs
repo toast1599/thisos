@@ -26,8 +26,9 @@ const VALID: u64 = 1 << 0;
 /// entry it must be set.
 const TABLE_OR_PAGE: u64 = 1 << 1;
 const ATTR_INDEX: u64 = 7 << 2;
-/// Attribute index 1, which Limine gives the framebuffer alone.
-const ATTR_FRAMEBUFFER: u64 = 1 << 2;
+/// Attribute index 2, which Limine leaves unused and the kernel gives the
+/// framebuffer.
+const ATTR_NON_CACHEABLE: u64 = 2 << 2;
 /// AP[1]: EL0 may reach the page.
 const EL0: u64 = 1 << 6;
 /// AP[2]: nothing may write the page.
@@ -54,7 +55,7 @@ const UPPER_HALF: u64 = 0xffff_0000_0000_0000;
 /// Where user mappings may go: TTBR0's 256 TiB, above the first 64 KiB.
 pub const USER_SPACE: Range<u64> = 0x1_0000..1 << 48;
 
-/// `MAIR_EL1`'s attribute 1 as normal memory, non-cacheable inner and outer,
+/// `MAIR_EL1`'s attribute 2 as normal memory, non-cacheable inner and outer,
 /// so that the CPU gathers stores to it as x86_64's write-combining does.
 const MAIR_NON_CACHEABLE: u64 = 0x44;
 
@@ -114,59 +115,80 @@ impl PageTables {
         start
     }
 
+    /// A new empty table for the kernel's tables, from `alloc`. Panics if
+    /// it has no frames left, since the kernel can't run without them.
+    fn kernel_table(&self, alloc: &mut dyn FnMut() -> Option<Frame>) -> u64 {
+        let Some(frame) = alloc() else {
+            panic!("no frames left for the kernel's page tables");
+        };
+        self.new_table(frame)
+    }
+
     /// Copies the valid entries of the level `level` table at `from`, which
     /// maps from `va`, into a new table, and returns the new table's
-    /// address. Each leaf becomes what `leaf` makes of it, given its
-    /// address, or is left out where it gives `None`; the tables below are
-    /// copied in turn.
+    /// address. Each entry becomes what `copy_entry` makes of it.
     fn copy(
         &self,
         from: u64,
         level: u8,
         va: u64,
-        leaf: &dyn Fn(u64, u64) -> Option<u64>,
+        leaf: &dyn Fn(u64, u64, u64) -> Option<u64>,
+        split: &dyn Fn(u64, u64) -> bool,
         alloc: &mut dyn FnMut() -> Option<Frame>,
     ) -> u64 {
-        let Some(frame) = alloc() else {
-            panic!("no frames left for the kernel's page tables");
-        };
-        let to = self.new_table(frame);
+        let to = self.kernel_table(alloc);
         for index in 0..512 {
             let value = self.entry(from, index).load();
             if value & VALID == 0 {
                 continue;
             }
             let address = va + index * entry_size(level);
-            let value = if is_leaf(level, value) {
-                match leaf(address, value) {
-                    Some(value) => value,
-                    None => continue,
-                }
-            } else {
-                (value & !ADDRESS) | self.copy(value & ADDRESS, level + 1, address, leaf, alloc)
-            };
-            // SAFETY: The new table isn't in use yet: no TTBR points at
-            // it.
-            unsafe { self.entry(to, index).store(value) };
+            if let Some(value) = self.copy_entry(value, level, address, leaf, split, alloc) {
+                // SAFETY: The new table isn't in use yet: no TTBR points at
+                // it.
+                unsafe { self.entry(to, index).store(value) };
+            }
         }
         to
     }
 
-    /// Calls `f` with the address, entry and size of each leaf under the
-    /// level `level` table at `table`, which maps from `va`.
-    fn for_each_leaf(&self, table: u64, level: u8, va: u64, f: &mut dyn FnMut(u64, u64, u64)) {
+    /// What the valid entry `value` of a level `level` table, which maps
+    /// from `va`, becomes in a copy, or `None` to leave it out. A table is
+    /// copied in turn. A block for which `split` gives true, given its
+    /// address and size, becomes a table of smaller entries that map the
+    /// same memory. Any other leaf becomes what `leaf` makes of it, given
+    /// its address, size and value.
+    fn copy_entry(
+        &self,
+        value: u64,
+        level: u8,
+        va: u64,
+        leaf: &dyn Fn(u64, u64, u64) -> Option<u64>,
+        split: &dyn Fn(u64, u64) -> bool,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
+    ) -> Option<u64> {
+        let size = entry_size(level);
+        if !is_leaf(level, value) {
+            let table = self.copy(value & ADDRESS, level + 1, va, leaf, split, alloc);
+            return Some((value & !ADDRESS) | table);
+        }
+        if level == 3 || !split(va, size) {
+            return leaf(va, size, value);
+        }
+        let to = self.kernel_table(alloc);
+        let child = entry_size(level + 1);
+        let page = if level + 1 == 3 { TABLE_OR_PAGE } else { 0 };
         for index in 0..512 {
-            let value = self.entry(table, index).load();
-            if value & VALID == 0 {
-                continue;
-            }
-            let address = va + index * entry_size(level);
-            if is_leaf(level, value) {
-                f(address, value, entry_size(level));
-            } else {
-                self.for_each_leaf(value & ADDRESS, level + 1, address, f);
+            let offset = index * child;
+            let value = (value & !ADDRESS & !TABLE_OR_PAGE) | ((value & ADDRESS) + offset) | page;
+            if let Some(value) = self.copy_entry(value, level + 1, va + offset, leaf, split, alloc)
+            {
+                // SAFETY: The new table isn't in use yet: no TTBR points at
+                // it.
+                unsafe { self.entry(to, index).store(value) };
             }
         }
+        Some(to | TABLE)
     }
 
     /// Maps `page` to `frame` with leaf bits `flags`, and links any new
@@ -358,11 +380,14 @@ fn flush_kernel_page(page: u64) {
 }
 
 /// Drops every TLB entry of ASID 0, which every user space uses, and
-/// keeps the kernel's global ones.
+/// keeps the kernel's global ones. The leading isb puts the caller's TTBR0
+/// and TCR writes in effect first, so that no walk after the TLBI uses the
+/// old values.
 fn flush_user() {
     // SAFETY: As in flush_kernel_page, for every user page.
     unsafe {
         asm!(
+            "isb",
             "dsb ishst",
             "tlbi aside1is, xzr",
             "dsb ish",
@@ -403,27 +428,60 @@ pub struct KernelPageTables {
     space: u64,
 }
 
-/// What the kernel's copy of Limine's leaf `value` is: global, with EL0
-/// unable to execute it, and EL1 unable to execute it either if it is
-/// writable.
-fn kernel_leaf(value: u64) -> u64 {
-    let pxn = if value & READ_ONLY == 0 { PXN } else { 0 };
-    (value & !NOT_GLOBAL) | UXN | pxn
+/// Whether `range` and the `size` bytes from `va` share an address.
+fn overlaps(range: &Range<u64>, va: u64, size: u64) -> bool {
+    !range.is_empty() && va < range.end && range.start.saturating_sub(va) < size
+}
+
+/// Whether the `size` bytes from `va` all lie in `range`.
+fn inside(range: &Range<u64>, va: u64, size: u64) -> bool {
+    range.contains(&va) && size <= range.end - va
+}
+
+/// The 4 KiB pages that hold `range`.
+fn pages(range: &Range<u64>) -> Range<u64> {
+    range.start & !0xfff..range.end.next_multiple_of(4096)
+}
+
+/// What the kernel's copy of Limine's leaf `value`, which maps `size`
+/// bytes from `va`, is: global, with EL0 unable to execute it, EL1 able to
+/// execute it only if it is read-only and inside the kernel's `text_pages`,
+/// and normal non-cacheable memory if it holds any of the framebuffer's
+/// `fb_pages`.
+fn kernel_leaf(
+    va: u64,
+    size: u64,
+    value: u64,
+    text_pages: &Range<u64>,
+    fb_pages: &Range<u64>,
+) -> u64 {
+    let code = value & READ_ONLY != 0 && inside(text_pages, va, size);
+    let pxn = if code { 0 } else { PXN };
+    let attr = if overlaps(fb_pages, va, size) {
+        ATTR_NON_CACHEABLE
+    } else {
+        value & ATTR_INDEX
+    };
+    (value & !NOT_GLOBAL & !PXN & !ATTR_INDEX) | UXN | pxn | attr
 }
 
 /// Copies Limine's upper half into new tables made from `alloc`'s frames,
-/// leaving out the page at `guard`, switches to them, empties the lower
-/// half and turns on PAN. Returns `None` after the first call. Panics if
-/// the CPU lacks PAN.
+/// leaving out the page at `guard`, letting EL1 execute only the kernel's
+/// `text` and making the framebuffer at `fb` normal non-cacheable memory.
+/// Then switches to them, empties the lower half and turns on PAN. Returns
+/// `None` after the first call. Panics if the CPU lacks PAN.
 ///
 /// # Safety
 ///
-/// `phys_offset` must be where Limine mapped all physical memory, nothing
-/// may use the page at `guard`, and nothing may use the lower half, where
-/// Limine left its identity mapping.
+/// `phys_offset` must be where Limine mapped all physical memory, `text`
+/// must hold all of the kernel's code, `fb` must be the framebuffer or
+/// empty, nothing may use the page at `guard`, and nothing may use the
+/// lower half.
 pub unsafe fn take(
     phys_offset: u64,
     guard: u64,
+    text: Range<u64>,
+    fb: Range<u64>,
     alloc: &mut dyn FnMut() -> Option<Frame>,
 ) -> Option<KernelPageTables> {
     static TAKEN: AtomicBool = AtomicBool::new(false);
@@ -438,11 +496,20 @@ pub unsafe fn take(
         phys_offset,
         level_0: TTBR1_EL1.get_baddr(),
     };
+    // linker.ld starts the next segment on a new page, so the text's last
+    // page holds nothing else.
+    let text_pages = pages(&text);
+    let fb_pages = pages(&fb);
     let level_0 = loader.copy(
         loader.level_0,
         0,
         UPPER_HALF,
-        &|va, value| (va != guard).then(|| kernel_leaf(value)),
+        &|va, size, value| {
+            (va != guard).then(|| kernel_leaf(va, size, value, &text_pages, &fb_pages))
+        },
+        // A block only partly framebuffer would make its other memory
+        // non-cacheable, which is too slow for RAM.
+        &|va, size| overlaps(&fb_pages, va, size) && !inside(&fb_pages, va, size),
         alloc,
     );
     let Some(space) = (0..512).find(|&i| loader.entry(loader.level_0, i).load() & VALID == 0)
@@ -453,20 +520,26 @@ pub unsafe fn take(
         phys_offset,
         level_0,
     };
-    let Some(frame) = alloc() else {
-        panic!("no frames left for the kernel's page tables");
-    };
-    let level_1 = tables.new_table(frame);
+    let level_1 = tables.kernel_table(alloc);
     // SAFETY: The new tables aren't in use yet.
     unsafe { tables.entry(level_0, space).store(level_1 | TABLE) };
+    // Limine's tables use attributes 0 and 1 alone, so changing 2 changes
+    // no live mapping.
+    let mair = MAIR_EL1.get();
+    MAIR_EL1.set((mair & !(0xff << 16)) | (MAIR_NON_CACHEABLE << 16));
     // SAFETY: The new tables map every upper-half address to the same frame
-    // with the same attributes as Limine's, apart from the global bit,
-    // execute permissions and the guard page, and the kernel's code, stack,
-    // statics, Limine's answers, the framebuffer and the physical-memory
-    // mapping are all in the upper half. The kernel executes only its code,
-    // which stays read-only and executable, and the caller guarantees
-    // nothing uses the guard page.
+    // as Limine's, with the same attributes apart from the global bit,
+    // execute permissions, the framebuffer's cacheability and the guard
+    // page, and the kernel's code, stack, statics, Limine's answers, the
+    // framebuffer and the physical-memory mapping are all in the upper
+    // half. The kernel executes only its code, which the caller guarantees
+    // is in text and stays read-only and executable, and nothing uses the
+    // guard page. load_kernel's isb puts the MAIR write in effect too.
     unsafe { load_kernel(level_0) };
+    if !fb_pages.is_empty() {
+        // SAFETY: fb_pages is the framebuffer, mapped in the new tables.
+        unsafe { clean(fb_pages) };
+    }
     // The caller guarantees nothing uses the lower half.
     empty_lower_half();
     // SAFETY: PAN only stops EL1 reaching EL0 pages, of which there are
@@ -484,6 +557,9 @@ pub unsafe fn take(
 /// The table must map everything the kernel reaches as the tables TTBR1
 /// points at now do, executable where the kernel executes.
 unsafe fn load_kernel(level_0: u64) {
+    // The Release stores that built the tables order them, but the walker
+    // is only certain to see them after a dsb.
+    barrier::dsb(ISHST);
     TTBR1_EL1.set_baddr(level_0);
     barrier::isb(barrier::SY);
     // SAFETY: As in flush_kernel_page, for every entry. QEMU models no TLB
@@ -675,6 +751,9 @@ impl thisos_hal::AddressSpace for UserSpace {
 
     fn activate(&self) {
         TTBR0_EL1.set_baddr(self.tables.level_0);
+        // Without it the TCR write could take effect first, and walks
+        // would start from the TTBR0 a destroyed space left.
+        barrier::isb(barrier::SY);
         TCR_EL1.modify(TCR_EL1::EPD0::EnableTTBR0Walks);
         flush_user();
     }
@@ -735,64 +814,26 @@ pub fn write_return(phys_offset: u64, frame: &Frame) {
     }
 }
 
-/// Makes the framebuffer at virtual addresses `fb` normal non-cacheable
-/// memory, by changing `MAIR_EL1`'s attribute 1, when Limine's tables give
-/// attribute 1 to the framebuffer's pages and to nothing else. Returns
-/// whether it did.
+/// Writes back and drops every data cache line that holds part of the
+/// virtual addresses `range`. Lines the console's stores left while Limine
+/// mapped the framebuffer write-back go out to memory this way; no new
+/// ones come once it is non-cacheable.
 ///
 /// # Safety
 ///
-/// `phys_offset` must be where Limine mapped all physical memory, `fb`
-/// must be the framebuffer, and nothing else may use Limine's tables
-/// meanwhile.
-pub unsafe fn write_combine(phys_offset: u64, fb: Range<u64>) -> bool {
-    let tables = PageTables {
-        phys_offset,
-        level_0: TTBR1_EL1.get_baddr(),
-    };
-    let fb_pages = fb.start & !0xfff..fb.end.next_multiple_of(4096);
-    let mut only_fb = true;
-    let mut fb_covered = 0;
-    tables.for_each_leaf(tables.level_0, 0, UPPER_HALF, &mut |va, value, size| {
-        let framebuffer = value & ATTR_INDEX == ATTR_FRAMEBUFFER;
-        let inside = fb_pages.start <= va && va + size <= fb_pages.end;
-        if framebuffer && !inside {
-            only_fb = false;
-        }
-        if framebuffer && inside {
-            fb_covered += size;
-        }
-    });
-    if !only_fb || fb_covered != fb_pages.end - fb_pages.start {
-        return false;
-    }
-    let mair = MAIR_EL1.get();
-    MAIR_EL1.set((mair & !0xff00) | (MAIR_NON_CACHEABLE << 8));
-    // SAFETY: As in flush_kernel_page, for every entry, so that no TLB
-    // entry keeps the old type.
-    unsafe {
-        asm!(
-            "dsb ish",
-            "tlbi vmalle1is",
-            "dsb ish",
-            "isb",
-            options(nostack, preserves_flags)
-        );
-    }
-    // Lines the console's stores left in the cache while the framebuffer
-    // was write-back go out to memory now; no new ones come, since the
-    // framebuffer is non-cacheable from here on.
+/// `range` must be mapped.
+unsafe fn clean(range: Range<u64>) {
     let ctr: u64;
     // SAFETY: Reading CTR_EL0 into a register changes nothing.
     unsafe { asm!("mrs {}, ctr_el0", out(reg) ctr, options(nomem, nostack, preserves_flags)) };
     // DminLine, bits 19:16, is the smallest data cache line in words.
-    let line = 4usize << ((ctr >> 16) & 0xf);
-    for addr in (fb_pages.start..fb_pages.end).step_by(line) {
+    let line = 4 << ((ctr >> 16) & 0xf);
+    let mut addr = range.start & !(line - 1);
+    while addr < range.end {
         // SAFETY: Cleaning and invalidating a line writes back what the
-        // cache holds of the framebuffer, which Limine maps for the
-        // kernel's life, and changes no memory's value.
+        // cache holds of a mapped address, and changes no memory's value.
         unsafe { asm!("dc civac, {}", in(reg) addr, options(nostack, preserves_flags)) };
+        addr += line;
     }
     barrier::dsb(ISH);
-    true
 }

@@ -42,7 +42,9 @@ impl Iterator for MemoryMap {
         };
         Some(MemoryRegion {
             start: entry.base,
-            end: entry.base + entry.length,
+            // An entry past the top ends at it, so that its frames below
+            // still count.
+            end: entry.base.saturating_add(entry.length),
             kind,
         })
     }
