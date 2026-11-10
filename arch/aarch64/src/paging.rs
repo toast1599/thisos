@@ -12,9 +12,7 @@ use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use aarch64_cpu::asm::barrier::{self, ISH, ISHST};
-use aarch64_cpu::registers::{
-    ID_AA64MMFR1_EL1, MAIR_EL1, ReadWriteable, Readable, TCR_EL1, TTBR0_EL1, TTBR1_EL1, Writeable,
-};
+use aarch64_cpu::registers::{ID_AA64MMFR1_EL1, MAIR_EL1, Readable, TCR_EL1, TTBR0_EL1, TTBR1_EL1};
 use thisos_frames::Frame;
 use thisos_hal::{MapError, MapErrorKind, Protection, Translation};
 
@@ -132,7 +130,7 @@ impl PageTables {
         from: u64,
         level: u8,
         va: u64,
-        leaf: &dyn Fn(u64, u64, u64) -> Option<u64>,
+        leaf: &dyn Fn(u64, u64, u64) -> u64,
         split: &dyn Fn(u64, u64) -> bool,
         alloc: &mut dyn FnMut() -> Option<Frame>,
     ) -> u64 {
@@ -143,34 +141,31 @@ impl PageTables {
                 continue;
             }
             let address = va + index * entry_size(level);
-            if let Some(value) = self.copy_entry(value, level, address, leaf, split, alloc) {
-                // SAFETY: The new table isn't in use yet: no TTBR points at
-                // it.
-                unsafe { self.entry(to, index).store(value) };
-            }
+            let value = self.copy_entry(value, level, address, leaf, split, alloc);
+            // SAFETY: The new table isn't in use yet: no TTBR points at it.
+            unsafe { self.entry(to, index).store(value) };
         }
         to
     }
 
     /// What the valid entry `value` of a level `level` table, which maps
-    /// from `va`, becomes in a copy, or `None` to leave it out. A table is
-    /// copied in turn. A block for which `split` gives true, given its
-    /// address and size, becomes a table of smaller entries that map the
-    /// same memory. Any other leaf becomes what `leaf` makes of it, given
-    /// its address, size and value.
+    /// from `va`, becomes in a copy. A table is copied in turn. A block for
+    /// which `split` gives true, given its address and size, becomes a
+    /// table of smaller entries that map the same memory. Any other leaf
+    /// becomes what `leaf` makes of it, given its address, size and value.
     fn copy_entry(
         &self,
         value: u64,
         level: u8,
         va: u64,
-        leaf: &dyn Fn(u64, u64, u64) -> Option<u64>,
+        leaf: &dyn Fn(u64, u64, u64) -> u64,
         split: &dyn Fn(u64, u64) -> bool,
         alloc: &mut dyn FnMut() -> Option<Frame>,
-    ) -> Option<u64> {
+    ) -> u64 {
         let size = entry_size(level);
         if !is_leaf(level, value) {
             let table = self.copy(value & ADDRESS, level + 1, va, leaf, split, alloc);
-            return Some((value & !ADDRESS) | table);
+            return (value & !ADDRESS) | table;
         }
         if level == 3 || !split(va, size) {
             return leaf(va, size, value);
@@ -181,14 +176,11 @@ impl PageTables {
         for index in 0..512 {
             let offset = index * child;
             let value = (value & !ADDRESS & !TABLE_OR_PAGE) | ((value & ADDRESS) + offset) | page;
-            if let Some(value) = self.copy_entry(value, level + 1, va + offset, leaf, split, alloc)
-            {
-                // SAFETY: The new table isn't in use yet: no TTBR points at
-                // it.
-                unsafe { self.entry(to, index).store(value) };
-            }
+            let value = self.copy_entry(value, level + 1, va + offset, leaf, split, alloc);
+            // SAFETY: The new table isn't in use yet: no TTBR points at it.
+            unsafe { self.entry(to, index).store(value) };
         }
-        Some(to | TABLE)
+        to | TABLE
     }
 
     /// Maps `page` to `frame` with leaf bits `flags`, and links any new
@@ -363,20 +355,41 @@ impl Entry<'_> {
     }
 }
 
+/// Runs `tlbi <op>` on every CPU once the table stores before it are done,
+/// and waits until the entries are gone. With a page address, the
+/// instruction gets the page's number.
+macro_rules! tlbi {
+    ($op:literal) => {
+        // SAFETY: TLB maintenance only makes the CPUs walk the tables
+        // again; it reads and writes no memory the kernel uses.
+        unsafe {
+            asm!(
+                "dsb ishst",
+                concat!("tlbi ", $op),
+                "dsb ish",
+                "isb",
+                options(nostack, preserves_flags),
+            )
+        }
+    };
+    ($op:literal, $page:expr) => {
+        // SAFETY: As above.
+        unsafe {
+            asm!(
+                "dsb ishst",
+                concat!("tlbi ", $op, ", {}"),
+                "dsb ish",
+                "isb",
+                in(reg) ($page >> 12) & ((1 << 44) - 1),
+                options(nostack, preserves_flags),
+            )
+        }
+    };
+}
+
 /// Drops the global entry for kernel page `page` from every TLB.
 fn flush_kernel_page(page: u64) {
-    // SAFETY: TLB maintenance only makes the CPU walk the tables again for
-    // the page; it reads and writes no memory the kernel uses.
-    unsafe {
-        asm!(
-            "dsb ishst",
-            "tlbi vaae1is, {}",
-            "dsb ish",
-            "isb",
-            in(reg) (page >> 12) & ((1 << 44) - 1),
-            options(nostack, preserves_flags),
-        );
-    }
+    tlbi!("vaae1is", page);
 }
 
 /// Drops every TLB entry of ASID 0, which every user space uses, and
@@ -384,39 +397,28 @@ fn flush_kernel_page(page: u64) {
 /// and TCR writes in effect first, so that no walk after the TLBI uses the
 /// old values.
 fn flush_user() {
-    // SAFETY: As in flush_kernel_page, for every user page.
-    unsafe {
-        asm!(
-            "isb",
-            "dsb ishst",
-            "tlbi aside1is, xzr",
-            "dsb ish",
-            "isb",
-            options(nostack, preserves_flags)
-        );
-    }
+    barrier::isb(barrier::SY);
+    tlbi!("aside1is, xzr");
 }
 
 /// Drops the entry for user page `page`, in ASID 0, from every TLB.
 fn flush_user_page(page: u64) {
-    // SAFETY: As in flush_kernel_page.
-    unsafe {
-        asm!(
-            "dsb ishst",
-            "tlbi vae1is, {}",
-            "dsb ish",
-            "isb",
-            in(reg) (page >> 12) & ((1 << 44) - 1),
-            options(nostack, preserves_flags),
-        );
-    }
+    tlbi!("vae1is", page);
 }
 
 /// Turns TTBR0's walks off, so that the lower half is empty, and drops
 /// what the TLB held of it.
 fn empty_lower_half() {
-    TCR_EL1.modify(TCR_EL1::EPD0::DisableTTBR0Walks);
+    // SAFETY: With TTBR0's walks off every lower-half access faults, which
+    // reaches no memory.
+    unsafe { set_ttbr0_walks(false) };
     flush_user();
+}
+
+/// Whether TTBR0's walks are on, so that the lower half is mapped through
+/// TTBR0's table.
+fn ttbr0_walks() -> bool {
+    TCR_EL1.matches_all(TCR_EL1::EPD0::EnableTTBR0Walks)
 }
 
 /// The page tables the kernel built and runs on. Only `take` makes one,
@@ -444,10 +446,9 @@ fn pages(range: &Range<u64>) -> Range<u64> {
 }
 
 /// What the kernel's copy of Limine's leaf `value`, which maps `size`
-/// bytes from `va`, is: global, with EL0 unable to execute it, EL1 able to
-/// execute it only if it is read-only and inside the kernel's `text_pages`,
-/// and normal non-cacheable memory if it holds any of the framebuffer's
-/// `fb_pages`.
+/// bytes from `va`, is: global, out of EL0's reach, executable by EL1 only
+/// if it is read-only and inside the kernel's `text_pages`, and normal
+/// non-cacheable memory if it holds any of the framebuffer's `fb_pages`.
 fn kernel_leaf(
     va: u64,
     size: u64,
@@ -462,21 +463,22 @@ fn kernel_leaf(
     } else {
         value & ATTR_INDEX
     };
-    (value & !NOT_GLOBAL & !PXN & !ATTR_INDEX) | UXN | pxn | attr
+    (value & !NOT_GLOBAL & !PXN & !ATTR_INDEX & !EL0) | UXN | pxn | attr
 }
 
 /// Copies Limine's upper half into new tables made from `alloc`'s frames,
-/// leaving out the page at `guard`, letting EL1 execute only the kernel's
-/// `text` and making the framebuffer at `fb` normal non-cacheable memory.
-/// Then switches to them, empties the lower half and turns on PAN. Returns
-/// `None` after the first call. Panics if the CPU lacks PAN.
+/// letting EL1 execute only the kernel's `text` and making the framebuffer
+/// at `fb` normal non-cacheable memory. Then switches to them, empties the
+/// lower half and turns on PAN. Returns `None` after the first call.
+/// Panics if the CPU lacks PAN, if Limine's `TCR_EL1` isn't what this
+/// module assumes, or if Limine mapped the boot stack's guard page at
+/// `guard`.
 ///
 /// # Safety
 ///
 /// `phys_offset` must be where Limine mapped all physical memory, `text`
 /// must hold all of the kernel's code, `fb` must be the framebuffer or
-/// empty, nothing may use the page at `guard`, and nothing may use the
-/// lower half.
+/// empty, and nothing may use the lower half.
 pub unsafe fn take(
     phys_offset: u64,
     guard: u64,
@@ -492,10 +494,28 @@ pub unsafe fn take(
         ID_AA64MMFR1_EL1.read(ID_AA64MMFR1_EL1::PAN) != 0,
         "the CPU lacks PAN"
     );
+    let tcr = TCR_EL1.extract();
+    let t1sz = tcr.read(TCR_EL1::T1SZ);
+    assert!(t1sz == 16, "Limine set TCR_EL1.T1SZ to {t1sz}, not 16");
+    let tg1 = tcr.read(TCR_EL1::TG1);
+    assert!(
+        tcr.matches_all(TCR_EL1::TG1::KiB_4),
+        "Limine set TCR_EL1.TG1 to {tg1:#b}, not 4 KiB"
+    );
+    // Either would let the walker write entries, which the software Access
+    // flag and Entry, whose walker only reads, assume it never does.
+    assert!(
+        tcr.read(TCR_EL1::HA) == 0 && tcr.read(TCR_EL1::HD) == 0,
+        "Limine turned on TCR_EL1.HA or HD"
+    );
     let loader = PageTables {
         phys_offset,
         level_0: TTBR1_EL1.get_baddr(),
     };
+    assert!(
+        loader.translate(guard).is_none(),
+        "Limine mapped the boot stack's guard page at {guard:#x}"
+    );
     // linker.ld starts the next segment on a new page, so the text's last
     // page holds nothing else.
     let text_pages = pages(&text);
@@ -504,9 +524,7 @@ pub unsafe fn take(
         loader.level_0,
         0,
         UPPER_HALF,
-        &|va, size, value| {
-            (va != guard).then(|| kernel_leaf(va, size, value, &text_pages, &fb_pages))
-        },
+        &|va, size, value| kernel_leaf(va, size, value, &text_pages, &fb_pages),
         // A block only partly framebuffer would make its other memory
         // non-cacheable, which is too slow for RAM.
         &|va, size| overlaps(&fb_pages, va, size) && !inside(&fb_pages, va, size),
@@ -523,18 +541,18 @@ pub unsafe fn take(
     let level_1 = tables.kernel_table(alloc);
     // SAFETY: The new tables aren't in use yet.
     unsafe { tables.entry(level_0, space).store(level_1 | TABLE) };
-    // Limine's tables use attributes 0 and 1 alone, so changing 2 changes
-    // no live mapping.
     let mair = MAIR_EL1.get();
-    MAIR_EL1.set((mair & !(0xff << 16)) | (MAIR_NON_CACHEABLE << 16));
+    // SAFETY: Limine's tables use attributes 0 and 1 alone, so changing 2
+    // changes no live mapping.
+    unsafe { write_mair((mair & !(0xff << 16)) | (MAIR_NON_CACHEABLE << 16)) };
     // SAFETY: The new tables map every upper-half address to the same frame
     // as Limine's, with the same attributes apart from the global bit,
-    // execute permissions, the framebuffer's cacheability and the guard
-    // page, and the kernel's code, stack, statics, Limine's answers, the
+    // EL0 access, execute permissions and the framebuffer's cacheability,
+    // and the kernel's code, stack, statics, Limine's answers, the
     // framebuffer and the physical-memory mapping are all in the upper
     // half. The kernel executes only its code, which the caller guarantees
-    // is in text and stays read-only and executable, and nothing uses the
-    // guard page. load_kernel's isb puts the MAIR write in effect too.
+    // is in text and stays read-only and executable. load_kernel's isb puts
+    // the MAIR write in effect too.
     unsafe { load_kernel(level_0) };
     if !fb_pages.is_empty() {
         // SAFETY: fb_pages is the framebuffer, mapped in the new tables.
@@ -560,22 +578,61 @@ unsafe fn load_kernel(level_0: u64) {
     // The Release stores that built the tables order them, but the walker
     // is only certain to see them after a dsb.
     barrier::dsb(ISHST);
-    TTBR1_EL1.set_baddr(level_0);
+    // SAFETY: The caller guarantees the table maps what the kernel reaches.
+    unsafe { write_ttbr1(level_0) };
     barrier::isb(barrier::SY);
-    // SAFETY: As in flush_kernel_page, for every entry. QEMU models no TLB
-    // conflicts; hardware that does could raise one between the switch and
-    // this flush for an address whose old and new entries differ in the
-    // global bit, which needs the switch made from tables that map the
-    // switching code alone.
-    unsafe {
-        asm!(
-            "dsb ishst",
-            "tlbi vmalle1is",
-            "dsb ish",
-            "isb",
-            options(nostack, preserves_flags)
-        );
-    }
+    // QEMU models no TLB conflicts; hardware that does could raise one
+    // between the switch and this flush for an address whose old and new
+    // entries differ in the global bit, which needs the switch made from
+    // tables that map the switching code alone.
+    tlbi!("vmalle1is");
+}
+
+/// Points `TTBR0_EL1` at the level 0 table at `table`, with ASID 0.
+///
+/// # Safety
+///
+/// While TTBR0's walks are on, the table must map nothing but frames it
+/// holds, so that the lower half reaches no memory the kernel uses
+/// otherwise.
+unsafe fn write_ttbr0(table: u64) {
+    // SAFETY: The caller guarantees what the table maps.
+    unsafe { asm!("msr ttbr0_el1, {}", in(reg) table, options(nostack, preserves_flags)) };
+}
+
+/// Points `TTBR1_EL1` at the level 0 table at `table`.
+///
+/// # Safety
+///
+/// The table must map everything the kernel reaches, as the kernel expects
+/// to reach it, executable where the kernel executes.
+unsafe fn write_ttbr1(table: u64) {
+    // SAFETY: The caller guarantees what the table maps.
+    unsafe { asm!("msr ttbr1_el1, {}", in(reg) table, options(nostack, preserves_flags)) };
+}
+
+/// Turns TTBR0's walks on or off with `TCR_EL1.EPD0` (bit 7).
+///
+/// # Safety
+///
+/// Turning them on needs TTBR0 to hold a table that `write_ttbr0`'s
+/// contract covers.
+unsafe fn set_ttbr0_walks(on: bool) {
+    let tcr = TCR_EL1.get();
+    let tcr = if on { tcr & !(1 << 7) } else { tcr | (1 << 7) };
+    // SAFETY: Only EPD0 changes, as the caller allows.
+    unsafe { asm!("msr tcr_el1, {}", in(reg) tcr, options(nostack, preserves_flags)) };
+}
+
+/// Writes `value` to `MAIR_EL1`.
+///
+/// # Safety
+///
+/// Every attribute index a live mapping uses must keep its memory type, or
+/// its TLB entries must be dropped before anything reaches it again.
+unsafe fn write_mair(value: u64) {
+    // SAFETY: The caller guarantees no live mapping changes type.
+    unsafe { asm!("msr mair_el1, {}", in(reg) value, options(nostack, preserves_flags)) };
 }
 
 /// Sets PSTATE.PAN, and makes every exception taken to EL1 set it too.
@@ -659,10 +716,18 @@ impl thisos_hal::PageTables for KernelPageTables {
         self.tables.translate(addr)
     }
 
-    // TTBR1 maps only the upper half; the lower half is empty while TTBR0's
-    // walks are off, as the kernel's activate leaves them.
+    // These tables are TTBR1's and can't map the lower half, so this says
+    // whether the CPU maps any of it now: whether TTBR0's walks are on with
+    // a table that maps anything. The kernel's activate turns them off.
     fn lower_half_mapped(&self) -> bool {
-        TCR_EL1.matches_all(TCR_EL1::EPD0::EnableTTBR0Walks)
+        if !ttbr0_walks() {
+            return false;
+        }
+        let ttbr0 = PageTables {
+            phys_offset: self.tables.phys_offset,
+            level_0: TTBR0_EL1.get_baddr(),
+        };
+        (0..512).any(|i| ttbr0.entry(ttbr0.level_0, i).load() & VALID != 0)
     }
 
     fn new_space(&self, alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<UserSpace> {
@@ -672,6 +737,7 @@ impl thisos_hal::PageTables for KernelPageTables {
                 phys_offset: self.tables.phys_offset,
                 level_0,
             },
+            kernel: self.tables.level_0,
         })
     }
 
@@ -685,13 +751,15 @@ impl thisos_hal::PageTables for KernelPageTables {
 #[derive(Debug)]
 pub struct UserSpace {
     tables: PageTables,
+    /// The kernel's level 0 table, which maps the upper half for every
+    /// space.
+    kernel: u64,
 }
 
 impl UserSpace {
     /// Whether the CPU translates the lower half through this space.
     fn active(&self) -> bool {
-        TCR_EL1.matches_all(TCR_EL1::EPD0::EnableTTBR0Walks)
-            && TTBR0_EL1.get_baddr() == self.tables.level_0
+        ttbr0_walks() && TTBR0_EL1.get_baddr() == self.tables.level_0
     }
 }
 
@@ -743,18 +811,29 @@ impl thisos_hal::AddressSpace for UserSpace {
     }
 
     fn translate(&self, addr: u64) -> Option<Translation> {
-        if addr >= 1 << 48 {
+        let level_0 = if addr >= UPPER_HALF {
+            self.kernel
+        } else if addr < 1 << 48 {
+            self.tables.level_0
+        } else {
             return None;
+        };
+        PageTables {
+            phys_offset: self.tables.phys_offset,
+            level_0,
         }
-        self.tables.translate(addr)
+        .translate(addr)
     }
 
     fn activate(&self) {
-        TTBR0_EL1.set_baddr(self.tables.level_0);
+        // SAFETY: Only map maps in the space, through map_page, with frames
+        // the space holds from then on.
+        unsafe { write_ttbr0(self.tables.level_0) };
         // Without it the TCR write could take effect first, and walks
         // would start from the TTBR0 a destroyed space left.
         barrier::isb(barrier::SY);
-        TCR_EL1.modify(TCR_EL1::EPD0::EnableTTBR0Walks);
+        // SAFETY: TTBR0 holds this space's table, as above.
+        unsafe { set_ttbr0_walks(true) };
         flush_user();
     }
 
@@ -777,7 +856,7 @@ pub fn translate_active(phys_offset: u64, addr: u64) -> Option<Translation> {
     // with their owner.
     let level_0 = if addr >= UPPER_HALF {
         TTBR1_EL1.get_baddr()
-    } else if addr < 1 << 48 && TCR_EL1.matches_all(TCR_EL1::EPD0::EnableTTBR0Walks) {
+    } else if addr < 1 << 48 && ttbr0_walks() {
         TTBR0_EL1.get_baddr()
     } else {
         return None;

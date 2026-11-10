@@ -56,16 +56,13 @@ const STACK_SIZE: usize = 64 << 10;
 
 // Limine enters at EL1 with the MMU on, interrupts masked and SP_EL0 on a
 // stack of its own, which has nothing unmapped below it. _start moves to
-// SP_EL1, which the kernel runs on, on the boot stack, whose guard page
-// take_page_tables leaves out of the kernel's own tables, and clears the
-// frame record registers so that a backtrace ends here.
+// SP_EL1, which the kernel runs on, on the boot stack, and clears the frame
+// record registers so that a backtrace ends here. linker.ld gives the boot
+// stack a segment of its own with an unmapped page below it, its guard.
 global_asm!(
     r#"
-    .section .bss.boot_stack, "aw", %nobits
+    .section .boot_stack, "aw", %nobits
     .balign {align}
-    .space {align} - 4096
-    __boot_stack_guard:
-    .space 4096
     __boot_stack_bottom:
     .space {size}
     __boot_stack_top:

@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["kernel", "hal", "arch/x86_64", "arch/aarch64", "lib/console", "lib/frames"]
+# The aarch64 arch crate builds only for aarch64, so a plain cargo build at
+# the root, which targets x86_64-unknown-none, leaves it out.
+default-members = ["kernel", "hal", "arch/x86_64", "lib/console", "lib/frames"]
 
 [workspace.package]
 version = "0.0.0"

@@ -1,7 +1,6 @@
 //! The framebuffer's memory, reached through a raw pointer with volatile
-//! stores. No Rust reference to it exists: the loader's mapping of all
-//! physical memory maps the same frames a second time, and the compiler
-//! must not treat device memory as ordinary RAM.
+//! stores. No Rust reference to it exists: two handles reach the same
+//! pixels, and the compiler must not treat device memory as ordinary RAM.
 
 use core::ops::Range;
 

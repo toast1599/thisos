@@ -11,6 +11,7 @@ PHDRS
     text   PT_LOAD FLAGS(5);
     rodata PT_LOAD FLAGS(4);
     data   PT_LOAD FLAGS(6);
+    stack  PT_LOAD FLAGS(6);
 }
 
 SECTIONS
@@ -40,6 +41,14 @@ SECTIONS
         *(.bss .bss.*)
         *(COMMON)
     } :data
+
+    /* The boot stack, in a segment of its own at the alignment its section
+       asks for, at least one page past the end of the data. Limine maps
+       nothing in between, so that page is the stack's guard. */
+    . = ALIGN(4096) + 4096;
+    .boot_stack (NOLOAD) : {
+        *(.boot_stack)
+    } :stack
 
     /DISCARD/ : {
         *(.eh_frame*)

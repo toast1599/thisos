@@ -5,7 +5,7 @@
 //!
 //! Not every HAL call is ported yet: those that aren't panic with
 //! `<call> isn't ported to aarch64`, and the types behind them are the
-//! empty stand-ins in `unported`.
+//! stand-ins in `unported`, which nothing can construct.
 
 #![no_std]
 #![deny(clippy::unwrap_used, clippy::expect_used)]
@@ -21,7 +21,7 @@ mod unported;
 use core::arch::asm;
 use core::ops::Range;
 
-use aarch64_cpu::asm::wfi;
+use aarch64_cpu::asm::{barrier, wfi};
 use aarch64_cpu::registers::{DAIF, ReadWriteable, Readable, Writeable};
 use thisos_frames::Frame;
 use thisos_hal::{
@@ -41,6 +41,9 @@ pub struct Aarch64;
 impl Cpu for Aarch64 {
     fn halt() -> ! {
         DAIF.write(DAIF::D::Masked + DAIF::A::Masked + DAIF::I::Masked + DAIF::F::Masked);
+        // The framebuffer is non-cacheable, so the last pixels may still
+        // sit in a write buffer; this drains them to the display.
+        barrier::dsb(barrier::SY);
         // Masked interrupts still end wfi, so go straight back.
         loop {
             wfi();
@@ -93,10 +96,8 @@ impl Platform for Aarch64 {
     fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<KernelPageTables> {
         // SAFETY: boot_info recorded where Limine mapped all physical memory
         // and the framebuffer, and linker.ld puts every function in .text.
-        // The guard page lies in the boot stack's section, which nothing
-        // uses below the stack, and the lower half holds only Limine's
-        // identity mapping, which nothing uses once _start has left
-        // Limine's stack.
+        // Limine's TTBR0 maps nothing the kernel uses: _start left Limine's
+        // stack, and everything else is in the upper half.
         unsafe {
             paging::take(
                 boot::phys_offset(),
@@ -156,8 +157,11 @@ impl Platform for Aarch64 {
         paging::write_return(boot::phys_offset(), frame);
     }
 
+    // Only halts until semihosting is ported, so that a test run stops on
+    // its summary and xtask's timeout ends it as a failure. Panicking here
+    // would recurse, since the panic path calls this.
     fn exit_qemu(_success: bool) -> ! {
-        not_ported("Platform::exit_qemu")
+        Self::halt()
     }
 }
 
@@ -194,8 +198,9 @@ pub use boot::boot_info;
 
 /// Defines the kernel's entry point: `entry!(kmain, trap)` makes the arch
 /// crate's `_start` call `kmain(thisos_hal::BootInfo<Aarch64>) -> !` on the
-/// boot stack, after making `trap` the `thisos_hal::TrapHandler`. The kernel uses
-/// this macro so that it never names the boot loader's types.
+/// boot stack. `trap` is the `thisos_hal::TrapHandler`, which nothing calls
+/// until exceptions are ported. The kernel uses this macro so that it never
+/// names the boot loader's types.
 #[macro_export]
 macro_rules! entry {
     ($main:path, $trap:path) => {
