@@ -536,6 +536,14 @@ pub unsafe fn take(
         tcr.matches_all(TCR_EL1::TG1::KiB_4),
         "Limine set TCR_EL1.TG1 to {tg1:#b}, not 4 KiB"
     );
+    // USER_SPACE and every user space's walk assume the same for TTBR0.
+    let t0sz = tcr.read(TCR_EL1::T0SZ);
+    assert!(t0sz == 16, "Limine set TCR_EL1.T0SZ to {t0sz}, not 16");
+    let tg0 = tcr.read(TCR_EL1::TG0);
+    assert!(
+        tcr.matches_all(TCR_EL1::TG0::KiB_4),
+        "Limine set TCR_EL1.TG0 to {tg0:#b}, not 4 KiB"
+    );
     // Either would let the walker write entries, which the software Access
     // flag and Entry, whose walker only reads, assume it never does.
     assert!(

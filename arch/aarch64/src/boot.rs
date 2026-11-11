@@ -9,7 +9,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use limine::BaseRevision;
 use limine::request::{DtbRequest, FramebufferRequest, HhdmRequest, MemmapRequest};
 use thisos_fdt::{Fdt, HEADER_SIZE};
-use thisos_hal::{BootInfo, Framebuffer, PixelFormat, TrapHandler};
+use thisos_hal::{BootInfo, Framebuffer, MemoryKind, PixelFormat, TrapHandler};
 
 use crate::framebuffer::FramebufferPixels;
 use crate::memory::MemoryMap;
@@ -142,7 +142,8 @@ pub unsafe fn boot_info(trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
     let Some(tree) = DEVICE_TREE.response() else {
         panic!("Limine gave no device tree; QEMU needs -machine acpi=off");
     };
-    devices::init(&device_tree(tree.dtb_ptr.cast()));
+    let memory = MemoryMap::new(memory.entries());
+    with_device_tree(tree.dtb_ptr.cast(), hhdm.offset, &memory, devices::init);
     if let Some(fb) = &framebuffer {
         let range = fb.pixels.range();
         FRAMEBUFFER_START.store(range.start, Ordering::Relaxed);
@@ -154,25 +155,50 @@ pub unsafe fn boot_info(trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
         // stores as write-combining does.
         framebuffer_write_combining: framebuffer.is_some(),
         framebuffer,
-        memory: MemoryMap::new(memory.entries()),
+        memory,
     }
 }
 
-/// The device tree at `start`, where Limine put it.
-fn device_tree(start: *const u8) -> Fdt<'static> {
-    // SAFETY: Limine maps the device tree, a header and more, in its mapping
-    // of physical memory, which the kernel keeps for good, in memory that
-    // the frame allocator never hands out and nothing writes.
+/// Calls `f` with the device tree at `start`, where Limine put it in its
+/// mapping of physical memory at `phys_offset`. Panics unless the blob lies
+/// in a Loader region of `memory`, which the frame allocator never hands
+/// out, or if it is malformed.
+fn with_device_tree<R>(
+    start: *const u8,
+    phys_offset: u64,
+    memory: &MemoryMap,
+    f: impl FnOnce(&Fdt<'_>) -> R,
+) -> R {
+    let Some(phys) = to_u64(start.addr()).checked_sub(phys_offset) else {
+        panic!("the device tree at {start:p} is outside Limine's mapping of physical memory");
+    };
+    let in_loader_region = |len: usize| {
+        let end = phys.saturating_add(to_u64(len));
+        memory
+            .clone()
+            .any(|r| r.kind == MemoryKind::Loader && r.start <= phys && end <= r.end)
+    };
+    assert!(
+        in_loader_region(HEADER_SIZE),
+        "the device tree's header at {phys:#x} isn't in a Loader region"
+    );
+    // SAFETY: The header lies in a Loader region, which Limine maps in its
+    // mapping of physical memory, the kernel keeps mapped for good, and
+    // nothing writes. The slice lasts this function.
     let header = unsafe { core::slice::from_raw_parts(start, HEADER_SIZE) };
     let size = match thisos_fdt::total_size(header) {
         Ok(size) => size,
         Err(e) => panic!("the device tree's header is bad: {e:?}"),
     };
+    assert!(
+        in_loader_region(size),
+        "the device tree at {phys:#x}, {size:#x} bytes, isn't in a Loader region"
+    );
     // SAFETY: As for the header, for the whole tree, whose size the header
     // gives.
     let blob = unsafe { core::slice::from_raw_parts(start, size) };
     match Fdt::new(blob) {
-        Ok(fdt) => fdt,
+        Ok(fdt) => f(&fdt),
         Err(e) => panic!("the device tree is malformed: {e:?}"),
     }
 }
