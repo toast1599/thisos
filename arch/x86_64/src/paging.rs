@@ -719,11 +719,6 @@ pub fn copy_from_user(phys_offset: VirtAddr, addr: u64, buf: &mut [u8]) -> bool 
         !interrupts::are_enabled(),
         "copying from user memory with interrupts on"
     );
-    let (frame, _) = Cr3::read();
-    let tables = PageTables {
-        phys_offset,
-        level_4: frame.start_address().as_u64(),
-    };
     let (mut at, mut rest) = (addr, buf);
     while !rest.is_empty() {
         // Under a page, so it fits a usize.
@@ -731,7 +726,7 @@ pub fn copy_from_user(phys_offset: VirtAddr, addr: u64, buf: &mut [u8]) -> bool 
         let len = room.min(rest.len());
         let (chunk, tail) = mem::take(&mut rest).split_at_mut(len);
         rest = tail;
-        let Some(translation) = tables.translate(at) else {
+        let Some(translation) = translate_active(phys_offset, at) else {
             return false;
         };
         if !translation.user || !USER_SPACE.contains(&at) {

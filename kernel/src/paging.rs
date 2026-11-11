@@ -95,7 +95,7 @@ pub fn new_space() -> Option<AddressSpace> {
     not(test),
     expect(
         dead_code,
-        reason = "nothing outside the tests switches spaces until threads"
+        reason = "threads switch through Platform::activate_kernel_tables, which takes no lock, so only the tests call this"
     )
 )]
 pub fn activate() {

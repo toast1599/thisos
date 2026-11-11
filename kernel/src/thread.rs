@@ -12,14 +12,6 @@
 //! reserves room in the queues for every thread, so moving one never
 //! allocates.
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "nothing outside the tests spawns a thread until init runs in user mode"
-    )
-)]
-
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
@@ -126,6 +118,13 @@ pub fn init() {
 
 /// Starts a thread that runs `run`, then exits. Panics if kernel space or
 /// the frames run out.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "only the tests run kernel threads besides boot and idle so far"
+    )
+)]
 pub fn spawn(run: impl FnOnce() + Send + 'static) {
     spawn_in(None, run);
 }
@@ -185,6 +184,13 @@ fn grow(need: usize) {
 }
 
 /// Lets the next ready thread run, if there is one.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "nothing outside the tests blocks or waits for another thread yet"
+    )
+)]
 pub fn yield_now() {
     Arch::without_interrupts(|| switch(Place::Ready));
 }
