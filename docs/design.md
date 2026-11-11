@@ -17,7 +17,7 @@ ThisOS is not Unix-like and has no libc. Programs target Rust's standard library
 These are deferred. Each comes back through a decision round when a milestone needs it.
 
 - More than one CPU core (SMP)
-- aarch64 and riscv64 bring-up
+- riscv64 bring-up, and aarch64 beyond QEMU or past what a decision round schedules ([0006](adr/0006-aarch64-behind-x86_64.md))
 - The IOMMU
 - Networking and USB
 - Image signing, Secure Boot support, updates and packages
@@ -30,8 +30,9 @@ These are deferred. Each comes back through a decision round when a milestone ne
 
 ThisOS is 64-bit only. Architecture names follow Rust's `target_arch`.
 
-- **x86_64** is the only architecture built and tested for now. It runs in QEMU and on real hardware, and both must pass the same tests.
-- **aarch64** and **riscv64** are the long-term targets. They will be tested in QEMU only, which is a documented limitation. No code for them exists yet.
+- **x86_64** is the main architecture. It runs in QEMU and on real hardware, and both must pass the same tests.
+- **aarch64** runs in QEMU only, behind x86_64 ([0006](adr/0006-aarch64-behind-x86_64.md)): work items land on x86_64 first, and aarch64 gains a feature when a decision round schedules its port. It has milestone 2's parity and passes the same kernel tests in QEMU.
+- **riscv64** is a long-term target, to be tested in QEMU only. No code for it exists yet.
 
 QEMU runs the q35 machine with OVMF firmware and is to emulate the same devices as the test laptop: an NVMe disk and an i8042 keyboard, with no virtio. One driver per device class then serves both. Today it has the image as USB storage on an xHCI controller, the way the laptop boots its stick, and no NVMe disk, which comes with the NVMe driver. QEMU runs without `-nodefaults`, so q35 also adds an e1000e NIC and VGA, which no driver uses.
 
@@ -49,7 +50,9 @@ Unsigned images need Secure Boot turned off in its firmware settings.
 
 The kernel boots through UEFI only, using the `bootloader` crate (0.11) unforked. The kernel is an ELF built for `x86_64-unknown-none`. `bootloader` maps all of physical memory at an offset it picks, and the kernel reaches any frame through that mapping. The kernel is position-independent, and the loader puts it, its stack, the boot information, the framebuffer and the physical-memory mapping in the upper half of the address space, from `0xffff_8000_0000_0000`, which leaves the lower half to user space. The lower half holds only the loader's own identity mappings, which the kernel drops when it switches to its own page tables. Its ramdisk carries `init` and the other early programs.
 
-`bootloader` supports only x86_64. The arch crate converts its `BootInfo` into the kernel's own boot structure in one place, so a different loader for another architecture changes one file. A fork of `bootloader` for aarch64 is under consideration.
+`bootloader` supports only x86_64. The arch crate converts its `BootInfo` into the kernel's own boot structure in one place, so a different loader for another architecture changes one file.
+
+aarch64 boots through Limine 12.9.6 under edk2. The kernel is an ELF built for `aarch64-unknown-none-softfloat`, linked statically at `0xffff_ffff_8000_0000` by a linker script that `kernel/build.rs` passes for aarch64 alone. xtask writes a GPT disk with one FAT partition holding Limine's `BOOTAA64.EFI`, its configuration, the kernel and the build ID. Limine maps physical memory in the upper half and enters at EL1 on a stack of its own; `_start` moves to SP_EL1 on a boot stack in the kernel's image. The arch crate builds `BootInfo` from Limine's answers, and reads the device tree Limine passes on, which edk2 hands over only when QEMU runs with `acpi=off`.
 
 ## Crates
 
@@ -60,6 +63,7 @@ ThisOS/
   kernel/             thisos-kernel: the kernel, a library and a thin binary, generic
   hal/                thisos-hal: traits the kernel needs from an architecture
   arch/x86_64/        thisos-arch-x86_64: implements thisos-hal
+  arch/aarch64/       thisos-arch-aarch64: implements thisos-hal under QEMU's virt machine
   abi/                thisos-abi: syscall numbers, errors, handle and rights types
   lib/*/              host-testable no_std logic
   user/rt/            thisos-rt: user runtime (entry, syscalls, allocator, panic)
@@ -67,7 +71,7 @@ ThisOS/
   xtask/              a separate workspace: image building, QEMU, tests, font
 ```
 
-Dependencies point from specific crates to generic ones. `thisos-kernel` depends on `thisos-hal`, and, under `cfg(target_arch = "x86_64")`, on `thisos-arch-x86_64`, which also depends on `thisos-hal`. The kernel reaches the hardware only through the `thisos-hal` traits and never names an architecture's types. `thisos-arch-x86_64` is the only crate that may depend on the `x86_64` crate, so architecture code leaking into generic crates shows up as a dependency change.
+Dependencies point from specific crates to generic ones. `thisos-kernel` depends on `thisos-hal`, and, under `cfg(target_arch = ...)`, on the architecture's crate, `thisos-arch-x86_64` or `thisos-arch-aarch64`, which also depends on `thisos-hal`. The kernel reaches the hardware only through the `thisos-hal` traits and never names an architecture's types. `thisos-arch-x86_64` is the only crate that may depend on the `x86_64` crate, and `thisos-arch-aarch64` the only one that may depend on `aarch64-cpu` and `limine`, so architecture code leaking into generic crates shows up as a dependency change.
 
 All crates are named with the `thisos-` prefix. A new crate is added only when its dependencies, unsafe status or test environment differ from its neighbors'; otherwise the code is a module.
 
@@ -100,6 +104,15 @@ The arch crate loads its own GDT, TSS and IDT before the kernel's main function 
 Every one of the 256 vectors has a stub, and all but nine have an IDT entry, so an interrupt the kernel never asked for reaches the handler as `Trap::Stray` with its vector, and the kernel reports it as a panic. The nine are 9, 15, 22-27 and 31, which the CPU never raises and the `x86_64` crate's IDT doesn't let the arch set; an interrupt on one of them arrives as a general-protection fault naming its entry. The arch crate remaps both legacy 8259 PICs to vectors 0x20-0x2f, so that a stray line can't pass for an exception, and masks every line. The timer is the local APIC's, in x2APIC mode: its registers are MSRs, so it needs no MMIO mapping, and it works whichever mode the firmware left the APIC in. The kernel panics at boot on a CPU without x2APIC. It runs periodically at 100 Hz on vector 0x30, with the spurious vector at 0xff, and the arch crate sends EOI after the handler returns. Its frequency is the crystal frequency from CPUID leaf 0x15 when the CPU reports one there. Otherwise the arch crate measures it against PIT channel 2 over 50 ms. QEMU reports none, so it always measures, and gets about 1 GHz. The test laptop reports 38.4 MHz, and its PIT never counts, most likely because the firmware gates it; Linux on the same laptop finds the HPET dysfunctional too and uses the TSC. A test checks the reported frequency against a 50 ms count of the TSC, whose frequency comes from the same leaf (the crystal frequency times EBX / EAX), to within 5%. That shows the timer runs on the crystal, which is what the kernel relies on, though not that the crystal frequency itself is right. The PIT, waited on for at most 2^32 TSC cycles, is only the fallback for CPUs that report no frequency. The kernel logs the rate, the frequency and its source. `kernel::init` starts the timer and turns interrupts on as its last step, for every entry point.
 
 The logger's lock is only ever held with interrupts off, so an interrupt handler can log: the code it interrupted can't be holding the lock. The cost is that interrupts wait while a record is drawn, a console scroll included, and timer ticks that come meanwhile count as one. An exception, NMI or machine check inside the logger can still find the lock held, and the panic path's `try_lock` covers that, as before.
+
+## aarch64
+
+The aarch64 crate implements the same HAL as x86_64's, under QEMU's virt machine with a `cortex-a76` CPU ([0006](adr/0006-aarch64-behind-x86_64.md)). Where it differs:
+
+- **Page tables.** TTBR1 holds the kernel's upper half, and a user space's level 0 table goes in TTBR0, with 4 KiB pages and 48-bit addresses. `take_page_tables` copies Limine's upper half as on x86_64, and makes every leaf global, out of EL0's reach and PXN, except the read-only leaves inside the kernel's `.text`. It reserves a free level 0 entry for the heap and kernel space as x86_64 reserves a level 4 entry. Every space uses ASID 0 and user pages are not global, so a switch writes TTBR0 and drops ASID 0's TLB entries. While no user space is active, `TCR_EL1.EPD0` turns TTBR0's walks off. The kernel sets the Access flag itself and leaves `TCR_EL1.HA` and HD off, so the walker never writes the tables. PAN is on from boot, and the kernel panics on a CPU without it. The framebuffer is normal non-cacheable memory, MAIR attribute 2, which gathers stores as write-combining does.
+- **Traps.** `VBAR_EL1` points at a table of 16 entries that save the registers, ESR, FAR and the entry's number in one frame. The CPU pushes nothing on a trap, so a full stack can't fault the way it does on x86_64: each entry instead checks, as Linux does, that the frame fits on the stack, which works because every stack EL1 runs on is 64 KiB with its start aligned to 128 KiB. An entry that finds it doesn't fit moves to a 64 KiB overflow stack with a guard page, and the kernel sees `Trap::DoubleFault`. Only translation, access flag and permission faults are page faults; other synchronous exceptions are `Trap::Other` with the exception class and ESR. A breakpoint resumes after its `brk`. Traps from EL0, from EL1 on SP_EL0, SErrors and FIQs are reported, then halt.
+- **Devices.** The kernel finds the GICv3 and the virtual timer's interrupt in the device tree, and maps the distributor and the boot CPU's redistributor as Device-nGnRE memory, MAIR attribute 3, in its copy of the physical-memory mapping. Only the timer's interrupt is enabled. The tick is the virtual timer, CNTV, at 100 Hz from `CNTFRQ_EL0`, each tick moving its compare value one period on, so that the handler's latency adds no drift; ticks missed while interrupts are off count as one. `Platform::timer_frequencies` reports nothing, since the virt machine has no second clock fine enough to check `CNTFRQ_EL0` against. A test run ends through semihosting's `SYS_EXIT_EXTENDED`, only when the device tree's root is QEMU's.
+- **Not there yet.** There is no serial port, so the kernel logs to the framebuffer alone, and nothing past milestone 2 is ported.
 
 ## Handles
 
@@ -136,4 +149,4 @@ Each milestone ends with QEMU and the laptop doing something they couldn't befor
 - How a handle is represented (for example, table index plus generation), and the syscall calling convention. Due at milestones 3 and 4.
 - The name and API of the audited driver crate. Due at milestone 5.
 - Networking on the laptop: its only network device is Intel CNVi Wi-Fi, so matching QEMU there would need a Wi-Fi driver or a USB Ethernet adapter, which needs xHCI first.
-- Which loader boots aarch64 and riscv64.
+- Which loader boots riscv64.
