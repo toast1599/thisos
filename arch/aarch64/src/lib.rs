@@ -33,7 +33,7 @@ use aarch64_cpu::registers::{DAIF, ReadWriteable, Readable, Writeable};
 use thisos_frames::Frame;
 use thisos_hal::{
     BacktraceEnd, Cpu, Framebuffer, HeapStats, Platform, Probe, TimerFrequencies, TimerFrequency,
-    Translation,
+    Translation, UserProgram,
 };
 
 pub use framebuffer::FramebufferPixels;
@@ -116,6 +116,9 @@ impl Cpu for Aarch64 {
         // PSTATE.PAN reads back in bit 22.
         pan & (1 << 22) != 0
     }
+    fn enter_user(_: u64, _: u64, _: u64) -> ! {
+        not_ported("Cpu::enter_user")
+    }
 }
 
 impl Platform for Aarch64 {
@@ -142,6 +145,10 @@ impl Platform for Aarch64 {
                 alloc,
             )
         }
+    }
+
+    fn activate_kernel_tables() {
+        not_ported("Platform::activate_kernel_tables")
     }
 
     fn move_trap_stacks(stack: &mut dyn FnMut(usize) -> u64) {
@@ -206,6 +213,10 @@ impl Platform for Aarch64 {
 
     fn write_return(frame: &Frame) {
         paging::write_return(boot::phys_offset(), frame);
+    }
+
+    fn write_user_program(_: &Frame, _: UserProgram) {
+        not_ported("Platform::write_user_program")
     }
 
     // Through semihosting's SYS_EXIT_EXTENDED, which QEMU turns into its

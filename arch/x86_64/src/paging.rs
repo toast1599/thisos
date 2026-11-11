@@ -34,8 +34,10 @@ pub const ADDRESS: u64 = 0x000f_ffff_ffff_f000;
 /// The first level 4 entry of the upper half.
 const UPPER_HALF: u16 = 256;
 
-/// Where user mappings may go: the lower half above its first 64 KiB.
-pub const USER_SPACE: Range<u64> = 0x1_0000..0x0000_8000_0000_0000;
+/// Where user mappings may go: the lower half above its first 64 KiB and
+/// below its last page, so that no user instruction ends at the canonical
+/// boundary, where SYSCALL would save a RIP that SYSRET can't return to.
+pub const USER_SPACE: Range<u64> = 0x1_0000..0x0000_7fff_ffff_f000;
 
 /// The page tables at `level_4`. Whoever makes one is the only user of the
 /// tables while it lives, apart from the CPU's page walker, and apart from
@@ -344,15 +346,19 @@ impl Entry<'_> {
     }
 }
 
-/// Makes CR3 point at the level 4 table at `level_4`.
+/// Makes CR3 point at the level 4 table at `level_4`, unless it does
+/// already: a write flushes the TLB but for global pages.
 ///
 /// # Safety
 ///
 /// The table's upper half must map everything the kernel reaches as the
 /// tables CR3 points at now do.
 unsafe fn load(level_4: u64) {
-    let (_, flags) = Cr3::read();
+    let (current, flags) = Cr3::read();
     let frame = PhysFrame::containing_address(PhysAddr::new(level_4));
+    if frame == current {
+        return;
+    }
     // SAFETY: The caller guarantees the kernel's memory stays where it is.
     unsafe { Cr3::write(frame, flags) };
 }
@@ -370,6 +376,20 @@ pub struct KernelPageTables {
 /// [`thisos_hal::PageTables::kernel_space`], which `take` records for
 /// checks that have no `KernelPageTables` to ask.
 pub static KERNEL_SPACE: Once<Range<u64>> = Once::new();
+
+/// The kernel's level 4 table, which `take` records for `activate_kernel`.
+static KERNEL_LEVEL_4: Once<u64> = Once::new();
+
+/// Makes the CPU use the kernel's own tables; see
+/// `Platform::activate_kernel_tables`.
+pub fn activate_kernel() {
+    let Some(&level_4) = KERNEL_LEVEL_4.get() else {
+        panic!("the kernel's page tables aren't taken yet");
+    };
+    // SAFETY: Every user space's upper half is a copy of the kernel tables'
+    // level 4 entries, which never change after take.
+    unsafe { load(level_4) };
+}
 
 /// Copies the loader's upper half into new tables made from `alloc`'s
 /// frames, switches to them, turns on global pages, SMEP and SMAP, and
@@ -443,6 +463,7 @@ pub unsafe fn take(
     }
     let heap_base = space_start(space);
     KERNEL_SPACE.init(kernel_space(space));
+    KERNEL_LEVEL_4.init(level_4);
     Some(KernelPageTables {
         tables,
         space,

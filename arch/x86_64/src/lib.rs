@@ -19,6 +19,7 @@ mod pic;
 mod pit;
 mod trap;
 mod tsc;
+mod user;
 
 use core::arch::asm;
 use core::fmt;
@@ -32,7 +33,7 @@ use once::Once;
 use thisos_frames::Frame;
 use thisos_hal::{
     BacktraceEnd, BootInfo, Cpu, Framebuffer, HeapStats, Platform, Probe, Serial, TimerFrequencies,
-    TimerFrequency, Translation, TrapHandler,
+    TimerFrequency, Translation, TrapHandler, UserProgram,
 };
 use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
@@ -108,6 +109,10 @@ impl Cpu for X86_64 {
         Cr4::read().contains(Cr4Flags::SUPERVISOR_MODE_ACCESS_PREVENTION)
             && !rflags::read().contains(RFlags::ALIGNMENT_CHECK)
     }
+
+    fn enter_user(ip: u64, sp: u64, arg: u64) -> ! {
+        user::enter_user(ip, sp, arg)
+    }
 }
 
 impl Platform for X86_64 {
@@ -123,6 +128,10 @@ impl Platform for X86_64 {
         // memory, and loaded the kernel's own descriptor tables before the
         // kernel could call this.
         unsafe { paging::take(phys_offset(), alloc) }
+    }
+
+    fn activate_kernel_tables() {
+        paging::activate_kernel();
     }
 
     fn move_trap_stacks(stack: &mut dyn FnMut(usize) -> u64) {
@@ -163,6 +172,10 @@ impl Platform for X86_64 {
 
     fn write_return(frame: &Frame) {
         paging::write_return(phys_offset(), frame);
+    }
+
+    fn write_user_program(frame: &Frame, program: UserProgram) {
+        user::write_program(phys_offset(), frame, program);
     }
 
     fn guard_page() -> u64 {

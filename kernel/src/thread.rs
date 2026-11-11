@@ -1,7 +1,9 @@
 //! Kernel threads and the round-robin scheduler. Every timer tick hands the
 //! CPU to the next ready thread, and the idle thread runs only when no
 //! thread is ready. The boot thread runs on the loader's stack; every other
-//! thread has a stack from `paging::map_stack`.
+//! thread has a stack from `paging::map_stack`. A user thread is a kernel
+//! thread that owns an address space and has left for user code in it;
+//! every switch loads the next thread's space, or the kernel's tables.
 //!
 //! The scheduler's lock is only ever held with interrupts off, so the
 //! timer's handler never finds it held, and nothing allocates or frees
@@ -25,7 +27,7 @@ use core::mem;
 use core::ops::Range;
 
 use spin::Mutex;
-use thisos_hal::{Cpu, Platform};
+use thisos_hal::{AddressSpace as _, Cpu, Platform};
 
 use crate::{Arch, frames, paging};
 
@@ -34,7 +36,7 @@ type Context = <Arch as Platform>::Context;
 /// The size of every thread's stack but the boot thread's. aarch64's trap
 /// entries tell an overflow by bit 16 of the stack pointer, which needs
 /// 64 KiB stacks aligned to 128 KiB, as `map_stack` aligns them.
-const STACK_SIZE: usize = 64 << 10;
+pub const STACK_SIZE: usize = 64 << 10;
 
 struct Thread {
     /// Where it stopped, while it isn't running.
@@ -44,6 +46,9 @@ struct Thread {
     stack: Option<Range<u64>>,
     /// What it runs, until it starts.
     run: Option<Box<dyn FnOnce() + Send>>,
+    /// The address space it runs user code in, or `None` for a kernel
+    /// thread.
+    space: Option<paging::AddressSpace>,
 }
 
 /// Where the thread that switches away goes.
@@ -96,11 +101,13 @@ pub fn init() {
         context: Some(Arch::new_context(stack.clone(), idle)),
         stack: Some(stack),
         run: None,
+        space: None,
     });
     let boot = Box::new(Thread {
         context: None,
         stack: None,
         run: None,
+        space: None,
     });
     let scheduler = Scheduler {
         running: Some(boot),
@@ -120,11 +127,24 @@ pub fn init() {
 /// Starts a thread that runs `run`, then exits. Panics if kernel space or
 /// the frames run out.
 pub fn spawn(run: impl FnOnce() + Send + 'static) {
+    spawn_in(None, run);
+}
+
+/// Starts a thread that runs user code at `ip` in `space`, with stack
+/// pointer `sp` and `arg` as its first argument. It ends through
+/// `user::trap`, and its space is destroyed along with it. Panics if
+/// kernel space or the frames run out.
+pub fn spawn_user(space: paging::AddressSpace, ip: u64, sp: u64, arg: u64) {
+    spawn_in(Some(space), move || Arch::enter_user(ip, sp, arg));
+}
+
+fn spawn_in(space: Option<paging::AddressSpace>, run: impl FnOnce() + Send + 'static) {
     let stack = paging::map_stack(STACK_SIZE);
     let mut thread = Some(Box::new(Thread {
         context: Some(Arch::new_context(stack.clone(), start)),
         stack: Some(stack),
         run: Some(Box::new(run)),
+        space,
     }));
     loop {
         let short = with(|scheduler| {
@@ -207,6 +227,12 @@ fn switch(place: Place) {
         let Some(to) = next.context.take() else {
             panic!("a thread that isn't running has no context");
         };
+        // The timer's handler runs this too, so the kernel's tables come
+        // through the HAL call that takes no lock.
+        match &next.space {
+            Some(space) => space.activate(),
+            None => Arch::activate_kernel_tables(),
+        }
         let Some(leaving) = scheduler.running.replace(next) else {
             panic!("no thread was running");
         };
@@ -235,10 +261,11 @@ fn arrived(from: Context) {
 }
 
 /// Frees every thread that exited: unmaps its stack and frees its frames,
-/// then drops it. Interrupts are on, since the page tables', the frames'
-/// and the heap's locks may be held by a thread a tick preempted.
+/// destroys its address space, then drops it. Interrupts are on, since the
+/// page tables', the frames' and the heap's locks may be held by a thread a
+/// tick preempted.
 fn reap() {
-    while let Some(thread) = with(|scheduler| {
+    while let Some(mut thread) = with(|scheduler| {
         let thread = scheduler.dead.pop()?;
         scheduler.threads -= 1;
         Some(thread)
@@ -252,6 +279,9 @@ fn reap() {
                 panic!("stack page {page:#x} wasn't mapped");
             };
             frames::free(frame);
+        }
+        if let Some(space) = thread.space.take() {
+            space.destroy(&mut frames::free, &mut frames::free);
         }
     }
 }
@@ -279,6 +309,25 @@ fn idle(from: Context) -> ! {
     }
 }
 
+/// The threads not freed yet, the boot thread included, and how many of
+/// them are dead.
+#[cfg(test)]
+fn counts() -> (usize, usize) {
+    with(|scheduler| (scheduler.threads, scheduler.dead.len()))
+}
+
+/// Waits until every thread but the boot thread is dead, then frees them,
+/// so that the next test starts with the boot thread alone.
+#[cfg(test)]
+pub fn wait_for_exits() {
+    crate::testing::spin_until("the threads to exit", || {
+        let (threads, dead) = counts();
+        threads - 1 == dead
+    });
+    reap();
+    assert_eq!(counts(), (1, 0));
+}
+
 #[cfg(test)]
 mod tests {
     use core::hint::spin_loop;
@@ -288,23 +337,6 @@ mod tests {
 
     use super::*;
     use crate::testing::{self, spin_until};
-
-    /// The threads not freed yet, the boot thread included, and how many of
-    /// them are dead.
-    fn counts() -> (usize, usize) {
-        with(|scheduler| (scheduler.threads, scheduler.dead.len()))
-    }
-
-    /// Waits until every thread but the boot thread is dead, then frees
-    /// them, so that the next test starts with the boot thread alone.
-    fn wait_for_exits() {
-        spin_until("the threads to exit", || {
-            let (threads, dead) = counts();
-            threads - 1 == dead
-        });
-        reap();
-        assert_eq!(counts(), (1, 0));
-    }
 
     // Neither the spawned threads nor this one yields, so all three make
     // progress only if ticks preempt them.

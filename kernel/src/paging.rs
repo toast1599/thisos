@@ -14,7 +14,8 @@ use thisos_hal::{MapError, PageTables as _, Platform};
 use crate::{Arch, frames};
 
 type PageTables = <Arch as Platform>::PageTables;
-type AddressSpace = <PageTables as thisos_hal::PageTables>::AddressSpace;
+/// A user address space.
+pub type AddressSpace = <PageTables as thisos_hal::PageTables>::AddressSpace;
 
 static PAGE_TABLES: Mutex<Option<Kernel>> = Mutex::new(None);
 
@@ -371,6 +372,7 @@ mod tests {
         for (page, kind) in [
             (0x40_0001, MapErrorKind::Unaligned),
             (lowest - 4096, MapErrorKind::OutsideUserSpace),
+            (space.user_space().end, MapErrorKind::OutsideUserSpace),
             (kernel_space().start, MapErrorKind::OutsideUserSpace),
         ] {
             let Err(e) = space.map(page, frame(), Protection::ReadOnly, &mut frames::alloc) else {
@@ -416,7 +418,7 @@ mod tests {
     fn destroying_the_active_space_gives_back_every_frame() {
         let before = frames::free_frames();
         let mut space = space();
-        let pages = [0x1_0000, 0x40_0000_0000, 0x7fff_ffff_f000];
+        let pages = [0x1_0000, 0x40_0000_0000, space.user_space().end - 4096];
         let mut phys: Vec<u64> = pages
             .iter()
             .map(|&page| map_user(&mut space, page, Protection::ReadWrite))

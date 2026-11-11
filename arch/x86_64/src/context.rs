@@ -9,7 +9,7 @@ use core::ops::Range;
 use x86_64::VirtAddr;
 use x86_64::instructions::interrupts;
 
-use crate::{backtrace, paging};
+use crate::{backtrace, paging, trap};
 
 /// A suspended thread: the stack pointer its registers were pushed at,
 /// and the stack it runs on.
@@ -129,6 +129,7 @@ pub fn switch(to: Context) -> Context {
         "switching threads with interrupts on"
     );
     let from = backtrace::stack();
+    trap::set_kernel_stack(to.stack.end);
     backtrace::set_stack(to.stack);
     let (rsp, start, end): (u64, u64, u64);
     // SAFETY: to came from new or from a switch, which consumed it, so

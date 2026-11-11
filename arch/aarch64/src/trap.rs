@@ -14,7 +14,7 @@ use thisos_hal::{Access, BacktraceEnd, Cpu, Trap, TrapHandler};
 use crate::boot::STACK_SIZE;
 use crate::gic::{self, Acknowledged, Group};
 use crate::once::Once;
-use crate::{Aarch64, backtrace, catch, timer, to_u64};
+use crate::{Aarch64, backtrace, catch, not_ported, timer, to_u64};
 
 // The vector table: 16 entries of 0x80 bytes, for a synchronous exception,
 // an IRQ, an FIQ and an SError, taken from EL1 on SP_EL0, from EL1 on
@@ -171,6 +171,10 @@ const FIQ: u64 = 2;
 const EL1H_SYNC: u64 = 4;
 const EL1H_IRQ: u64 = 5;
 
+/// The synchronous entries for traps from EL0.
+const EL0_SYNC: u64 = 8;
+const EL0_AARCH32_SYNC: u64 = 12;
+
 const ENTRY_NAMES: [&str; 16] = [
     "EL1t sync",
     "EL1t IRQ",
@@ -202,6 +206,20 @@ impl thisos_hal::TrapFrame for TrapFrame {
 
     fn sp(&self) -> u64 {
         self.sp
+    }
+
+    // The synchronous entries from EL0 take exceptions user code's own
+    // instructions raise.
+    fn raised_by_user(&self) -> bool {
+        matches!(self.entry(), EL0_SYNC | EL0_AARCH32_SYNC)
+    }
+
+    fn syscall(&self) -> (u64, [u64; 6]) {
+        not_ported("TrapFrame::syscall")
+    }
+
+    fn set_syscall_result(&mut self, _: u64, _: u64) {
+        not_ported("TrapFrame::set_syscall_result")
     }
 
     fn backtrace(&self, mut f: impl FnMut(u64)) -> BacktraceEnd {

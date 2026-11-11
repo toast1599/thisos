@@ -1,8 +1,8 @@
 //! The kernel's trap handler.
 
-use thisos_hal::{Platform, Trap};
+use thisos_hal::{Platform, Trap, TrapFrame as _};
 
-use crate::{Arch, paging, panic, thread, timer};
+use crate::{Arch, paging, panic, thread, timer, user};
 
 /// Moves the stacks the CPU takes double faults, NMIs and machine checks
 /// on to stacks in kernel space with an unmapped page below each.
@@ -17,10 +17,13 @@ pub fn init() {
 }
 
 /// The kernel's trap handler, which every entry point passes to `entry!`.
-/// A breakpoint returns, and a timer interrupt counts a tick and switches
-/// to the next ready thread. Until the kernel has user space, any other
-/// trap is a kernel bug, and panics.
+/// A trap user code raised goes to `user::trap`. Otherwise a breakpoint
+/// returns, and a timer interrupt counts a tick and switches to the next
+/// ready thread; any other trap is a kernel bug, and panics.
 pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
+    if frame.raised_by_user() {
+        return user::trap(trap, frame);
+    }
     #[cfg(test)]
     if crate::testing::caught(trap, frame) {
         return;

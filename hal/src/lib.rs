@@ -134,6 +134,15 @@ pub trait Cpu {
     /// Whether the kernel is stopped from reading, writing and running user
     /// pages right now, as it is everywhere but in user copies. For tests.
     fn user_access_blocked() -> bool;
+
+    /// Leaves the kernel for user code at `ip` in the address space the
+    /// CPU uses, with stack pointer `sp`, `arg` as its first argument,
+    /// every other general register zeroed, and interrupts on. The calling
+    /// thread comes back to the kernel only through traps, which start at
+    /// the top of its stack, so whatever it had there is gone. Panics
+    /// unless `ip` is in [`AddressSpace::user_space`] and `sp` is in it or
+    /// at its end.
+    fn enter_user(ip: u64, sp: u64, arg: u64) -> !;
 }
 
 /// Code the architecture runs under [`Cpu::catch`] to make a trap. Each is
@@ -174,6 +183,30 @@ pub enum Probe {
     /// nothing is mapped there, or because the kernel may not run user
     /// code.
     ExecuteUser,
+}
+
+/// User code the architecture writes with [`Platform::write_user_program`],
+/// for tests that need code in user mode before anything loads programs.
+/// Each fits in its first page and runs from anywhere. The architecture
+/// writes each as it writes a [`Probe`], so kernel code can't make user
+/// code of its own choosing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UserProgram {
+    /// Puts a value of its own in every general register a syscall keeps,
+    /// makes a syscall with the number `u64::MAX`, which no syscall has,
+    /// then checks those registers. It exits with the error code the
+    /// syscall returned if they all kept their values and the syscall's
+    /// value is 0, and with `u64::MAX` otherwise.
+    Syscalls,
+    /// Reads the byte at its argument, then exits with status 0.
+    Read,
+    /// Runs an instruction only the kernel may run.
+    Privileged,
+    /// Runs an SSE instruction, or the architecture's equivalent.
+    Simd,
+    /// Spins for 2^28 cycles of a counter user code can read, through many
+    /// timer ticks, then exits with status 0.
+    Spin,
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
@@ -223,6 +256,13 @@ pub trait Platform {
     /// architecture drives itself, and switches to them. Returns `None` if
     /// they were taken already. Panics if `alloc` runs out of frames.
     fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<Self::PageTables>;
+
+    /// Makes the CPU use the kernel's own tables, as
+    /// [`PageTables::activate`] does, without the [`PageTables`] value: the
+    /// scheduler switches tables in the timer's handler, which can't take
+    /// the lock the kernel keeps them behind. Does nothing if the CPU uses
+    /// them already. Panics before [`Platform::take_page_tables`].
+    fn activate_kernel_tables();
 
     /// Moves the stacks the CPU switches to for some traps, which start out
     /// with nothing unmapped below them, onto stacks `stack` maps. For each
@@ -302,6 +342,9 @@ pub trait Platform {
     /// tests.
     fn write_return(frame: &Frame);
 
+    /// Writes `program` at the start of `frame`. For tests.
+    fn write_user_program(frame: &Frame, program: UserProgram);
+
     /// Ends a QEMU test run through QEMU's debug exit device, reporting
     /// whether the tests passed. It touches the device only when it runs
     /// under a hypervisor; on real hardware it only halts.
@@ -369,7 +412,8 @@ pub trait PageTables: Send {
 pub trait AddressSpace: Send {
     /// The virtual addresses [`AddressSpace::map`] maps into: the lower
     /// half, apart from the first pages, which stay unmapped so that a
-    /// null pointer plus a small offset always faults.
+    /// null pointer plus a small offset always faults, and on x86_64 the
+    /// last page, which SYSRET couldn't return past.
     fn user_space(&self) -> Range<u64>;
 
     /// Maps the page at `page` to `frame` for user code, with `protection`.
@@ -491,6 +535,8 @@ pub trait Serial: fmt::Write + Send {}
 /// [`TrapFrame::abandon`] after a double fault. The handler may switch
 /// threads on a [`Trap::Timer`], which the architecture acknowledges before
 /// calling it; the trapped thread resumes when a switch comes back to it.
+/// After a trap [`TrapFrame::raised_by_user`], the handler may also never
+/// return, ending the thread.
 pub type TrapHandler<P> = fn(Trap, &mut <P as Platform>::TrapFrame);
 
 /// Why the CPU trapped.
@@ -511,6 +557,10 @@ pub enum Trap {
     DoubleFault,
     /// A tick of the timer [`Platform::start_timer`] started.
     Timer,
+    /// A syscall from user code. [`TrapFrame::syscall`] reads its number
+    /// and arguments, and [`TrapFrame::set_syscall_result`] sets what it
+    /// returns.
+    Syscall,
     /// An interrupt the kernel never asked for, by the architecture's
     /// number for it: a stray legacy line, a spurious interrupt or any
     /// other.
@@ -537,6 +587,7 @@ impl fmt::Display for Trap {
             }
             Trap::DoubleFault => write!(f, "double fault"),
             Trap::Timer => write!(f, "timer interrupt"),
+            Trap::Syscall => write!(f, "syscall"),
             Trap::Stray { vector } => write!(f, "stray interrupt on vector {vector:#x}"),
             Trap::Other { vector, error } => {
                 write!(f, "exception {vector}, error code {error:#x}")
@@ -575,6 +626,20 @@ pub trait TrapFrame: fmt::Display {
 
     /// The stack pointer when the CPU trapped.
     fn sp(&self) -> u64;
+
+    /// Whether user code raised the trap: a syscall, or an exception its
+    /// instruction caused. Interrupts, NMIs, machine checks and double
+    /// faults aren't the doing of the code they arrive in, so they are
+    /// never user code's, even when they arrive in it.
+    fn raised_by_user(&self) -> bool;
+
+    /// The number and the six arguments of a [`Trap::Syscall`], in the
+    /// registers ADR 0007 puts them in.
+    fn syscall(&self) -> (u64, [u64; 6]);
+
+    /// Makes a [`Trap::Syscall`] return `error`, 0 for success, and
+    /// `value`.
+    fn set_syscall_result(&mut self, error: u64, value: u64);
 
     /// Calls `f` with the link address of the trapped instruction, then
     /// walks the trapped code's frame pointers as [`Cpu::backtrace`] does.

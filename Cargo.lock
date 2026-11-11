@@ -94,6 +94,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "thisos-abi"
+version = "0.0.0"
+
+[[package]]
 name = "thisos-arch-aarch64"
 version = "0.0.0"
 dependencies = [
@@ -113,6 +117,7 @@ dependencies = [
  "bootloader_api",
  "spin",
  "talc",
+ "thisos-abi",
  "thisos-frames",
  "thisos-hal",
  "uart_16550",
@@ -147,6 +152,7 @@ version = "0.0.0"
 dependencies = [
  "log",
  "spin",
+ "thisos-abi",
  "thisos-arch-aarch64",
  "thisos-arch-x86_64",
  "thisos-console",

@@ -22,6 +22,7 @@ mod testing;
 mod thread;
 mod timer;
 mod trap;
+mod user;
 
 use thisos_hal::BootInfo;
 #[cfg(test)]

@@ -18,6 +18,7 @@ bench = false
 [dependencies]
 log = "0.4"
 spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex"] }
+thisos-abi.workspace = true
 thisos-console.workspace = true
 thisos-frames.workspace = true
 thisos-hal.workspace = true
