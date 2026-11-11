@@ -368,14 +368,14 @@ pub struct KernelPageTables {
 
 /// Copies the loader's upper half into new tables made from `alloc`'s
 /// frames, switches to them, turns on global pages, SMEP and SMAP, and
-/// returns them. Returns `None` after the first call. Panics if the CPU
-/// lacks SMEP or SMAP.
+/// returns them. Returns `None` after the first call.
 ///
 /// # Safety
 ///
 /// `phys_offset` must be where the loader mapped all physical memory, and
 /// the descriptor tables the CPU uses must be the kernel's own, not the
-/// loader's, which it mapped in the lower half.
+/// loader's, which it mapped in the lower half: `trap::init`, which loads
+/// them, has also checked that the CPU has SMEP and SMAP.
 pub unsafe fn take(
     phys_offset: VirtAddr,
     alloc: &mut dyn FnMut() -> Option<Frame>,
@@ -384,10 +384,6 @@ pub unsafe fn take(
     if TAKEN.swap(true, Ordering::Relaxed) {
         return None;
     }
-    // CPUID leaf 7 reports SMEP in EBX bit 7 and SMAP in bit 20.
-    let features = core::arch::x86_64::__cpuid_count(7, 0).ebx;
-    let both = (1 << 7) | (1 << 20);
-    assert!(features & both == both, "the CPU lacks SMEP or SMAP");
     // SAFETY: The caller guarantees phys_offset. TAKEN makes this the only
     // call, and only it changes the tables until the KernelPageTables it
     // returns exists.

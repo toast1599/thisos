@@ -126,6 +126,10 @@ pub trait Cpu {
     /// handler calls [`TrapFrame::abandon`]. Panics if a catch is running
     /// already. For tests.
     fn catch(probe: Probe);
+
+    /// Whether the kernel is stopped from reading, writing and running user
+    /// pages right now, as it is everywhere but in user copies. For tests.
+    fn user_access_blocked() -> bool;
 }
 
 /// Code the architecture runs under [`Cpu::catch`] to make a trap. Each is
@@ -144,6 +148,10 @@ pub enum Probe {
     OverflowStack,
     /// Spins forever with interrupts as they were.
     Spin,
+    /// Lets the kernel reach user pages, as a user copy does, then spins
+    /// forever. Trap handlers must still find [`Cpu::user_access_blocked`],
+    /// and the catch blocks user access again when it returns.
+    SpinUserAccessOpen,
     /// Reads a read-only byte of the architecture's own and writes it back,
     /// again and again, which traps with [`Trap::PageFault`] on write at
     /// [`Platform::probe_target`] when the CPU enforces read-only pages.

@@ -38,6 +38,7 @@ global_asm!(
     ".byte 0",
     ".popsection",
     ".pushsection .text.thisos_catch, \"ax\", %progbits",
+    ".arch_extension pan",
     ".globl thisos_catch",
     ".hidden thisos_catch",
     "thisos_catch:",
@@ -57,6 +58,8 @@ global_asm!(
     "b.eq 4f",
     "cmp x0, #4",
     "b.eq 5f",
+    "cmp x0, #5",
+    "b.eq 6f",
     "1:",
     "yield",
     "b 1b",
@@ -73,9 +76,14 @@ global_asm!(
     "5:",
     "blr x1",
     "b 5b",
+    "6:",
+    "msr pan, #0",
+    "b 1b",
     ".globl thisos_catch_landing",
     ".hidden thisos_catch_landing",
     "thisos_catch_landing:",
+    // eret brought back the PAN the probe ran with.
+    "msr pan, #1",
     "adrp x10, {saved}",
     "ldr x9, [x10, :lo12:{saved}]",
     "mov sp, x9",
@@ -110,6 +118,7 @@ pub fn catch(probe: Probe) {
         Probe::Spin => 2,
         Probe::WriteReadOnly => 3,
         Probe::ExecuteNoExecute | Probe::ExecuteUser => 4,
+        Probe::SpinUserAccessOpen => 5,
     };
     let run = || {
         // SAFETY: thisos_catch saves and restores every callee-saved
@@ -121,8 +130,9 @@ pub fn catch(probe: Probe) {
         // that no frame above uses; the read-only byte, written back with
         // the value it holds; the ret, which only returns; and the user
         // probe page, which the read can't change, and which the call can't
-        // run, since every user page is PXN. The C ABI clobbers cover x9,
-        // x10, x30 and the flags.
+        // run, since every user page is PXN. The spin with PAN clear reaches
+        // no memory, and the landing sets PAN again. The C ABI clobbers
+        // cover x9, x10, x30 and the flags.
         unsafe {
             asm!(
                 "bl thisos_catch",
@@ -139,6 +149,7 @@ pub fn catch(probe: Probe) {
         Probe::OverflowStack => Aarch64::without_interrupts(run),
         Probe::ReadGuardPage
         | Probe::Spin
+        | Probe::SpinUserAccessOpen
         | Probe::WriteReadOnly
         | Probe::ExecuteNoExecute
         | Probe::ReadUser
@@ -153,7 +164,7 @@ pub fn target(probe: Probe) -> Option<u64> {
         Probe::WriteReadOnly => Some(address(&raw const thisos_probe_read_only)),
         Probe::ExecuteNoExecute => Some(address(&raw const thisos_probe_ret)),
         Probe::ReadUser | Probe::ExecuteUser => Some(USER_SPACE.start),
-        Probe::OverflowStack | Probe::Spin => None,
+        Probe::OverflowStack | Probe::Spin | Probe::SpinUserAccessOpen => None,
     }
 }
 

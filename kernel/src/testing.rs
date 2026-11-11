@@ -4,6 +4,7 @@
 
 use core::fmt::{self, Write};
 use core::hint::spin_loop;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use spin::Mutex;
 use thisos_hal::{Cpu, Platform, Probe, Trap, TrapFrame};
@@ -29,6 +30,10 @@ const LIMIT: u64 = 10;
 
 /// What ends the probe the running test runs, set while it runs.
 static EXPECTED: Mutex<Option<Expectation>> = Mutex::new(None);
+
+/// Whether the trap handler that stopped the last [`expect_timeout`]
+/// probe found user access blocked.
+static BLOCKED_AT_TIMEOUT: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy)]
 enum Expectation {
@@ -210,7 +215,14 @@ pub fn expect_trap(expected: fn(Trap) -> bool, probe: Probe) {
 /// would stop a hung test.
 pub fn expect_timeout(seconds: u64, probe: Probe) {
     let at = timer::ticks() + seconds * u64::from(timer::HZ);
+    BLOCKED_AT_TIMEOUT.store(false, Ordering::Relaxed);
     catch(Expectation::Timeout(at), probe);
+}
+
+/// Whether the trap handler that stopped the last [`expect_timeout`] probe
+/// found user access blocked.
+pub fn user_access_blocked_at_timeout() -> bool {
+    BLOCKED_AT_TIMEOUT.load(Ordering::Relaxed)
 }
 
 fn catch(expectation: Expectation, probe: Probe) {
@@ -229,7 +241,13 @@ pub(crate) fn caught(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) -> b
     };
     let matches = match expected {
         Expectation::Trap(accepts) => accepts(trap),
-        Expectation::Timeout(at) => trap == Trap::Timer && timer::ticks() >= at,
+        Expectation::Timeout(at) => {
+            let due = trap == Trap::Timer && timer::ticks() >= at;
+            if due {
+                BLOCKED_AT_TIMEOUT.store(Arch::user_access_blocked(), Ordering::Relaxed);
+            }
+            due
+        }
     };
     matches && frame.abandon()
 }

@@ -57,6 +57,8 @@ global_asm!(
     "je 4f",
     "cmp rdi, 4",
     "je 5f",
+    "cmp rdi, 5",
+    "je 6f",
     "1:",
     "pause",
     "jmp 1b",
@@ -73,9 +75,14 @@ global_asm!(
     "5:",
     "call rsi",
     "jmp 5b",
+    "6:",
+    "stac",
+    "jmp 1b",
     ".globl thisos_catch_landing",
     ".hidden thisos_catch_landing",
     "thisos_catch_landing:",
+    // iretq brought back the AC the probe ran with.
+    "clac",
     "mov qword ptr [rip + {saved}], 0",
     "pop r15",
     "pop r14",
@@ -107,6 +114,7 @@ pub fn catch(probe: Probe) {
         Probe::Spin => 2,
         Probe::WriteReadOnly => 3,
         Probe::ExecuteNoExecute | Probe::ExecuteUser => 4,
+        Probe::SpinUserAccessOpen => 5,
     };
     if probe == Probe::ExecuteUser {
         assert!(
@@ -124,7 +132,9 @@ pub fn catch(probe: Probe) {
         // uses; the read-only byte, written back with the value it holds;
         // the ret, which only returns; and the user probe page, which the
         // read can't change, and which the call can't run, since SMEP is on.
-        // The C ABI clobbers cover rax and the flags.
+        // The spin with AC set reaches no memory, and the landing clears AC
+        // again; trap::init checked that the CPU has stac and clac. The C
+        // ABI clobbers cover rax and the flags.
         unsafe {
             asm!(
                 "call thisos_catch",
@@ -141,6 +151,7 @@ pub fn catch(probe: Probe) {
         Probe::OverflowStack => interrupts::without_interrupts(run),
         Probe::ReadGuardPage
         | Probe::Spin
+        | Probe::SpinUserAccessOpen
         | Probe::WriteReadOnly
         | Probe::ExecuteNoExecute
         | Probe::ReadUser
@@ -155,7 +166,7 @@ pub fn target(probe: Probe) -> Option<u64> {
         Probe::WriteReadOnly => Some(address(&raw const thisos_probe_read_only)),
         Probe::ExecuteNoExecute => Some(address(&raw const thisos_probe_ret)),
         Probe::ReadUser | Probe::ExecuteUser => Some(USER_SPACE.start),
-        Probe::OverflowStack | Probe::Spin => None,
+        Probe::OverflowStack | Probe::Spin | Probe::SpinUserAccessOpen => None,
     }
 }
 

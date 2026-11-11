@@ -96,6 +96,22 @@ impl Cpu for Aarch64 {
     fn catch(probe: Probe) {
         catch::catch(probe);
     }
+
+    fn user_access_blocked() -> bool {
+        let pan: u64;
+        // SAFETY: Reading PSTATE.PAN into a register reads no memory and
+        // changes no other state.
+        unsafe {
+            asm!(
+                ".arch_extension pan",
+                "mrs {}, pan",
+                out(reg) pan,
+                options(nomem, nostack, preserves_flags),
+            );
+        }
+        // PSTATE.PAN reads back in bit 22.
+        pan & (1 << 22) != 0
+    }
 }
 
 impl Platform for Aarch64 {

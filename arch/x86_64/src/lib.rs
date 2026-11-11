@@ -37,6 +37,8 @@ use uart_16550::backend::PioBackend;
 use uart_16550::{BaudRate, Config, Uart16550Tty};
 use x86_64::VirtAddr;
 use x86_64::instructions::port::Port;
+use x86_64::registers::control::{Cr4, Cr4Flags};
+use x86_64::registers::rflags::{self, RFlags};
 
 #[doc(hidden)]
 pub use bootloader_api as __bootloader_api;
@@ -94,6 +96,11 @@ impl Cpu for X86_64 {
 
     fn catch(probe: Probe) {
         catch::catch(probe);
+    }
+
+    fn user_access_blocked() -> bool {
+        Cr4::read().contains(Cr4Flags::SUPERVISOR_MODE_ACCESS_PREVENTION)
+            && !rflags::read().contains(RFlags::ALIGNMENT_CHECK)
     }
 }
 
@@ -242,7 +249,7 @@ pub const BOOTLOADER_CONFIG: BootloaderConfig = {
 
 /// Loads the descriptor tables with `trap` as the trap handler, builds the
 /// kernel's [`BootInfo`] from the loader's, and sets up the devices it
-/// holds.
+/// holds. Panics if the CPU lacks SMEP or SMAP.
 ///
 /// # Safety
 ///

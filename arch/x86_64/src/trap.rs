@@ -67,8 +67,11 @@ global_asm!(
     "push r15",
     "mov rdi, rsp",
     // The C ABI wants the direction flag clear, and a trap can come while
-    // it is set.
+    // it is set. A gate leaves AC as the trapped code had it, and with AC
+    // set SMAP stops nothing, so the stub closes user access itself;
+    // iretq gives the trapped code its AC back.
     "cld",
+    "clac",
     "call {entry}",
     "pop r15",
     "pop r14",
@@ -334,13 +337,19 @@ static GDT: Once<GlobalDescriptorTable> = Once::new();
 static IDT: Once<InterruptDescriptorTable> = Once::new();
 
 /// Loads the GDT, the TSS and the IDT, with `handler` as the kernel's trap
-/// handler.
+/// handler. Panics if the CPU lacks SMEP or SMAP: the stubs run `clac`,
+/// which faults without SMAP, and `paging::take` turns both on.
 ///
 /// # Safety
 ///
 /// Call this once, before anything else uses the segment registers or the
 /// descriptor tables, and before anything traps.
 pub unsafe fn init(handler: TrapHandler<X86_64>) {
+    // CPUID leaf 7 reports SMEP in EBX bit 7 and SMAP in bit 20.
+    let features = core::arch::x86_64::__cpuid_count(7, 0).ebx;
+    let both = (1 << 7) | (1 << 20);
+    assert!(features & both == both, "the CPU lacks SMEP or SMAP");
+
     HANDLER.init(handler);
 
     for slot in IST_SLOTS {

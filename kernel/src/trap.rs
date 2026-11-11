@@ -48,6 +48,22 @@ mod tests {
         Arch::breakpoint();
     }
 
+    // A trap from code that opened user access, as a user copy does, runs
+    // the handler with it blocked, and the catch blocks it again for the
+    // code after it.
+    #[test_case]
+    fn traps_block_user_access() {
+        testing::expect_timeout(1, Probe::SpinUserAccessOpen);
+        assert!(
+            testing::user_access_blocked_at_timeout(),
+            "the timer handler ran with user access open"
+        );
+        assert!(
+            Arch::user_access_blocked(),
+            "user access stayed open after the catch"
+        );
+    }
+
     #[test_case]
     fn legacy_interrupts_stay_masked() {
         assert!(Arch::legacy_interrupts_masked());
