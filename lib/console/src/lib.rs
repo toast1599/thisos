@@ -130,11 +130,18 @@ impl<M: Pixels> Console<M> {
         }
     }
 
-    /// Starts drawing to `fb`, and clears it to black.
+    /// Starts drawing to `fb`, and clears it to black. A framebuffer that
+    /// can't hold one character cell is dropped untouched, and the console
+    /// stays without a screen.
     pub fn attach(&mut self, mut fb: Framebuffer<M>) {
         let font = Font::pick(fb.height);
         let cols = (fb.width / font.width).min(MAX_COLS);
         let rows = (fb.height / font.height).min(MAX_ROWS);
+        // Drawing and scrolling assume at least one cell.
+        if cols == 0 || rows == 0 {
+            self.screen = None;
+            return;
+        }
         let len = fb.pixels.len();
         write_pixels(&mut fb.pixels, 0..len, iter::repeat(0));
         self.cells.fill(BLANK);
@@ -508,6 +515,43 @@ mod tests {
         let mut fresh = sized_console(128, PixelFormat::Bgr);
         write!(fresh, "\n\n\n\na\nb\nc\nd\ne").unwrap();
         assert_eq!(pixels(&scrolled), pixels(&fresh));
+    }
+
+    /// Framebuffer memory that fails the test on any store.
+    #[derive(Debug)]
+    struct Untouchable(usize);
+
+    impl Pixels for Untouchable {
+        fn len(&self) -> usize {
+            self.0
+        }
+
+        fn store(&mut self, index: usize, _: u32) {
+            panic!("pixel {index} stored");
+        }
+
+        fn store_pair(&mut self, index: usize, _: u64) {
+            panic!("pixel pair {index} stored");
+        }
+    }
+
+    // One pixel narrower, then one row shorter, than the 12 px font's 7x16
+    // cell.
+    #[test]
+    fn stays_detached_on_a_framebuffer_smaller_than_a_cell() {
+        for (width, height) in [(6, 32), (70, 15)] {
+            let mut console = Box::new(Console::new());
+            console.attach(Framebuffer {
+                pixels: Untouchable(width * height),
+                width,
+                height,
+                stride: width,
+                format: PixelFormat::Rgb,
+            });
+            assert!(console.screen.is_none(), "{width}x{height}");
+            write!(console, "a\nb\n").unwrap();
+            console.write_large("PASS", 4);
+        }
     }
 
     #[test]
