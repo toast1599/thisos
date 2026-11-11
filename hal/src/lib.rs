@@ -214,6 +214,8 @@ pub enum UserProgram {
     /// words at its argument, then exits with the error code it returned, or with
     /// `u64::MAX` if it succeeded but its value isn't the length.
     Write,
+    /// Raises the debug exception that needs no debugger: ICEBP on x86_64.
+    Debug,
 }
 
 /// The most frames [`Cpu::backtrace`] reports.

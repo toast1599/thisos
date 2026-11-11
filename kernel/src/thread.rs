@@ -207,6 +207,15 @@ pub fn exit() -> ! {
     panic!("a thread ran after it exited");
 }
 
+/// Ends the running thread from a trap handler, with interrupts still off,
+/// and frees no other thread: the trap may have come in on a stack the CPU
+/// starts the next such trap on, so nothing may preempt the thread there.
+/// The idle thread, or the next thread to `exit`, frees it.
+pub fn exit_from_trap() -> ! {
+    switch(Place::Dead);
+    panic!("a thread ran after it exited");
+}
+
 /// Switches from the running thread, which goes to `place`, or back to its
 /// slot if it is the idle thread, to the next ready thread, or to the idle
 /// thread if none is ready and the running one is dead. Returns at once if

@@ -166,6 +166,9 @@ global_asm!(
     "syscall",
     "ud2",
     ".org thisos_user_programs + 6 * {slot}, 0xcc",
+    // Debug. ICEBP, as a byte since assemblers spell it differently.
+    ".byte 0xf1",
+    ".org thisos_user_programs + 7 * {slot}, 0xcc",
     ".popsection",
     exit = const Syscall::Exit.number(),
     write = const Syscall::Write.number(),
@@ -174,7 +177,7 @@ global_asm!(
 );
 
 unsafe extern "C" {
-    static thisos_user_programs: [u8; 6 * SLOT];
+    static thisos_user_programs: [u8; 7 * SLOT];
 }
 
 /// Writes `program` at the start of `frame`, through the physical-memory
@@ -187,6 +190,7 @@ pub fn write_program(phys_offset: VirtAddr, frame: &Frame, program: UserProgram)
         UserProgram::Simd => 3,
         UserProgram::Spin => 4,
         UserProgram::Write => 5,
+        UserProgram::Debug => 6,
     };
     let source = (&raw const thisos_user_programs)
         .cast::<u8>()

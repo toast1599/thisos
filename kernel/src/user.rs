@@ -6,9 +6,7 @@ use core::{fmt, str};
 use spin::Mutex;
 use thisos_abi::{Error, MAX_WRITE, Syscall};
 use thisos_elf::Elf;
-use thisos_hal::{
-    AddressSpace as _, Cpu, MapErrorKind, Platform, Protection, Trap, TrapFrame as _,
-};
+use thisos_hal::{AddressSpace as _, MapErrorKind, Platform, Protection, Trap, TrapFrame as _};
 
 use crate::{Arch, frames, paging, thread};
 
@@ -24,7 +22,8 @@ enum End {
     Killed { trap: Trap, ip: u64 },
 }
 
-/// How the last user thread to end ended, for tests to wait on.
+/// How the last user thread to end ended, for tests to wait on. The trap
+/// handler takes the lock with interrupts off, so tests must too.
 #[cfg(test)]
 static ENDED: Mutex<Option<End>> = Mutex::new(None);
 
@@ -178,14 +177,13 @@ pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
         End::Exited(status) => log::info!("user thread exited with status {status:#x}"),
         End::Killed { trap, ip } => log::warn!("user thread killed by {trap} at {ip:#x}"),
     }
-    // User code holds no kernel lock, so nothing this handler interrupted
-    // does either, and exit frees threads with interrupts on.
-    Arch::enable_interrupts();
     #[cfg(test)]
     {
         *ENDED.lock() = Some(end);
     }
-    thread::exit()
+    // A #DB comes in on an IST stack, which the next one starts at the top
+    // of again, so interrupts stay off until the thread is gone from it.
+    thread::exit_from_trap()
 }
 
 /// Logs the `len` bytes of text at `buf` in user space as one record, as
@@ -220,7 +218,7 @@ mod tests {
     use core::ptr;
     use core::sync::atomic::AtomicU64;
 
-    use thisos_hal::{Access, UserProgram};
+    use thisos_hal::{Access, Cpu, UserProgram};
 
     use super::*;
     use crate::testing::spin_until;
@@ -287,14 +285,14 @@ mod tests {
     fn run_in(program: Program, before: usize, arg: u64) -> End {
         let space_frames = before - frames::free_frames();
         let entry = program.entry;
-        *ENDED.lock() = None;
+        Arch::without_interrupts(|| *ENDED.lock() = None);
         thread::spawn_user(program.space, entry, program.stack_top, arg);
         // User code allocates nothing, and nothing frees the thread until
         // wait_for_exits, so this counts its stack whenever it runs.
         let spawned = frames::free_frames();
         spin_until("the user thread to end", || {
             assert_eq!(Arch::translate_active(entry), None, "user code's page");
-            ENDED.lock().is_some()
+            Arch::without_interrupts(|| ENDED.lock().is_some())
         });
         thread::wait_for_exits();
         assert_eq!(
@@ -302,7 +300,7 @@ mod tests {
             spawned + space_frames + thread::STACK_SIZE / 4096,
             "frames leaked"
         );
-        let Some(end) = *ENDED.lock() else {
+        let Some(end) = Arch::without_interrupts(|| *ENDED.lock()) else {
             unreachable!("ENDED was set");
         };
         end
@@ -413,6 +411,19 @@ mod tests {
             matches!(end, End::Killed { trap: Trap::Other { .. }, ip } if ip == code),
             "{end:?}"
         );
+    }
+
+    // The exception arrives on the stack every user thread's debug
+    // exceptions share. ICEBP raises it as a trap, after the instruction,
+    // so the CPU reports the byte after it.
+    #[test_case]
+    fn a_debug_exception_kills_the_thread() {
+        let (end, code) = run(UserProgram::Debug, |_| 0);
+        let trap = Trap::Other {
+            vector: 1,
+            error: 0,
+        };
+        assert_eq!(end, End::Killed { trap, ip: code + 1 });
     }
 
     // The kernel saves no SIMD state, so user code may not use it.
