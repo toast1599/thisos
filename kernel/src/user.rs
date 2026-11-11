@@ -27,10 +27,37 @@ enum End {
 #[cfg(test)]
 static ENDED: Mutex<Option<End>> = Mutex::new(None);
 
-/// The text of the last write syscall, and its length, for tests. The
-/// syscall takes the lock with interrupts off, so tests must too.
+/// The records the last write syscall logged, joined by newlines, for
+/// tests. The syscall takes the lock with interrupts off, so tests must
+/// too.
 #[cfg(test)]
-static WRITTEN: Mutex<([u8; MAX_WRITE], usize)> = Mutex::new(([0; MAX_WRITE], 0));
+static WRITTEN: Mutex<Written> = Mutex::new(Written {
+    bytes: [0; WRITTEN_SIZE],
+    len: 0,
+});
+
+/// Escapes make a record up to six bytes per byte of text, as `\u{1b}`.
+#[cfg(test)]
+const WRITTEN_SIZE: usize = 6 * MAX_WRITE;
+
+#[cfg(test)]
+struct Written {
+    bytes: [u8; WRITTEN_SIZE],
+    len: usize,
+}
+
+#[cfg(test)]
+impl fmt::Write for Written {
+    fn write_str(&mut self, text: &str) -> fmt::Result {
+        let end = self.len + text.len();
+        self.bytes
+            .get_mut(self.len..end)
+            .ok_or(fmt::Error)?
+            .copy_from_slice(text.as_bytes());
+        self.len = end;
+        Ok(())
+    }
+}
 
 /// The loader's ramdisk, which holds init's ELF file.
 static RAMDISK: Mutex<Option<&'static [u8]>> = Mutex::new(None);
@@ -186,10 +213,10 @@ pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
     thread::exit_from_trap()
 }
 
-/// Logs the `len` bytes of text at `buf` in user space as one record, as
-/// the write syscall does, and returns `len`. Runs with interrupts off, as
-/// syscalls do, and copies into a buffer on the stack, since trap handlers
-/// never allocate.
+/// Logs the `len` bytes of text at `buf` in user space as the write
+/// syscall does, one record per line, and returns `len`. Runs with
+/// interrupts off, as syscalls do, and copies into a buffer on the stack,
+/// since trap handlers never allocate.
 fn write(buf: u64, len: u64) -> Result<u64, Error> {
     let mut bytes = [0; MAX_WRITE];
     let bytes = usize::try_from(len)
@@ -201,14 +228,40 @@ fn write(buf: u64, len: u64) -> Result<u64, Error> {
     }
     let text = str::from_utf8(bytes).map_err(|_| Error::NotUtf8)?;
     let text = text.strip_suffix('\n').unwrap_or(text);
-    log::info!(target: "user", "{text}");
+    for line in text.split('\n') {
+        log::info!(target: "user", "{}", Escaped(line));
+    }
     #[cfg(test)]
     {
+        use fmt::Write as _;
         let mut written = WRITTEN.lock();
-        written.0[..text.len()].copy_from_slice(text.as_bytes());
-        written.1 = text.len();
+        written.len = 0;
+        for (i, line) in text.split('\n').enumerate() {
+            let newline = if i == 0 { "" } else { "\n" };
+            assert!(
+                write!(written, "{newline}{}", Escaped(line)).is_ok(),
+                "WRITTEN is full"
+            );
+        }
     }
     Ok(len)
+}
+
+/// A line of user text with its control characters shown as escapes, such
+/// as `\u{1b}`, so that it can't move the terminal's cursor.
+struct Escaped<'a>(&'a str);
+
+impl fmt::Display for Escaped<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for c in self.0.chars() {
+            if c.is_control() {
+                write!(f, "{}", c.escape_default())?;
+            } else {
+                fmt::Write::write_char(f, c)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -223,13 +276,13 @@ mod tests {
     use super::*;
     use crate::testing::spin_until;
 
-    /// The text of the last write syscall, which it then forgets.
+    /// The records of the last write syscall, joined by newlines, which it
+    /// then forgets.
     fn take_written() -> String {
         Arch::without_interrupts(|| {
             let mut written = WRITTEN.lock();
-            let (bytes, len) = &mut *written;
-            let text = String::from_utf8_lossy(&bytes[..*len]).into_owned();
-            *len = 0;
+            let text = String::from_utf8_lossy(&written.bytes[..written.len]).into_owned();
+            written.len = 0;
             text
         })
     }
@@ -367,6 +420,17 @@ mod tests {
         let (end, written) = run_write(|at| at, long.len(), &long);
         assert_eq!(end, End::Exited(0));
         assert_eq!(written.len(), MAX_WRITE);
+    }
+
+    #[test_case]
+    fn write_logs_a_record_per_line_with_control_characters_escaped() {
+        let text = b"one\n\ntwo\r\x1b[2J\t\n";
+        let (end, written) = run_write(|at| at, text.len(), text);
+        assert_eq!(end, End::Exited(0));
+        assert_eq!(written, "one\n\ntwo\\r\\u{1b}[2J\\t");
+        // A zero-length write reads nothing, so even a null pointer logs
+        // its empty line.
+        assert_eq!(run_write(|_| 0, 0, b""), (End::Exited(0), String::new()));
     }
 
     #[test_case]

@@ -14,10 +14,12 @@ pub enum Syscall {
     /// exit status. It never returns.
     Exit,
     /// Logs the UTF-8 text at its first argument, as long as its second,
-    /// at most [`MAX_WRITE`] bytes, as one line of the kernel's log, without
-    /// a newline at its end. Its value is the length. It fails, writing
-    /// nothing, with [`Error::TooLong`], [`Error::BadAddress`] or
-    /// [`Error::NotUtf8`].
+    /// at most [`MAX_WRITE`] bytes, in the kernel's log, one record per
+    /// line. A newline at its end is dropped, and other control characters
+    /// show as escapes such as `\u{1b}`. A zero-length write reads nothing,
+    /// checks no address and logs one empty line. Its value is the length.
+    /// It fails, writing nothing, with [`Error::TooLong`],
+    /// [`Error::BadAddress`] or [`Error::NotUtf8`].
     Write,
 }
 

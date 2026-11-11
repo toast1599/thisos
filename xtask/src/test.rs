@@ -9,8 +9,8 @@ use crate::build::{self, Arch, Kernel};
 use crate::cmd::{cargo, exec, on_host};
 use crate::root;
 
-/// Runs the host tests of every `lib/*` crate, then the kernel's tests for
-/// `arch` in QEMU.
+/// Runs the host tests of every `lib/*` crate and `thisos-rt`, then the
+/// kernel's tests for `arch` in QEMU.
 pub fn test(arch: Arch) -> Result<()> {
     for manifest in libs()? {
         exec(on_host(
@@ -49,7 +49,9 @@ pub fn test(arch: Arch) -> Result<()> {
     )
 }
 
-/// The manifests of the `lib/*` crates, which build and test on the host.
+/// The manifests of the crates that build and test on the host: the
+/// `lib/*` crates, and `thisos-rt`, whose tests leave out its entry point,
+/// panic handler and syscalls.
 pub fn libs() -> Result<Vec<PathBuf>> {
     let dir = root().join("lib");
     let mut manifests = Vec::new();
@@ -63,5 +65,6 @@ pub fn libs() -> Result<Vec<PathBuf>> {
         }
     }
     manifests.sort();
+    manifests.push(root().join("user/rt/Cargo.toml"));
     Ok(manifests)
 }
