@@ -19,10 +19,13 @@ mod paging;
 mod panic;
 #[cfg(test)]
 mod testing;
+mod thread;
 mod timer;
 mod trap;
 
-use thisos_hal::{BootInfo, Cpu};
+use thisos_hal::BootInfo;
+#[cfg(test)]
+use thisos_hal::Cpu;
 
 pub use trap::trap;
 
@@ -67,13 +70,14 @@ fn init(boot: BootInfo<Arch>) {
     paging::init();
     trap::init();
     heap::init();
+    thread::init();
     timer::init();
 }
 
 /// The kernel binary's main function.
 pub fn kmain(boot: BootInfo<Arch>) -> ! {
     init(boot);
-    Arch::halt()
+    thread::exit()
 }
 
 #[cfg(test)]

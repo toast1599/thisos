@@ -245,13 +245,18 @@ extern "C" fn trap_entry(frame: &mut TrapFrame) {
     let Some(handler) = HANDLER.get() else {
         X86_64::halt();
     };
+    // Before the handler, which may switch to another thread that runs for
+    // many ticks before this one leaves it. Interrupts stay off in the
+    // handler, so the next tick waits for iretq or for another thread.
+    if frame.vector == apic::TIMER_VECTOR {
+        apic::eoi();
+    }
     handler(trap, frame);
     match frame.vector {
         // A double fault the handler abandoned resumes in the catch, from
         // registers it saved itself, not from the state the fault left.
         DOUBLE_FAULT if !catch::abandoned(frame) => X86_64::halt(),
         MACHINE_CHECK => X86_64::halt(),
-        apic::TIMER_VECTOR => apic::eoi(),
         _ => {}
     }
 }

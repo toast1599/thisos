@@ -2,7 +2,7 @@
 
 use thisos_hal::{Platform, Trap};
 
-use crate::{Arch, paging, panic, timer};
+use crate::{Arch, paging, panic, thread, timer};
 
 /// Moves the stacks the CPU takes double faults, NMIs and machine checks
 /// on to stacks in kernel space with an unmapped page below each.
@@ -17,8 +17,9 @@ pub fn init() {
 }
 
 /// The kernel's trap handler, which every entry point passes to `entry!`.
-/// A breakpoint returns, and a timer interrupt counts a tick. Until the
-/// kernel has user space, any other trap is a kernel bug, and panics.
+/// A breakpoint returns, and a timer interrupt counts a tick and switches
+/// to the next ready thread. Until the kernel has user space, any other
+/// trap is a kernel bug, and panics.
 pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
     #[cfg(test)]
     if crate::testing::caught(trap, frame) {
@@ -30,6 +31,7 @@ pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
             #[cfg(test)]
             crate::testing::watchdog(frame);
             timer::tick();
+            thread::tick();
         }
         _ => panic::trap(trap, frame),
     }
@@ -92,8 +94,7 @@ mod tests {
     // overflow reaches the handler as a double fault, on a stack of its own.
     // The tests after this one show the kernel carries on after it. The
     // probe runs with interrupts off, and the timer ticking after it shows
-    // they came back on, and that no timer handler was abandoned before its
-    // EOI.
+    // they came back on.
     #[test_case]
     fn a_stack_overflow_double_faults() {
         testing::expect_trap(|trap| trap == Trap::DoubleFault, Probe::OverflowStack);

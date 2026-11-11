@@ -118,6 +118,10 @@ pub trait Cpu {
     /// runs.
     fn enable_interrupts();
 
+    /// Turns interrupts on and waits for one, then returns once its
+    /// handler has, with interrupts on.
+    fn wait_for_interrupt();
+
     /// Runs `f` with interrupts off, then turns them back on if they were
     /// on before.
     fn without_interrupts<R>(f: impl FnOnce() -> R) -> R;
@@ -208,6 +212,11 @@ pub trait Platform {
     /// The kernel's own page tables.
     type PageTables: PageTables;
 
+    /// A suspended kernel thread: where it stopped and the stack it runs
+    /// on. Resuming it consumes it, so no thread resumes twice, and
+    /// dropping it leaves the thread suspended for good.
+    type Context: Send;
+
     /// Builds page tables of the kernel's own, with frames from `alloc`,
     /// that map everything the loader mapped for the kernel at the same
     /// addresses, and nothing else but the registers of devices the
@@ -226,8 +235,22 @@ pub trait Platform {
     /// The stacks the CPU switches to for some traps. For tests.
     fn trap_stacks() -> impl Iterator<Item = Range<u64>>;
 
-    /// The address of the unmapped page right below the kernel stack, which
-    /// a stack overflow runs into.
+    /// A kernel thread that, once [`Platform::switch`] resumes it, calls
+    /// `entry` on `stack` with interrupts off, passing it the context of
+    /// the thread that switched to it. `stack` is a stack of
+    /// [`PageTables::kernel_space`] that nothing else uses, with an
+    /// unmapped page below it, such as `move_trap_stacks`'s callback
+    /// returns; the architecture writes the thread's first frame at its
+    /// top. Panics unless `stack` is whole pages inside kernel space.
+    fn new_context(stack: Range<u64>, entry: fn(Self::Context) -> !) -> Self::Context;
+
+    /// Suspends the calling thread and resumes `to`. Returns once another
+    /// thread switches to the caller's context, with that thread's own
+    /// context, which it left to do so. Panics if interrupts are on.
+    fn switch(to: Self::Context) -> Self::Context;
+
+    /// The address of the unmapped page right below the running thread's
+    /// stack, which a stack overflow runs into.
     fn guard_page() -> u64;
 
     /// The address whose page fault ends `probe`: the guard page for
@@ -465,7 +488,9 @@ pub trait Serial: fmt::Write + Send {}
 /// When it returns, the trapped code resumes, and a fault runs the faulting
 /// instruction again; after a [`Trap::DoubleFault`] or a trap that can't
 /// resume, the architecture halts instead, unless the handler called
-/// [`TrapFrame::abandon`] after a double fault.
+/// [`TrapFrame::abandon`] after a double fault. The handler may switch
+/// threads on a [`Trap::Timer`], which the architecture acknowledges before
+/// calling it; the trapped thread resumes when a switch comes back to it.
 pub type TrapHandler<P> = fn(Trap, &mut <P as Platform>::TrapFrame);
 
 /// Why the CPU trapped.

@@ -40,7 +40,7 @@ pub use framebuffer::FramebufferPixels;
 pub use memory::MemoryMap;
 pub use paging::{KernelPageTables, UserSpace};
 pub use trap::TrapFrame;
-pub use unported::NoSerial;
+pub use unported::{NoContext, NoSerial};
 
 /// The aarch64 architecture, as the kernel sees it through `thisos-hal`.
 #[derive(Debug)]
@@ -83,6 +83,10 @@ impl Cpu for Aarch64 {
         DAIF.modify(DAIF::I::Unmasked);
     }
 
+    fn wait_for_interrupt() {
+        not_ported("Cpu::wait_for_interrupt")
+    }
+
     fn without_interrupts<R>(f: impl FnOnce() -> R) -> R {
         let masked = DAIF.is_set(DAIF::I);
         DAIF.modify(DAIF::I::Masked);
@@ -120,6 +124,7 @@ impl Platform for Aarch64 {
     type TrapFrame = TrapFrame;
     type MemoryMap = MemoryMap;
     type PageTables = KernelPageTables;
+    type Context = NoContext;
 
     fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<KernelPageTables> {
         // SAFETY: boot_info recorded where Limine mapped all physical memory
@@ -145,6 +150,14 @@ impl Platform for Aarch64 {
 
     fn trap_stacks() -> impl Iterator<Item = Range<u64>> {
         trap::stacks()
+    }
+
+    fn new_context(_: Range<u64>, _: fn(NoContext) -> !) -> NoContext {
+        not_ported("Platform::new_context")
+    }
+
+    fn switch(_: NoContext) -> NoContext {
+        not_ported("Platform::switch")
     }
 
     fn guard_page() -> u64 {

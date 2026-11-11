@@ -16,6 +16,7 @@ use x86_64::structures::paging::{Page, PageTableIndex, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
 use crate::heap::{self, Heap};
+use crate::once::Once;
 
 // Page-table entry bits.
 pub const PRESENT: u64 = 1 << 0;
@@ -366,6 +367,10 @@ pub struct KernelPageTables {
     heap: Heap,
 }
 
+/// [`thisos_hal::PageTables::kernel_space`], which `take` records for
+/// checks that have no `KernelPageTables` to ask.
+pub static KERNEL_SPACE: Once<Range<u64>> = Once::new();
+
 /// Copies the loader's upper half into new tables made from `alloc`'s
 /// frames, switches to them, turns on global pages, SMEP and SMAP, and
 /// returns them. Returns `None` after the first call.
@@ -437,6 +442,7 @@ pub unsafe fn take(
         });
     }
     let heap_base = space_start(space);
+    KERNEL_SPACE.init(kernel_space(space));
     Some(KernelPageTables {
         tables,
         space,
@@ -453,12 +459,17 @@ fn space_start(index: PageTableIndex) -> VirtAddr {
     Page::<Size4KiB>::from_page_table_indices(index, zero, zero, zero).start_address()
 }
 
+/// Where `map` maps in level 4 entry `space`: all of it above the heap.
+fn kernel_space(space: PageTableIndex) -> Range<u64> {
+    let start = space_start(space).as_u64();
+    start + heap::SIZE..start + (1 << 39)
+}
+
 impl thisos_hal::PageTables for KernelPageTables {
     type AddressSpace = UserSpace;
 
     fn kernel_space(&self) -> Range<u64> {
-        let start = space_start(self.space).as_u64();
-        start + heap::SIZE..start + (1 << 39)
+        kernel_space(self.space)
     }
 
     fn map(

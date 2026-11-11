@@ -8,6 +8,7 @@
 mod apic;
 mod backtrace;
 mod catch;
+mod context;
 mod framebuffer;
 mod heap;
 mod memory;
@@ -42,6 +43,7 @@ use x86_64::registers::rflags::{self, RFlags};
 
 #[doc(hidden)]
 pub use bootloader_api as __bootloader_api;
+pub use context::Context;
 pub use framebuffer::FramebufferPixels;
 pub use memory::MemoryMap;
 pub use paging::KernelPageTables;
@@ -90,6 +92,10 @@ impl Cpu for X86_64 {
         x86_64::instructions::interrupts::enable();
     }
 
+    fn wait_for_interrupt() {
+        x86_64::instructions::interrupts::enable_and_hlt();
+    }
+
     fn without_interrupts<R>(f: impl FnOnce() -> R) -> R {
         x86_64::instructions::interrupts::without_interrupts(f)
     }
@@ -110,6 +116,7 @@ impl Platform for X86_64 {
     type TrapFrame = TrapFrame;
     type MemoryMap = MemoryMap;
     type PageTables = KernelPageTables;
+    type Context = Context;
 
     fn take_page_tables(alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<KernelPageTables> {
         // SAFETY: boot_info recorded where the loader mapped all physical
@@ -124,6 +131,14 @@ impl Platform for X86_64 {
 
     fn trap_stacks() -> impl Iterator<Item = Range<u64>> {
         trap::stacks()
+    }
+
+    fn new_context(stack: Range<u64>, entry: fn(Context) -> !) -> Context {
+        context::new(stack, entry)
+    }
+
+    fn switch(to: Context) -> Context {
+        context::switch(to)
     }
 
     fn heap_stats() -> HeapStats {

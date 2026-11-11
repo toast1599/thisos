@@ -3,8 +3,7 @@
 //! exists and their methods never run: the HAL calls that would make one
 //! panic in `not_ported` first. They aren't empty enums because the
 //! compiler would then flag the kernel's tests that use them as
-//! unreachable. Each goes once its part is ported; only the serial port's
-//! is left.
+//! unreachable. Each goes once its part is ported.
 
 use core::fmt;
 
@@ -21,3 +20,7 @@ impl fmt::Write for NoSerial {
 }
 
 impl thisos_hal::Serial for NoSerial {}
+
+/// No kernel threads yet: `Platform::new_context` panics.
+#[derive(Debug)]
+pub struct NoContext(());

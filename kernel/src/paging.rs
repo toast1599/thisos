@@ -79,13 +79,6 @@ pub fn map(page: u64, frame: Frame, writable: bool) -> Result<(), MapError> {
 
 /// Unmaps the page at `page` in kernel space, and returns its frame, or
 /// `None` if nothing was mapped there. Its address is never mapped again.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "nothing outside the tests unmaps until threads exit"
-    )
-)]
 pub fn unmap(page: u64) -> Option<Frame> {
     with(|kernel| kernel.tables.unmap(page))
 }

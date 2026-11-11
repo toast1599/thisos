@@ -1,4 +1,4 @@
-//! Walking the frame pointers on the kernel stack. The kernel is built with
+//! Walking the frame pointers on the running thread's stack. The kernel is built with
 //! frame pointers, so each function's prologue pushes its caller's rbp right
 //! below the return address and points rbp at it.
 
@@ -13,12 +13,23 @@ static STACK_START: AtomicU64 = AtomicU64::new(0);
 static STACK_END: AtomicU64 = AtomicU64::new(0);
 static IMAGE_OFFSET: AtomicU64 = AtomicU64::new(0);
 
-/// Records the kernel stack's addresses and where the loader put the kernel
+/// Records the boot stack's addresses and where the loader put the kernel
 /// image, which the walk subtracts to give link addresses.
 pub fn init(stack: Range<u64>, image_offset: u64) {
+    set_stack(stack);
+    IMAGE_OFFSET.store(image_offset, Ordering::Relaxed);
+}
+
+/// The running thread's stack.
+pub fn stack() -> Range<u64> {
+    STACK_START.load(Ordering::Relaxed)..STACK_END.load(Ordering::Relaxed)
+}
+
+/// Makes `stack` the one walks stay inside and the guard page is under,
+/// for the thread a switch is about to run.
+pub fn set_stack(stack: Range<u64>) {
     STACK_START.store(stack.start, Ordering::Relaxed);
     STACK_END.store(stack.end, Ordering::Relaxed);
-    IMAGE_OFFSET.store(image_offset, Ordering::Relaxed);
 }
 
 /// The link address of `address`, an address in the loaded kernel image.
@@ -26,8 +37,9 @@ pub fn link_address(address: u64) -> u64 {
     address.wrapping_sub(IMAGE_OFFSET.load(Ordering::Relaxed))
 }
 
-/// The lowest address of the kernel stack. The loader leaves the page below
-/// it unmapped, as a guard page.
+/// The lowest address of the running thread's stack. The loader, and
+/// the kernel's `map_stack` for the other threads, leave the page below it
+/// unmapped, as a guard page.
 pub fn stack_bottom() -> u64 {
     STACK_START.load(Ordering::Relaxed)
 }
@@ -48,8 +60,9 @@ impl Frame {
     }
 
     fn caller(&self) -> u64 {
-        // SAFETY: The word is aligned and inside the kernel stack, which the
-        // loader maps in full and only this core uses. A volatile read makes
+        // SAFETY: The word is aligned and inside the running thread's stack,
+        // which is mapped in full while the thread runs, and which only this
+        // core uses. A volatile read makes
         // no reference, so it can't alias one. On a chain of prologues it
         // holds the caller's rbp. On a chain broken by code without frame
         // pointers it can be part of a local, live or dead, or never written,

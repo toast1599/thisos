@@ -57,13 +57,6 @@ pub fn alloc() -> Option<Frame> {
 }
 
 /// Makes `frame` free again.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "nothing outside the tests frees a frame until threads exit"
-    )
-)]
 pub fn free(frame: Frame) {
     FRAMES.lock().free(frame);
 }
