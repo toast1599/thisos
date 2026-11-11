@@ -338,7 +338,27 @@ pub unsafe fn boot_info(
         framebuffer,
         framebuffer_write_combining,
         memory: MemoryMap::new(&boot.memory_regions),
+        ramdisk: boot
+            .ramdisk_addr
+            .into_option()
+            .map(|start| ramdisk(start, boot.ramdisk_len)),
     }
+}
+
+/// The ramdisk the loader mapped at `start`, `len` bytes long.
+fn ramdisk(start: u64, len: u64) -> &'static [u8] {
+    let Ok(len) = usize::try_from(len) else {
+        panic!("the ramdisk's length {len:#x} doesn't fit a usize");
+    };
+    // The address is a BootInfo field, one of the integers CONTRIBUTING
+    // lets the arch crate turn into a pointer.
+    let start = VirtAddr::new(start).as_ptr::<u8>();
+    // SAFETY: The loader maps the ramdisk's len bytes at start, in the upper
+    // half that the kernel's page tables copy, so it stays mapped for the
+    // kernel's life. Its frames are in a Loader region, which the frame
+    // allocator never hands out, and nothing writes them, through this
+    // mapping or the physical-memory one.
+    unsafe { core::slice::from_raw_parts(start, len) }
 }
 
 fn framebuffer(mut fb: FrameBuffer) -> Option<Framebuffer<FramebufferPixels>> {

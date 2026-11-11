@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["kernel", "hal", "abi", "arch/x86_64", "arch/aarch64", "lib/console", "lib/fdt", "lib/frames"]
+members = ["kernel", "hal", "abi", "arch/x86_64", "arch/aarch64", "lib/console", "lib/fdt", "lib/frames", "user/rt", "user/init"]
 # The aarch64 arch crate builds only for aarch64, so a plain cargo build at
 # the root, which targets x86_64-unknown-none, leaves it out.
-default-members = ["kernel", "hal", "abi", "arch/x86_64", "lib/console", "lib/fdt", "lib/frames"]
+default-members = ["kernel", "hal", "abi", "arch/x86_64", "lib/console", "lib/fdt", "lib/frames", "user/rt", "user/init"]
 
 [workspace.package]
 version = "0.0.0"
@@ -20,6 +20,7 @@ thisos-arch-aarch64 = { path = "arch/aarch64" }
 thisos-console = { path = "lib/console" }
 thisos-fdt = { path = "lib/fdt" }
 thisos-frames = { path = "lib/frames" }
+thisos-rt = { path = "user/rt" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

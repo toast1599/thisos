@@ -147,6 +147,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "thisos-init"
+version = "0.0.0"
+dependencies = [
+ "thisos-rt",
+]
+
+[[package]]
 name = "thisos-kernel"
 version = "0.0.0"
 dependencies = [
@@ -158,6 +165,13 @@ dependencies = [
  "thisos-console",
  "thisos-frames",
  "thisos-hal",
+]
+
+[[package]]
+name = "thisos-rt"
+version = "0.0.0"
+dependencies = [
+ "thisos-abi",
 ]
 
 [[package]]

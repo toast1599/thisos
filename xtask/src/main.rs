@@ -77,6 +77,8 @@ enum Command {
     QemuTest {
         #[arg(long, value_enum)]
         arch: Arch,
+        #[arg(long)]
+        ramdisk: Option<PathBuf>,
         elf: PathBuf,
     },
 }
@@ -118,7 +120,7 @@ fn main() -> ExitCode {
         Command::Test { arch } => test::test(arch),
         Command::Ci => ci::ci(),
         Command::Font => font::font(),
-        Command::QemuTest { arch, elf } => qemu::test(arch, &elf),
+        Command::QemuTest { arch, ramdisk, elf } => qemu::test(arch, ramdisk.as_deref(), &elf),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

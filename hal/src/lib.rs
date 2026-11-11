@@ -26,6 +26,9 @@ pub struct BootInfo<P: Platform> {
     pub framebuffer_write_combining: bool,
     /// Physical memory, as the loader left it.
     pub memory: P::MemoryMap,
+    /// The file the loader loaded as its ramdisk, mapped in the upper half
+    /// in memory the loader's map marks Loader, or `None` without one.
+    pub ramdisk: Option<&'static [u8]>,
 }
 
 /// A range of physical memory in the loader's memory map.

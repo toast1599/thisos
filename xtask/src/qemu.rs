@@ -36,11 +36,12 @@ pub fn run(arch: Arch, release: bool, gdb: bool) -> Result<()> {
     exec(&mut qemu)
 }
 
-/// Boots a kernel test ELF headless, as cargo's runner, and fails unless the
-/// kernel reports success before the timeout.
-pub fn test(arch: Arch, elf: &Path) -> Result<()> {
+/// Boots a kernel test ELF headless, with the file at `ramdisk` as the
+/// loader's ramdisk, as cargo's runner, and fails unless the kernel reports
+/// success before the timeout.
+pub fn test(arch: Arch, ramdisk: Option<&Path>, elf: &Path) -> Result<()> {
     let image = with_extension(elf, "img");
-    arch.write_image(elf, None, &image)?;
+    arch.write_image(elf, ramdisk, None, &image)?;
 
     let mut qemu = qemu(arch, &image, &with_extension(elf, "vars.fd"))?;
     qemu.args(["-display", "none"]);

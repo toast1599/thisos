@@ -30,9 +30,16 @@ pub fn test(arch: Arch) -> Result<()> {
         "CARGO_TARGET_{}_RUNNER",
         arch.target().to_uppercase().replace('-', "_")
     );
+    let mut command = format!("{xtask} qemu-test --arch {}", arch.name());
+    // Inside the repository, as the xtask executable is, so the check above
+    // covers it too.
+    if let Some(ramdisk) = arch.ramdisk(false)? {
+        let ramdisk = ramdisk.to_str().context("the ramdisk path isn't UTF-8")?;
+        command = format!("{command} --ramdisk {ramdisk}");
+    }
     exec(
         cargo()
-            .env(runner, format!("{xtask} qemu-test --arch {}", arch.name()))
+            .env(runner, command)
             // The same kind as build --tests, so a QEMU run logs `tests` like a
             // laptop test image. It doesn't spare a rebuild when switching
             // between the two: the ID has the time to the minute, and the

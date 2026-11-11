@@ -1,0 +1,18 @@
+[package]
+name = "thisos-rt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+test = false
+doctest = false
+bench = false
+
+[dependencies]
+thisos-abi.workspace = true
+
+[lints]
+workspace = true

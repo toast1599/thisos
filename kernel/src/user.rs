@@ -1,4 +1,5 @@
-//! Traps user code raises: its syscalls, and the faults that end it.
+//! User code: the ramdisk that holds init, and the traps user code raises,
+//! its syscalls and the faults that end it.
 
 use thisos_abi::Syscall;
 use thisos_hal::{Cpu, Platform, Trap, TrapFrame as _};
@@ -17,6 +18,22 @@ enum End {
 /// How the last user thread to end ended, for tests to wait on.
 #[cfg(test)]
 static ENDED: spin::Mutex<Option<End>> = spin::Mutex::new(None);
+
+/// The loader's ramdisk, for tests to read.
+#[cfg(test)]
+static RAMDISK: spin::Mutex<Option<&'static [u8]>> = spin::Mutex::new(None);
+
+/// Logs the size of the loader's ramdisk, which holds init's ELF file.
+pub fn init(ramdisk: Option<&'static [u8]>) {
+    match ramdisk {
+        Some(ramdisk) => log::info!("ramdisk is {} bytes", ramdisk.len()),
+        None => log::warn!("no ramdisk, so no init to run"),
+    }
+    #[cfg(test)]
+    {
+        *RAMDISK.lock() = ramdisk;
+    }
+}
 
 /// Handles a trap that [`TrapFrame::raised_by_user`](thisos_hal::TrapFrame::raised_by_user)
 /// says user code raised: runs a syscall, and ends the thread on any other
@@ -156,6 +173,18 @@ mod tests {
         assert!(
             matches!(end, End::Killed { trap: Trap::Other { .. }, ip } if ip == code),
             "{end:?}"
+        );
+    }
+
+    #[test_case]
+    fn the_ramdisk_holds_an_elf_file() {
+        let Some(ramdisk) = *RAMDISK.lock() else {
+            panic!("no ramdisk");
+        };
+        assert!(
+            ramdisk.starts_with(b"\x7fELF"),
+            "the ramdisk starts with {:x?}",
+            ramdisk.get(..4)
         );
     }
 

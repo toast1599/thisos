@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use serde_json::Value;
 
 use crate::cmd::{cargo, exec, output};
@@ -38,11 +38,21 @@ impl Arch {
     }
 
     /// Writes the disk image that boots the kernel ELF at `elf` to `path`,
-    /// with `id` in [`BUILD_FILE`] when it is `Some`.
-    pub fn write_image(self, elf: &Path, id: Option<&str>, path: &Path) -> Result<()> {
+    /// with the file at `ramdisk` as the loader's ramdisk, and `id` in
+    /// [`BUILD_FILE`], when they are `Some`.
+    pub fn write_image(
+        self,
+        elf: &Path,
+        ramdisk: Option<&Path>,
+        id: Option<&str>,
+        path: &Path,
+    ) -> Result<()> {
         match self {
             Arch::X86_64 => {
                 let mut builder = bootloader::DiskImageBuilder::new(elf.to_path_buf());
+                if let Some(ramdisk) = ramdisk {
+                    builder.set_ramdisk(ramdisk.to_path_buf());
+                }
                 if let Some(id) = id {
                     builder.set_file_contents(BUILD_FILE.into(), format!("{id}\n").into_bytes());
                 }
@@ -50,8 +60,34 @@ impl Arch {
                     .create_uefi_image(path)
                     .with_context(|| format!("writing {}", path.display()))
             }
-            Arch::Aarch64 => limine::write_image(elf, id, path),
+            Arch::Aarch64 => {
+                ensure!(ramdisk.is_none(), "aarch64 images carry no ramdisk");
+                limine::write_image(elf, id, path)
+            }
         }
+    }
+
+    /// Builds what the kernel's images carry as the loader's ramdisk and
+    /// returns its path: init's ELF file on x86_64, and nothing on aarch64,
+    /// which has no user mode yet (ADR 0006).
+    pub fn ramdisk(self, release: bool) -> Result<Option<PathBuf>> {
+        if self == Arch::Aarch64 {
+            return Ok(None);
+        }
+        let mut cargo_build = cargo();
+        cargo_build.args(["build", "-p", "thisos-init", "--target", self.target()]);
+        if release {
+            cargo_build.arg("--release");
+        }
+        exec(&mut cargo_build)?;
+        let profile = if release { "release" } else { "debug" };
+        Ok(Some(
+            root()
+                .join("target")
+                .join(self.target())
+                .join(profile)
+                .join("thisos-init"),
+        ))
     }
 
     /// What follows `thisos` in the names of its files in `target/`:
@@ -121,7 +157,8 @@ pub fn build(arch: Arch, release: bool, kernel: Kernel) -> Result<Image> {
         ),
     };
 
-    arch.write_image(&elf, Some(&id), &path)?;
+    let ramdisk = arch.ramdisk(release)?;
+    arch.write_image(&elf, ramdisk.as_deref(), Some(&id), &path)?;
     Ok(Image { path, id })
 }
 

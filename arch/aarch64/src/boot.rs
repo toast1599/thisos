@@ -156,6 +156,8 @@ pub unsafe fn boot_info(trap: TrapHandler<Aarch64>) -> BootInfo<Aarch64> {
         framebuffer_write_combining: framebuffer.is_some(),
         framebuffer,
         memory,
+        // User mode isn't ported (ADR 0006), so nothing asks Limine for one.
+        ramdisk: None,
     }
 }
 
