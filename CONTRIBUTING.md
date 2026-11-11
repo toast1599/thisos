@@ -169,7 +169,7 @@ GitHub Actions runs on every push and pull request:
 
 `.github/workflows/ci.yml` has one job on `ubuntu-26.04` that runs `cargo xtask ci`, so CI and a local run do the same checks. It installs the toolchain from `rust-toolchain.toml` with the runner's rustup, `cargo-deny` 0.20.2 as a prebuilt binary through `taiki-e/install-action`, and QEMU from Ubuntu's `qemu-system-x86` package, which the runner image lacks. Every action is pinned to a full commit SHA, with its tag in a comment. The workflow only reads the repository, and a new push cancels a run still going on the same ref.
 
-CI caches the cargo registry and both target directories, keyed on `rust-toolchain.toml` and both `Cargo.lock` files. The cache holds `target/ovmf/` too: fetching OVMF from GitHub can take minutes, and the cache means CI pays that only when the pinned release changes.
+CI caches the cargo registry and both target directories, keyed on `rust-toolchain.toml` and both `Cargo.lock` files. The cache holds `target/ovmf/` too: fetching OVMF from GitHub can take minutes, and the cache means CI pays that only when the pinned release changes. The `cargo xtask ci` step times out after 15 minutes on an exact cache hit and 45 otherwise, and the job after 60, which also bounds the network steps before it.
 
 ## Dependencies
 

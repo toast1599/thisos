@@ -14,12 +14,16 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-26.04
+    # A ceiling for the steps that have no timeout of their own: rustup, the
+    # cache, apt and install-action.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Installs the toolchain rust-toolchain.toml pins, with its components
       # and targets.
       - run: rustup toolchain install
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -35,4 +39,7 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends qemu-system-x86
+      # A warm run takes 3-5 minutes. Without an exact cache hit both
+      # workspaces, Miri's sysroot, OVMF and Limine come in from scratch.
       - run: cargo xtask ci
+        timeout-minutes: ${{ steps.cache.outputs.cache-hit == 'true' && 15 || 45 }}
