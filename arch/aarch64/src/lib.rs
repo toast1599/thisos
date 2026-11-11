@@ -26,6 +26,7 @@ mod unported;
 
 use core::arch::asm;
 use core::ops::Range;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use aarch64_cpu::asm::{barrier, wfi};
 use aarch64_cpu::registers::{DAIF, ReadWriteable, Readable, Writeable};
@@ -178,10 +179,30 @@ impl Platform for Aarch64 {
         paging::write_return(boot::phys_offset(), frame);
     }
 
-    // Only halts until semihosting is ported, so that a test run stops on
-    // its summary and xtask's timeout ends it as a failure. Panicking here
-    // would recurse, since the panic path calls this.
-    fn exit_qemu(_success: bool) -> ! {
+    // Through semihosting's SYS_EXIT_EXTENDED, which QEMU turns into its
+    // exit status: 33 and 35, as x86_64's debug exit device gives. Without
+    // -semihosting-config the hlt is undefined, and the panic path its trap
+    // takes calls this again, which then only halts.
+    fn exit_qemu(success: bool) -> ! {
+        static EXITING: AtomicBool = AtomicBool::new(false);
+        if devices::qemu_virt() && !EXITING.swap(true, Ordering::Relaxed) {
+            const SYS_EXIT_EXTENDED: u64 = 0x20;
+            const APPLICATION_EXIT: u64 = 0x2_0026;
+            let block = [APPLICATION_EXIT, if success { 33 } else { 35 }];
+            // SAFETY: Under QEMU with semihosting, the call reads the two
+            // words at x1 and ends the process; without it, the hlt traps as
+            // an undefined instruction, and EXITING keeps it from running
+            // again. On real hardware the root isn't QEMU's, so it never
+            // runs.
+            unsafe {
+                asm!(
+                    "hlt #0xf000",
+                    inout("x0") SYS_EXIT_EXTENDED => _,
+                    in("x1") block.as_ptr(),
+                    options(nostack, readonly),
+                );
+            }
+        }
         Self::halt()
     }
 }

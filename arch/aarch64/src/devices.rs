@@ -15,8 +15,8 @@ pub const REDISTRIBUTOR_SIZE: u64 = 0x2_0000;
 /// The distributor's size.
 pub const DISTRIBUTOR_SIZE: u64 = 0x1_0000;
 
-/// The physical addresses of the GIC's registers, and the virtual timer's
-/// interrupt.
+/// The physical addresses of the GIC's registers, the virtual timer's
+/// interrupt, and whether the machine is QEMU's virt.
 #[derive(Clone, Copy, Debug)]
 pub struct Devices {
     /// The GIC distributor's registers.
@@ -25,6 +25,9 @@ pub struct Devices {
     pub redistributor: u64,
     /// The virtual timer's interrupt ID, a private peripheral interrupt.
     pub timer: u32,
+    /// Whether the root is compatible with `linux,dummy-virt`, as only
+    /// QEMU's virt machine's is.
+    pub qemu_virt: bool,
 }
 
 impl Devices {
@@ -38,6 +41,12 @@ impl Devices {
 }
 
 static DEVICES: Once<Devices> = Once::new();
+
+/// Whether the machine is QEMU's virt, and `false` before `init` has read
+/// the device tree. Never panics, for the panic path.
+pub fn qemu_virt() -> bool {
+    DEVICES.get().is_some_and(|devices| devices.qemu_virt)
+}
 
 /// The devices `init` found.
 pub fn get() -> Devices {
@@ -88,6 +97,9 @@ pub fn init(fdt: &Fdt<'_>) {
         distributor: distributor.address,
         redistributor: redistributor.address,
         timer: 16 + number,
+        qemu_virt: fdt
+            .root()
+            .is_some_and(|root| root.compatible().any(|c| c == "linux,dummy-virt")),
     });
 }
 
