@@ -193,14 +193,21 @@ fn segment<'a>(file: &'a [u8], n: usize, header: &[u8]) -> Result<Option<Segment
     {
         return Err(Error::BadSegment(n));
     }
-    let start = usize::try_from(offset).map_err(|_| Error::Truncated)?;
-    let end = start
-        .checked_add(usize::try_from(file_size).map_err(|_| Error::Truncated)?)
-        .ok_or(Error::Truncated)?;
+    // A segment of .bss alone takes nothing from the file, and linkers may
+    // give it any offset, past the file's end included.
+    let data = if file_size == 0 {
+        &[]
+    } else {
+        let start = usize::try_from(offset).map_err(|_| Error::Truncated)?;
+        let end = start
+            .checked_add(usize::try_from(file_size).map_err(|_| Error::Truncated)?)
+            .ok_or(Error::Truncated)?;
+        file.get(start..end).ok_or(Error::Truncated)?
+    };
     Ok(Some(Segment {
         address,
         size,
-        data: file.get(start..end).ok_or(Error::Truncated)?,
+        data,
         writable: flags & WRITE != 0,
         executable: flags & EXECUTE != 0,
     }))
@@ -416,6 +423,26 @@ mod tests {
                     data: &[],
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn a_segment_of_bss_alone_may_start_past_the_file() {
+        let headers = [
+            load(RX, 0, 0x1000, 0x10, 0x10),
+            load(RW, 0x1000, 0x2000, 0, 0x100),
+        ];
+        let file = file(0x1000, &headers, 0x300);
+        let elf = Elf::new(&file).unwrap();
+        let bss = elf.segments().nth(1).unwrap();
+        assert_eq!(bss.data, &[]);
+        assert_eq!(
+            bss.pages().collect::<Vec<_>>(),
+            [Page {
+                address: 0x2000,
+                offset: 0,
+                data: &[],
+            }]
         );
     }
 
