@@ -211,6 +211,14 @@ impl Platform for Aarch64 {
         paging::translate_active(boot::phys_offset(), addr)
     }
 
+    fn fill_frame(_: &mut Frame, _: usize, _: &[u8]) {
+        not_ported("Platform::fill_frame")
+    }
+
+    fn copy_from_user(_: u64, _: &mut [u8]) -> bool {
+        not_ported("Platform::copy_from_user")
+    }
+
     fn write_return(frame: &Frame) {
         paging::write_return(boot::phys_offset(), frame);
     }

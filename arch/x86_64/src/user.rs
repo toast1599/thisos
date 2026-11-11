@@ -150,14 +150,31 @@ global_asm!(
     "syscall",
     "ud2",
     ".org thisos_user_programs + 5 * {slot}, 0xcc",
+    // Write. The syscall keeps RSI, the length.
+    "mov rsi, qword ptr [rdi + 8]",
+    "mov rdi, qword ptr [rdi]",
+    "mov eax, {write}",
+    "syscall",
+    "test rax, rax",
+    "jnz 2f",
+    "cmp rdx, rsi",
+    "je 2f",
+    "mov rax, -1",
+    "2:",
+    "mov rdi, rax",
+    "mov eax, {exit}",
+    "syscall",
+    "ud2",
+    ".org thisos_user_programs + 6 * {slot}, 0xcc",
     ".popsection",
     exit = const Syscall::Exit.number(),
+    write = const Syscall::Write.number(),
     slot = const SLOT,
     cycles = const 1 << 28,
 );
 
 unsafe extern "C" {
-    static thisos_user_programs: [u8; 5 * SLOT];
+    static thisos_user_programs: [u8; 6 * SLOT];
 }
 
 /// Writes `program` at the start of `frame`, through the physical-memory
@@ -169,6 +186,7 @@ pub fn write_program(phys_offset: VirtAddr, frame: &Frame, program: UserProgram)
         UserProgram::Privileged => 2,
         UserProgram::Simd => 3,
         UserProgram::Spin => 4,
+        UserProgram::Write => 5,
     };
     let source = (&raw const thisos_user_programs)
         .cast::<u8>()

@@ -5,12 +5,12 @@
 
 use core::marker::PhantomData;
 use core::ops::Range;
-use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use core::{mem, ptr, slice};
 
 use thisos_frames::Frame;
 use thisos_hal::{MapError, MapErrorKind, Protection, Translation};
-use x86_64::instructions::tlb;
+use x86_64::instructions::{interrupts, tlb};
 use x86_64::registers::control::{Cr3, Cr4, Cr4Flags};
 use x86_64::structures::paging::{Page, PageTableIndex, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
@@ -639,10 +639,11 @@ impl thisos_hal::AddressSpace for UserSpace {
             return None;
         }
         // SAFETY: Only map maps in the lower half, through map_page. The
-        // kernel never reaches user pages but through user copies, which
-        // fault on an unmapped page. User pages aren't global, so loading
-        // CR3 to leave this space flushed them, and the TLB holds them only
-        // while it is active.
+        // kernel reaches user pages' frames only in copy_from_user, which
+        // runs with interrupts off on the only CPU, so never while this
+        // runs, and holds no reference to them afterwards. User pages
+        // aren't global, so loading CR3 to leave this space flushed them,
+        // and the TLB holds them only while it is active.
         unsafe {
             self.tables.unmap_page(
                 Page::containing_address(VirtAddr::new(page)),
@@ -690,6 +691,64 @@ pub fn translate_active(phys_offset: VirtAddr, addr: u64) -> Option<Translation>
         level_4: frame.start_address().as_u64(),
     }
     .translate(addr)
+}
+
+/// Writes `bytes` into `frame` from `offset` and zeroes the rest of it.
+pub fn fill_frame(phys_offset: VirtAddr, frame: &mut Frame, offset: usize, bytes: &[u8]) {
+    let Some(end) = offset.checked_add(bytes.len()).filter(|&end| end <= 4096) else {
+        panic!(
+            "{:#x} bytes at offset {offset:#x} don't fit in a frame",
+            bytes.len()
+        );
+    };
+    // A physical address, reached through the physical-memory mapping.
+    let start = (phys_offset + frame.start()).as_mut_ptr::<u8>();
+    // SAFETY: The caller holds the frame mutably, and page tables hold
+    // every frame they map, so nothing maps it but the physical-memory
+    // mapping, and no other reference to its 4 KiB exists.
+    let page = unsafe { slice::from_raw_parts_mut(start, 4096) };
+    page[..offset].fill(0);
+    page[offset..end].copy_from_slice(bytes);
+    page[end..].fill(0);
+}
+
+/// Copies the bytes at `addr` in the tables CR3 points at into `buf`; see
+/// `Platform::copy_from_user`.
+pub fn copy_from_user(phys_offset: VirtAddr, addr: u64, buf: &mut [u8]) -> bool {
+    assert!(
+        !interrupts::are_enabled(),
+        "copying from user memory with interrupts on"
+    );
+    let (frame, _) = Cr3::read();
+    let tables = PageTables {
+        phys_offset,
+        level_4: frame.start_address().as_u64(),
+    };
+    let (mut at, mut rest) = (addr, buf);
+    while !rest.is_empty() {
+        // Under a page, so it fits a usize.
+        let room = usize::try_from(4096 - at % 4096).unwrap_or(4096);
+        let len = room.min(rest.len());
+        let (chunk, tail) = mem::take(&mut rest).split_at_mut(len);
+        rest = tail;
+        let Some(translation) = tables.translate(at) else {
+            return false;
+        };
+        if !translation.user || !USER_SPACE.contains(&at) {
+            return false;
+        }
+        // A physical address, reached through the physical-memory mapping.
+        let source = (phys_offset + translation.phys).as_ptr::<u8>();
+        // SAFETY: chunk stays inside the page at, which is mapped for user
+        // code, so its frame is RAM that the physical-memory mapping maps.
+        // Interrupts are off on the only CPU, so no other code runs to
+        // write the frame or unmap it meanwhile, and the kernel holds no
+        // reference into user pages.
+        unsafe { ptr::copy_nonoverlapping(source, chunk.as_mut_ptr(), len) };
+        // USER_SPACE ends below the last page, so this doesn't overflow.
+        at += u64::try_from(len).unwrap_or(4096);
+    }
+    true
 }
 
 /// Writes `ret` at the start of `frame`.

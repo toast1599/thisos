@@ -7,5 +7,6 @@
 thisos_rt::entry!(main);
 
 fn main() -> u64 {
+    thisos_rt::println!("hello from init");
     0
 }

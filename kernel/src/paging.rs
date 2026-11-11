@@ -86,13 +86,6 @@ pub fn unmap(page: u64) -> Option<Frame> {
 
 /// A new address space with an empty lower half, or `None` if no frame is
 /// free.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "nothing outside the tests makes a space until init runs"
-    )
-)]
 pub fn new_space() -> Option<AddressSpace> {
     with(|kernel| kernel.tables.new_space(&mut frames::alloc))
 }

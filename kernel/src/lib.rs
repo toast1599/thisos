@@ -79,6 +79,7 @@ fn init(boot: BootInfo<Arch>) {
 /// The kernel binary's main function.
 pub fn kmain(boot: BootInfo<Arch>) -> ! {
     init(boot);
+    user::start_init();
     thread::exit()
 }
 

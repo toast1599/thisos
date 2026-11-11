@@ -210,6 +210,10 @@ pub enum UserProgram {
     /// Spins for 2^28 cycles of a counter user code can read, through many
     /// timer ticks, then exits with status 0.
     Spin,
+    /// Calls the write syscall with the buffer and the length in the two
+    /// words at its argument, then exits with the error code it returned, or with
+    /// `u64::MAX` if it succeeded but its value isn't the length.
+    Write,
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
@@ -339,6 +343,18 @@ pub trait Platform {
     /// Where `addr` is mapped in the page tables the CPU uses now, or
     /// `None` if it isn't. For tests.
     fn translate_active(addr: u64) -> Option<Translation>;
+
+    /// Writes `bytes` into `frame` from `offset` and zeroes the rest of it.
+    /// Panics unless `bytes` fits in the frame from `offset`.
+    fn fill_frame(frame: &mut Frame, offset: usize, bytes: &[u8]);
+
+    /// Copies the bytes at `addr` in the address space the CPU uses into
+    /// `buf`, reaching their frames through the kernel's own mapping, so
+    /// the kernel never reaches user pages. Returns `false`, with `buf`
+    /// partly written, unless every byte is in a page mapped for user code.
+    /// Panics if interrupts are on: with them off, nothing can unmap the
+    /// pages or write them during the copy.
+    fn copy_from_user(addr: u64, buf: &mut [u8]) -> bool;
 
     /// Writes code that only returns at the start of `frame`, for
     /// [`Probe::ExecuteUser`] to find if the CPU ever let it run. For

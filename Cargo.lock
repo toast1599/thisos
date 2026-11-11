@@ -132,6 +132,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "thisos-elf"
+version = "0.0.0"
+
+[[package]]
 name = "thisos-fdt"
 version = "0.0.0"
 
@@ -163,6 +167,7 @@ dependencies = [
  "thisos-arch-aarch64",
  "thisos-arch-x86_64",
  "thisos-console",
+ "thisos-elf",
  "thisos-frames",
  "thisos-hal",
 ]
