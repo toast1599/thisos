@@ -351,6 +351,7 @@ extern "C" fn trap_entry(frame: &mut TrapFrame) {
             error: frame.error,
         },
         apic::TIMER_VECTOR => Trap::Timer,
+        apic::SPURIOUS_VECTOR => Trap::Spurious,
         vector => Trap::Stray {
             vector: u32::from(vector.to_le_bytes()[0]),
         },

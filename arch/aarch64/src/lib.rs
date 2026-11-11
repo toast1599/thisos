@@ -223,6 +223,10 @@ impl Platform for Aarch64 {
         paging::write_return(boot::phys_offset(), frame);
     }
 
+    fn raise_spurious() {
+        not_ported("Platform::raise_spurious");
+    }
+
     fn write_user_program(_: &Frame, _: UserProgram) {
         not_ported("Platform::write_user_program")
     }

@@ -16,7 +16,7 @@ pub const TIMER_VECTOR: u64 = 0x30;
 
 /// The spurious interrupt's vector, whose low four bits older APICs fix
 /// at 1.
-const SPURIOUS_VECTOR: u64 = 0xff;
+pub const SPURIOUS_VECTOR: u64 = 0xff;
 
 const IA32_APIC_BASE: u32 = 0x1b;
 const ENABLED: u64 = 1 << 11;

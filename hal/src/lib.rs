@@ -363,6 +363,10 @@ pub trait Platform {
     /// tests.
     fn write_return(frame: &Frame);
 
+    /// Raises the interrupt [`Trap::Spurious`] reports, and returns once
+    /// the trap handler does. For tests.
+    fn raise_spurious();
+
     /// Writes `program` at the start of `frame`. For tests.
     fn write_user_program(frame: &Frame, program: UserProgram);
 
@@ -582,9 +586,13 @@ pub enum Trap {
     /// and arguments, and [`TrapFrame::set_syscall_result`] sets what it
     /// returns.
     Syscall,
+    /// An interrupt that went away before the CPU took it, which the
+    /// interrupt controller reports in its place: x86_64's spurious vector,
+    /// or the GIC's interrupt ID 1023. It needs no end of interrupt.
+    Spurious,
     /// An interrupt the kernel never asked for, by the architecture's
-    /// number for it: a stray legacy line, a spurious interrupt or any
-    /// other.
+    /// number for it: a stray legacy line, or any other that isn't
+    /// [`Trap::Spurious`].
     Stray {
         /// The vector number on x86_64, the interrupt ID on aarch64.
         vector: u32,
@@ -609,6 +617,7 @@ impl fmt::Display for Trap {
             Trap::DoubleFault => write!(f, "double fault"),
             Trap::Timer => write!(f, "timer interrupt"),
             Trap::Syscall => write!(f, "syscall"),
+            Trap::Spurious => write!(f, "spurious interrupt"),
             Trap::Stray { vector } => write!(f, "stray interrupt on vector {vector:#x}"),
             Trap::Other { vector, error } => {
                 write!(f, "exception {vector}, error code {error:#x}")

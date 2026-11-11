@@ -182,6 +182,16 @@ impl Platform for X86_64 {
         paging::write_return(phys_offset(), frame);
     }
 
+    fn raise_spurious() {
+        // SAFETY: The IDT's entry for the spurious vector is a stub that
+        // saves and restores every register and returns with iretq, and the
+        // trap handler returns for Trap::Spurious without an end of
+        // interrupt, which a software interrupt doesn't take either.
+        unsafe {
+            asm!("int 0xff", options(nomem, nostack));
+        }
+    }
+
     fn write_user_program(frame: &Frame, program: UserProgram) {
         user::write_program(phys_offset(), frame, program);
     }

@@ -49,6 +49,10 @@ const PRIORITY: u32 = 0x80;
 /// and nothing ends them.
 const SPECIAL: u32 = 1020;
 
+/// The special interrupt ID for an interrupt that went away, or none
+/// pending, by the time the handler acknowledges.
+pub const SPURIOUS: u32 = 1023;
+
 /// One device's registers: `size` bytes of device memory from `base`.
 struct Registers {
     base: *mut u32,

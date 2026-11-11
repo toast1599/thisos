@@ -407,6 +407,7 @@ fn interrupt(group: Group) -> (Trap, Option<Acknowledged>) {
             },
             Some(interrupt),
         ),
+        Err(gic::SPURIOUS) => (Trap::Spurious, None),
         Err(special) => (Trap::Stray { vector: special }, None),
     }
 }

@@ -17,9 +17,10 @@ pub fn init() {
 }
 
 /// The kernel's trap handler, which every entry point passes to `entry!`.
-/// A trap user code raised goes to `user::trap`. Otherwise a breakpoint
-/// returns, and a timer interrupt counts a tick and switches to the next
-/// ready thread; any other trap is a kernel bug, and panics.
+/// A trap user code raised goes to `user::trap`. Otherwise a breakpoint and
+/// a spurious interrupt return, and a timer interrupt counts a tick and
+/// switches to the next ready thread; any other trap is a kernel bug, and
+/// panics.
 pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
     if frame.raised_by_user() {
         return user::trap(trap, frame);
@@ -29,7 +30,7 @@ pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
         return;
     }
     match trap {
-        Trap::Breakpoint => {}
+        Trap::Breakpoint | Trap::Spurious => {}
         Trap::Timer => {
             #[cfg(test)]
             crate::testing::watchdog(frame);
@@ -67,6 +68,12 @@ mod tests {
             Arch::user_access_blocked(),
             "user access stayed open after the catch"
         );
+    }
+
+    // Passes by returning, as breakpoint_returns does.
+    #[test_case]
+    fn a_spurious_interrupt_returns() {
+        Arch::raise_spurious();
     }
 
     #[test_case]
