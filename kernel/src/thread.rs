@@ -2,8 +2,9 @@
 //! CPU to the next ready thread, and the idle thread runs only when no
 //! thread is ready. The boot thread runs on the loader's stack; every other
 //! thread has a stack from `paging::map_stack`. A user thread is a kernel
-//! thread that owns an address space and has left for user code in it;
-//! every switch loads the next thread's space, or the kernel's tables.
+//! thread that owns an address space and belongs to a process, and has
+//! left for user code in it; every switch loads the next thread's space, or
+//! the kernel's tables.
 //!
 //! A thread blocks with [`park`] or [`park_until`] until [`unpark`] names
 //! it or its deadline passes. Each tick readies the blocked threads whose
@@ -18,6 +19,7 @@
 
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::mem;
 use core::ops::Range;
@@ -26,6 +28,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use spin::Mutex;
 use thisos_hal::{AddressSpace as _, Cpu, Platform};
 
+use crate::process::Process;
 use crate::{Arch, frames, paging, timer};
 
 type Context = <Arch as Platform>::Context;
@@ -48,6 +51,8 @@ struct Thread {
     /// The address space it runs user code in, or `None` for a kernel
     /// thread.
     space: Option<paging::AddressSpace>,
+    /// The process it belongs to, or `None` for a kernel thread.
+    process: Option<Arc<Process>>,
     /// The tick at which it stops being blocked, while it is.
     deadline: Option<u64>,
     /// Why its next park returns, once something has woken it: set by an
@@ -62,6 +67,7 @@ impl Thread {
         stack: Option<Range<u64>>,
         run: Option<Box<dyn FnOnce() + Send>>,
         space: Option<paging::AddressSpace>,
+        process: Option<Arc<Process>>,
     ) -> Self {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
         Self {
@@ -70,6 +76,7 @@ impl Thread {
             stack,
             run,
             space,
+            process,
             deadline: None,
             wake: None,
         }
@@ -141,8 +148,9 @@ pub fn init() {
         Some(stack),
         None,
         None,
+        None,
     ));
-    let boot = Box::new(Thread::new(None, None, None, None));
+    let boot = Box::new(Thread::new(None, None, None, None, None));
     let scheduler = Scheduler {
         running: Some(boot),
         ready: VecDeque::with_capacity(1),
@@ -169,24 +177,31 @@ pub fn init() {
     )
 )]
 pub fn spawn(run: impl FnOnce() + Send + 'static) {
-    spawn_in(None, run);
+    spawn_in(None, None, run);
 }
 
-/// Starts a thread that runs user code at `ip` in `space`, with stack
-/// pointer `sp` and `arg` as its first argument. It ends through
+/// Starts a thread of `process` that runs user code at `ip` in `space`,
+/// with stack pointer `sp` and `arg` as its first argument. It ends through
 /// `user::trap`, and its space is destroyed along with it. Panics if
 /// kernel space or the frames run out.
-pub fn spawn_user(space: paging::AddressSpace, ip: u64, sp: u64, arg: u64) {
-    spawn_in(Some(space), move || Arch::enter_user(ip, sp, arg));
+pub fn spawn_user(process: Arc<Process>, space: paging::AddressSpace, ip: u64, sp: u64, arg: u64) {
+    spawn_in(Some(space), Some(process), move || {
+        Arch::enter_user(ip, sp, arg)
+    });
 }
 
-fn spawn_in(space: Option<paging::AddressSpace>, run: impl FnOnce() + Send + 'static) {
+fn spawn_in(
+    space: Option<paging::AddressSpace>,
+    process: Option<Arc<Process>>,
+    run: impl FnOnce() + Send + 'static,
+) {
     let stack = paging::map_stack(STACK_SIZE);
     let mut thread = Some(Box::new(Thread::new(
         Some(Arch::new_context(stack.clone(), start)),
         Some(stack),
         Some(Box::new(run)),
         space,
+        process,
     )));
     loop {
         let short = with(|scheduler| {
@@ -244,6 +259,11 @@ fn grow(need: usize) {
 )]
 pub fn id() -> u64 {
     with(|scheduler| running(scheduler).id)
+}
+
+/// The running thread's process, or `None` for a kernel thread.
+pub fn process() -> Option<Arc<Process>> {
+    with(|scheduler| running(scheduler).process.clone())
 }
 
 fn running(scheduler: &mut Scheduler) -> &mut Thread {
@@ -468,7 +488,8 @@ fn arrived(from: Context) {
 }
 
 /// Frees every thread that exited: unmaps its stack and frees its frames,
-/// destroys its address space, then drops it. Interrupts are on, since the
+/// closes its process's handles, destroys its address space, then drops
+/// it. A process has one thread, so that thread's end is the process's. Interrupts are on, since the
 /// page tables', the frames' and the heap's locks may be held by a thread a
 /// tick preempted.
 fn reap() {
@@ -486,6 +507,9 @@ fn reap() {
                 panic!("stack page {page:#x} wasn't mapped");
             };
             frames::free(frame);
+        }
+        if let Some(process) = thread.process.take() {
+            process.close_handles();
         }
         if let Some(space) = thread.space.take() {
             space.destroy(&mut frames::free, &mut frames::free);

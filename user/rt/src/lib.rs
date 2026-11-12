@@ -1,6 +1,6 @@
 //! The runtime every ThisOS program links: its entry point, its syscalls,
-//! [`print!`] and [`println!`], and its panic handler. A program names its
-//! main function with [`entry!`].
+//! [`Handle`], [`print!`] and [`println!`], and its panic handler. A
+//! program names its main function with [`entry!`].
 
 #![no_std]
 
@@ -13,10 +13,12 @@ use core::panic::PanicInfo;
 #[cfg(not(test))]
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use thisos_abi::{Error, MAX_WRITE, Syscall};
+pub use thisos_abi::{Error, Rights};
+use thisos_abi::{MAX_WRITE, Syscall};
 
-/// Makes `main`, a `fn() -> u64`, the program's main function: the thread
-/// ends through [`exit`] with the status it returns.
+/// Makes `main`, a `fn(Handle) -> u64`, the program's main function. It
+/// gets the handle its creator started it with, and the process ends
+/// through [`exit`] with the status it returns.
 #[macro_export]
 macro_rules! entry {
     ($main:path) => {
@@ -24,9 +26,9 @@ macro_rules! entry {
         // function and call it a second time.
         const _: () = {
             #[unsafe(export_name = "__thisos_main")]
-            fn __thisos_main() -> u64 {
-                let main: fn() -> u64 = $main;
-                main()
+            fn __thisos_main(arg: u64) -> u64 {
+                let main: fn($crate::Handle) -> u64 = $main;
+                main($crate::Handle::__from_start(arg))
             }
         };
     };
@@ -39,13 +41,14 @@ macro_rules! entry {
 #[cfg(not(test))]
 unsafe extern "Rust" {
     /// The function `entry!` exports.
-    safe fn __thisos_main() -> u64;
+    safe fn __thisos_main(arg: u64) -> u64;
 }
 
-/// Where the kernel starts the program, with a 16-byte aligned stack and
-/// every register but RDI zeroed, RBP included, which ends a backtrace's
-/// frame chain here. The call makes the stack aligned as the System V ABI
-/// wants it at a function's entry.
+/// Where the kernel starts the program, with a 16-byte aligned stack, its
+/// argument in RDI, and every other register zeroed, RBP included, which
+/// ends a backtrace's frame chain here. The call makes the stack aligned as
+/// the System V ABI wants it at a function's entry, and leaves RDI as
+/// `start`'s argument.
 #[cfg(not(test))]
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
@@ -54,11 +57,11 @@ extern "C" fn _start() -> ! {
 }
 
 #[cfg(not(test))]
-extern "C" fn start() -> ! {
-    exit(__thisos_main())
+extern "C" fn start(arg: u64) -> ! {
+    exit(__thisos_main(arg))
 }
 
-/// Ends the calling thread with `status`.
+/// Ends the calling process with `status`.
 pub fn exit(status: u64) -> ! {
     // SAFETY: By ADR 0007, exit reads only its number and argument
     // registers, touches no user memory and never returns.
@@ -101,6 +104,84 @@ fn write_bytes(bytes: &[u8]) -> u64 {
         );
     }
     error
+}
+
+/// A handle to a kernel object, which closes when it drops.
+#[derive(Debug)]
+pub struct Handle(u32);
+
+impl Handle {
+    /// The handle the kernel started the program with, in `arg`. Only
+    /// [`entry!`] calls this.
+    #[doc(hidden)]
+    pub fn __from_start(arg: u64) -> Handle {
+        let Ok(handle) = u32::try_from(arg) else {
+            panic!("the program started with {arg:#x}, which isn't a handle");
+        };
+        Handle(handle)
+    }
+
+    /// The handle's value in the process's table.
+    pub fn value(&self) -> u32 {
+        self.0
+    }
+
+    /// Makes another handle to the same object with `rights`, which must
+    /// be ones this handle has. Needs [`Rights::DUPLICATE`].
+    pub fn duplicate(&self, rights: Rights) -> Result<Handle, Error> {
+        let value = syscall(
+            Syscall::Duplicate,
+            u64::from(self.0),
+            u64::from(rights.bits()),
+        )?;
+        let Ok(handle) = u32::try_from(value) else {
+            panic!("the kernel returned {value:#x}, which isn't a handle");
+        };
+        Ok(Handle(handle))
+    }
+
+    /// Leaves this handle with only `rights`, which must be ones it has.
+    pub fn restrict(&mut self, rights: Rights) -> Result<(), Error> {
+        syscall(
+            Syscall::Restrict,
+            u64::from(self.0),
+            u64::from(rights.bits()),
+        )
+        .map(|_| ())
+    }
+}
+
+impl Drop for Handle {
+    fn drop(&mut self) {
+        if let Err(e) = syscall(Syscall::Close, u64::from(self.0), 0) {
+            panic!("closing handle {:#x} failed: {e:?}", self.0);
+        }
+    }
+}
+
+/// Makes `number`, a syscall that takes at most two arguments and reads
+/// and writes no user memory, and returns its value.
+fn syscall(number: Syscall, a: u64, b: u64) -> Result<u64, Error> {
+    let code;
+    let value;
+    // SAFETY: By ADR 0007, a syscall changes only RAX, RDX, RCX and R11,
+    // and the caller passes one that touches no user memory.
+    unsafe {
+        asm!(
+            "syscall",
+            inlateout("rax") number.number() => code,
+            in("rdi") a,
+            in("rsi") b,
+            lateout("rdx") value,
+            lateout("rcx") _,
+            lateout("r11") _,
+            options(nostack, nomem),
+        );
+    }
+    match code {
+        0 => Ok(value),
+        code => Err(error(code)),
+    }
 }
 
 /// The error with `code`, which the kernel returned.

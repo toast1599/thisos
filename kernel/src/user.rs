@@ -1,35 +1,36 @@
 //! User code: loading init from the ramdisk, and the traps user code
 //! raises, its syscalls and the faults that end it.
 
+use alloc::sync::Arc;
 use core::{fmt, str};
 
 use spin::Mutex;
-use thisos_abi::{Error, MAX_WRITE, Syscall};
+use thisos_abi::{Error, MAX_WRITE, Rights, Syscall};
 use thisos_elf::Elf;
-use thisos_hal::{AddressSpace as _, MapErrorKind, Platform, Protection, Trap, TrapFrame as _};
+use thisos_hal::{
+    AddressSpace as _, Cpu, MapErrorKind, Platform, Protection, Trap, TrapFrame as _,
+};
 
+use crate::process::{End, Process};
 use crate::{Arch, frames, paging, thread};
 
 /// The size of a program's stack, which ends where user space does.
 const STACK_SIZE: u64 = 64 << 10;
 
-/// How a user thread ended.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum End {
-    /// Through the exit syscall, with this status.
-    Exited(u64),
-    /// By a trap its code raised at `ip`.
-    Killed { trap: Trap, ip: u64 },
-}
+/// The rights of init's handle to itself.
+const INIT_RIGHTS: Rights = Rights::READ
+    .union(Rights::WRITE)
+    .union(Rights::DUPLICATE)
+    .union(Rights::TRANSFER);
 
-/// How the last user thread to end ended, for tests to wait on. The trap
-/// handler takes the lock with interrupts off, so tests must too.
+/// How the last user process to end ended, for tests to wait on. The trap
+/// handler takes the lock with interrupts off, so everything else must
+/// too.
 #[cfg(test)]
 static ENDED: Mutex<Option<End>> = Mutex::new(None);
 
 /// The records the last write syscall logged, joined by newlines, for
-/// tests. The syscall takes the lock with interrupts off, so tests must
-/// too.
+/// tests. Taken with interrupts off.
 #[cfg(test)]
 static WRITTEN: Mutex<Written> = Mutex::new(Written {
     bytes: [0; WRITTEN_SIZE],
@@ -78,9 +79,22 @@ pub fn start_init() {
         return;
     };
     match load(ramdisk) {
-        Ok(program) => program.start(),
+        Ok(program) => {
+            let (process, handle) = new_init();
+            program.start(process, u64::from(handle));
+        }
         Err(e) => panic!("loading init failed: {e}"),
     }
+}
+
+/// A process for init, holding a handle to itself with [`INIT_RIGHTS`],
+/// and that handle.
+fn new_init() -> (Arc<Process>, u32) {
+    let process = Process::new();
+    let Ok(handle) = process.insert_self(INIT_RIGHTS) else {
+        panic!("a new handle table is full");
+    };
+    (process, handle)
 }
 
 /// Why [`load`] failed.
@@ -111,10 +125,10 @@ struct Program {
 }
 
 impl Program {
-    /// Starts the program in a thread of its own, with 0 as its argument.
-    /// Panics if kernel space or the frames run out.
-    fn start(self) {
-        thread::spawn_user(self.space, self.entry, self.stack_top, 0);
+    /// Starts the program in a thread of `process`, with `arg` as its
+    /// argument. Panics if kernel space or the frames run out.
+    fn start(self, process: Arc<Process>, arg: u64) {
+        thread::spawn_user(process, self.space, self.entry, self.stack_top, arg);
     }
 }
 
@@ -179,51 +193,88 @@ fn map_page(
 }
 
 /// Handles a trap that [`TrapFrame::raised_by_user`](thisos_hal::TrapFrame::raised_by_user)
-/// says user code raised: runs a syscall, and ends the thread on any other
+/// says user code raised: runs a syscall, and ends the process on any other
 /// trap, or on the exit syscall.
 pub fn trap(trap: Trap, frame: &mut <Arch as Platform>::TrapFrame) {
-    let end = if trap == Trap::Syscall {
-        let (number, args) = frame.syscall();
-        match Syscall::try_from(number) {
-            Ok(Syscall::Exit) => End::Exited(args[0]),
-            Ok(Syscall::Write) => {
-                return match write(args[0], args[1]) {
-                    Ok(len) => frame.set_syscall_result(0, len),
-                    Err(e) => frame.set_syscall_result(e.code(), 0),
-                };
-            }
-            Err(e) => return frame.set_syscall_result(e.code(), 0),
-        }
-    } else {
-        End::Killed {
+    if trap != Trap::Syscall {
+        end(End::Killed {
             trap,
             ip: frame.ip(),
+        });
+        // A #DB comes in on an IST stack, which the next one starts at the
+        // top of again, so interrupts stay off until the thread is gone
+        // from it.
+        thread::exit_from_trap();
+    }
+    // Syscalls run with interrupts on, so that they can allocate and free,
+    // and a tick may preempt them. The SYSCALL stub turns interrupts off
+    // again before it returns to user code.
+    Arch::enable_interrupts();
+    let (number, args) = frame.syscall();
+    match syscall(number, args) {
+        Ok(value) => frame.set_syscall_result(0, value),
+        Err(e) => frame.set_syscall_result(e.code(), 0),
+    }
+}
+
+/// Runs the syscall `number` with `args`, and returns its value.
+fn syscall(number: u64, args: [u64; 6]) -> Result<u64, Error> {
+    match Syscall::try_from(number)? {
+        Syscall::Exit => {
+            end(End::Exited(args[0]));
+            thread::exit()
         }
-    };
+        Syscall::Write => write(args[0], args[1]),
+        Syscall::Close => process().close(handle(args[0])?).map(|()| 0),
+        Syscall::Duplicate => process()
+            .duplicate(handle(args[0])?, rights(args[1])?)
+            .map(u64::from),
+        Syscall::Restrict => process()
+            .restrict(handle(args[0])?, rights(args[1])?)
+            .map(|()| 0),
+    }
+}
+
+/// Logs how the running thread's process ended, and records it there.
+fn end(end: End) {
     match end {
-        End::Exited(status) => log::info!("user thread exited with status {status:#x}"),
-        End::Killed { trap, ip } => log::warn!("user thread killed by {trap} at {ip:#x}"),
+        End::Exited(status) => log::info!("user process exited with status {status:#x}"),
+        End::Killed { trap, ip } => log::warn!("user process killed by {trap} at {ip:#x}"),
     }
+    process().set_end(end);
     #[cfg(test)]
-    {
-        *ENDED.lock() = Some(end);
-    }
-    // A #DB comes in on an IST stack, which the next one starts at the top
-    // of again, so interrupts stay off until the thread is gone from it.
-    thread::exit_from_trap()
+    Arch::without_interrupts(|| *ENDED.lock() = Some(end));
+}
+
+/// The running thread's process.
+fn process() -> Arc<Process> {
+    let Some(process) = thread::process() else {
+        panic!("a kernel thread trapped as user code");
+    };
+    process
+}
+
+fn handle(arg: u64) -> Result<u32, Error> {
+    u32::try_from(arg).map_err(|_| Error::BadHandle)
+}
+
+fn rights(arg: u64) -> Result<Rights, Error> {
+    u32::try_from(arg)
+        .ok()
+        .and_then(Rights::from_bits)
+        .ok_or(Error::BadRights)
 }
 
 /// Logs the `len` bytes of text at `buf` in user space as the write
-/// syscall does, one record per line, and returns `len`. Runs with
-/// interrupts off, as syscalls do, and copies into a buffer on the stack,
-/// since trap handlers never allocate.
+/// syscall does, one record per line, and returns `len`. Copies the text
+/// into a buffer on the stack first.
 fn write(buf: u64, len: u64) -> Result<u64, Error> {
     let mut bytes = [0; MAX_WRITE];
     let bytes = usize::try_from(len)
         .ok()
         .and_then(|len| bytes.get_mut(..len))
         .ok_or(Error::TooLong)?;
-    if !Arch::copy_from_user(buf, bytes) {
+    if !copy_from_user(buf, bytes) {
         return Err(Error::BadAddress);
     }
     let text = str::from_utf8(bytes).map_err(|_| Error::NotUtf8)?;
@@ -232,7 +283,7 @@ fn write(buf: u64, len: u64) -> Result<u64, Error> {
         log::info!(target: "user", "{}", Escaped(line));
     }
     #[cfg(test)]
-    {
+    Arch::without_interrupts(|| {
         use fmt::Write as _;
         let mut written = WRITTEN.lock();
         written.len = 0;
@@ -243,8 +294,30 @@ fn write(buf: u64, len: u64) -> Result<u64, Error> {
                 "WRITTEN is full"
             );
         }
-    }
+    });
     Ok(len)
+}
+
+/// Copies the bytes at `addr` in user space into `bytes`, as
+/// [`Platform::copy_from_user`] does, one page at a time with interrupts
+/// off, so that nothing unmaps a page while it is read.
+fn copy_from_user(addr: u64, bytes: &mut [u8]) -> bool {
+    let mut addr = addr;
+    let mut rest = bytes;
+    while !rest.is_empty() {
+        let in_page = 4096 - addr % 4096;
+        let len = rest
+            .len()
+            .min(usize::try_from(in_page).unwrap_or(usize::MAX));
+        let (chunk, after) = rest.split_at_mut(len);
+        if !Arch::without_interrupts(|| Arch::copy_from_user(addr, chunk)) {
+            return false;
+        }
+        // The page was user space, so the next one's address fits.
+        addr += in_page;
+        rest = after;
+    }
+    true
 }
 
 /// A line of user text with its control characters shown as escapes, such
@@ -287,19 +360,19 @@ mod tests {
         })
     }
 
-    /// Runs `program` in a new space, with its code in the first user page
-    /// and a stack page after it, and `arg` as its argument. Returns how it
-    /// ended and where its code was; see [`run_in`].
-    fn run(program: UserProgram, arg: impl FnOnce(u64) -> u64) -> (End, u64) {
-        run_with_stack(program, |stack| (Vec::new(), arg(stack)))
+    /// Runs `program` in a new process and space, with its code in the
+    /// first user page and a stack page after it, and the argument `arg`
+    /// returns given the stack page's address and the process. Returns how
+    /// it ended and where its code was; see [`run_in`].
+    fn run(program: UserProgram, arg: impl FnOnce(u64, &Arc<Process>) -> u64) -> (End, u64) {
+        run_with_stack(program, |stack, process| (Vec::new(), arg(stack, process)))
     }
 
     /// Runs `program` as [`run`] does, with the bytes `setup` returns at
-    /// the start of its stack page, and the argument it returns. `setup`
-    /// gets the stack page's address.
+    /// the start of its stack page, and the argument it returns.
     fn run_with_stack(
         program: UserProgram,
-        setup: impl FnOnce(u64) -> (Vec<u8>, u64),
+        setup: impl FnOnce(u64, &Arc<Process>) -> (Vec<u8>, u64),
     ) -> (End, u64) {
         let before = frames::free_frames();
         let Some(mut space) = paging::new_space() else {
@@ -307,7 +380,8 @@ mod tests {
         };
         let code = space.user_space().start;
         let stack = code + 4096;
-        let (bytes, arg) = setup(stack);
+        let process = Process::new();
+        let (bytes, arg) = setup(stack, &process);
         let code_frame = page_frame();
         Arch::write_user_program(&code_frame, program);
         let mut stack_frame = page_frame();
@@ -325,21 +399,22 @@ mod tests {
             entry: code,
             stack_top: stack + 4096,
         };
-        (run_in(program, before, arg), code)
+        (run_in(program, before, &process, arg), code)
     }
 
-    /// Starts `program` with `arg` as its argument, and returns how it
-    /// ended once its thread and space are freed. Checks that every frame
-    /// taken since there were `before` free came back: those of the space
-    /// and its pages, and those of the thread's stack. Kernel-space tables
-    /// the stack needed stay, so those are left out. Meanwhile it checks
-    /// that this thread, a kernel thread, runs on the kernel's tables every
-    /// time ticks switch back to it.
-    fn run_in(program: Program, before: usize, arg: u64) -> End {
+    /// Starts `program` in `process` with `arg` as its argument, and
+    /// returns how it ended once its thread and space are freed. Checks
+    /// that the process recorded that end and closed its handles, and that
+    /// every frame taken since there were `before` free came back: those of
+    /// the space and its pages, and those of the thread's stack.
+    /// Kernel-space tables the stack needed stay, so those are left out.
+    /// Meanwhile it checks that this thread, a kernel thread, runs on the
+    /// kernel's tables every time ticks switch back to it.
+    fn run_in(program: Program, before: usize, process: &Arc<Process>, arg: u64) -> End {
         let space_frames = before - frames::free_frames();
         let entry = program.entry;
         Arch::without_interrupts(|| *ENDED.lock() = None);
-        thread::spawn_user(program.space, entry, program.stack_top, arg);
+        program.start(Arc::clone(process), arg);
         // User code allocates nothing, and nothing frees the thread until
         // wait_for_exits, so this counts its stack whenever it runs.
         let spawned = frames::free_frames();
@@ -356,6 +431,9 @@ mod tests {
         let Some(end) = Arch::without_interrupts(|| *ENDED.lock()) else {
             unreachable!("ENDED was set");
         };
+        assert_eq!(process.end(), Some(end));
+        // Handles to itself are closed, and its thread is gone.
+        assert_eq!(Arc::strong_count(process), 1);
         end
     }
 
@@ -384,13 +462,28 @@ mod tests {
             Ok(program) => program,
             Err(e) => panic!("loading init failed: {e}"),
         };
-        assert_eq!(run_in(program, before, 0), End::Exited(0));
-        assert_eq!(take_written(), "hello from init");
+        let (process, handle) = new_init();
+        assert_eq!(
+            run_in(program, before, &process, u64::from(handle)),
+            End::Exited(0)
+        );
+        assert_eq!(take_written(), "hello from init, holding handle 0x10000");
+    }
+
+    #[test_case]
+    fn handle_syscalls_check_handles_and_rights() {
+        let (end, _) = run(UserProgram::Handles, |_, process| {
+            let Ok(handle) = process.insert_self(INIT_RIGHTS) else {
+                panic!("a new handle table is full");
+            };
+            u64::from(handle)
+        });
+        assert_eq!(end, End::Exited(0));
     }
 
     #[test_case]
     fn a_syscall_keeps_registers_and_an_unknown_one_fails() {
-        let (end, _) = run(UserProgram::Syscalls, |_| 0);
+        let (end, _) = run(UserProgram::Syscalls, |_, _| 0);
         assert_eq!(end, End::Exited(Error::UnknownSyscall.code()));
     }
 
@@ -399,7 +492,7 @@ mod tests {
     /// status and what it wrote.
     fn run_write(buf: impl FnOnce(u64) -> u64, len: usize, text: &[u8]) -> (End, String) {
         take_written();
-        let (end, _) = run_with_stack(UserProgram::Write, |stack| {
+        let (end, _) = run_with_stack(UserProgram::Write, |stack, _| {
             let at = stack + 16;
             let mut bytes = Vec::new();
             bytes.extend(buf(at).to_le_bytes());
@@ -452,7 +545,7 @@ mod tests {
 
     #[test_case]
     fn user_code_reads_its_own_stack() {
-        let (end, _) = run(UserProgram::Read, |stack| stack);
+        let (end, _) = run(UserProgram::Read, |stack, _| stack);
         assert_eq!(end, End::Exited(0));
     }
 
@@ -460,7 +553,7 @@ mod tests {
     fn reading_kernel_memory_kills_the_thread() {
         static TARGET: AtomicU64 = AtomicU64::new(0);
         let address = static_address(&TARGET);
-        let (end, code) = run(UserProgram::Read, |_| address);
+        let (end, code) = run(UserProgram::Read, |_, _| address);
         let trap = Trap::PageFault {
             address,
             access: Access::Read,
@@ -470,7 +563,7 @@ mod tests {
 
     #[test_case]
     fn a_privileged_instruction_kills_the_thread() {
-        let (end, code) = run(UserProgram::Privileged, |_| 0);
+        let (end, code) = run(UserProgram::Privileged, |_, _| 0);
         assert!(
             matches!(end, End::Killed { trap: Trap::Other { .. }, ip } if ip == code),
             "{end:?}"
@@ -482,7 +575,7 @@ mod tests {
     // so the CPU reports the byte after it.
     #[test_case]
     fn a_debug_exception_kills_the_thread() {
-        let (end, code) = run(UserProgram::Debug, |_| 0);
+        let (end, code) = run(UserProgram::Debug, |_, _| 0);
         let trap = Trap::Other {
             vector: 1,
             error: 0,
@@ -493,7 +586,7 @@ mod tests {
     // The kernel saves no SIMD state, so user code may not use it.
     #[test_case]
     fn simd_kills_the_thread() {
-        let (end, code) = run(UserProgram::Simd, |_| 0);
+        let (end, code) = run(UserProgram::Simd, |_, _| 0);
         assert!(
             matches!(end, End::Killed { trap: Trap::Other { .. }, ip } if ip == code),
             "{end:?}"
@@ -504,7 +597,7 @@ mod tests {
     // in ring 3 and switches to this thread.
     #[test_case]
     fn ticks_preempt_user_code() {
-        let (end, _) = run(UserProgram::Spin, |_| 0);
+        let (end, _) = run(UserProgram::Spin, |_, _| 0);
         assert_eq!(end, End::Exited(0));
     }
 }

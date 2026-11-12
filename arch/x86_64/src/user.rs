@@ -3,7 +3,7 @@
 use core::arch::{asm, global_asm};
 use core::ptr;
 
-use thisos_abi::Syscall;
+use thisos_abi::{Error, Rights, Syscall};
 use thisos_frames::Frame;
 use thisos_hal::UserProgram;
 use x86_64::VirtAddr;
@@ -169,15 +169,74 @@ global_asm!(
     // Debug. ICEBP, as a byte since assemblers spell it differently.
     ".byte 0xf1",
     ".org thisos_user_programs + 7 * {slot}, 0xcc",
+    // Handles. RBX holds the handle and R12 its copy, since syscalls keep
+    // both; EDI is set to each check's number before it's tested, so it
+    // is the exit status if the check fails.
+    "mov rbx, rdi",
+    "mov esi, {read_duplicate}",
+    "mov eax, {duplicate}",
+    "syscall",
+    "mov edi, 1",
+    "test rax, rax",
+    "jnz 2f",
+    "mov r12, rdx",
+    "mov rdi, r12",
+    "mov esi, {write_right}",
+    "mov eax, {duplicate}",
+    "syscall",
+    "mov edi, 2",
+    "cmp rax, {bad_rights}",
+    "jne 2f",
+    "mov rdi, r12",
+    "mov esi, {read}",
+    "mov eax, {restrict}",
+    "syscall",
+    "mov edi, 3",
+    "test rax, rax",
+    "jnz 2f",
+    "mov rdi, r12",
+    "mov esi, {read}",
+    "mov eax, {duplicate}",
+    "syscall",
+    "mov edi, 4",
+    "cmp rax, {access_denied}",
+    "jne 2f",
+    "mov rdi, r12",
+    "mov eax, {close}",
+    "syscall",
+    "mov edi, 5",
+    "test rax, rax",
+    "jnz 2f",
+    "mov rdi, r12",
+    "mov eax, {close}",
+    "syscall",
+    "mov edi, 6",
+    "cmp rax, {bad_handle}",
+    "jne 2f",
+    "xor edi, edi",
+    "2:",
+    "mov eax, {exit}",
+    "syscall",
+    "ud2",
+    ".org thisos_user_programs + 8 * {slot}, 0xcc",
     ".popsection",
     exit = const Syscall::Exit.number(),
     write = const Syscall::Write.number(),
+    close = const Syscall::Close.number(),
+    duplicate = const Syscall::Duplicate.number(),
+    restrict = const Syscall::Restrict.number(),
+    read = const Rights::READ.bits(),
+    write_right = const Rights::WRITE.bits(),
+    read_duplicate = const Rights::READ.union(Rights::DUPLICATE).bits(),
+    bad_handle = const Error::BadHandle.code(),
+    bad_rights = const Error::BadRights.code(),
+    access_denied = const Error::AccessDenied.code(),
     slot = const SLOT,
     cycles = const 1 << 28,
 );
 
 unsafe extern "C" {
-    static thisos_user_programs: [u8; 7 * SLOT];
+    static thisos_user_programs: [u8; 8 * SLOT];
 }
 
 /// Writes `program` at the start of `frame`, through the physical-memory
@@ -191,6 +250,7 @@ pub fn write_program(phys_offset: VirtAddr, frame: &Frame, program: UserProgram)
         UserProgram::Spin => 4,
         UserProgram::Write => 5,
         UserProgram::Debug => 6,
+        UserProgram::Handles => 7,
     };
     let source = (&raw const thisos_user_programs)
         .cast::<u8>()

@@ -17,6 +17,7 @@ mod heap;
 mod logger;
 mod paging;
 mod panic;
+mod process;
 #[cfg(test)]
 mod testing;
 mod thread;

@@ -22,6 +22,7 @@ thisos-abi.workspace = true
 thisos-console.workspace = true
 thisos-elf.workspace = true
 thisos-frames.workspace = true
+thisos-handles.workspace = true
 thisos-hal.workspace = true
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]

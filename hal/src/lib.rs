@@ -216,6 +216,15 @@ pub enum UserProgram {
     Write,
     /// Raises the debug exception that needs no debugger: ICEBP on x86_64.
     Debug,
+    /// Gets a handle with read and duplicate rights at least as its
+    /// argument, then checks, in order: (1) duplicating it with read and
+    /// duplicate succeeds; (2) duplicating the copy with write fails with
+    /// `BadRights`; (3) restricting the copy to read succeeds; (4)
+    /// duplicating the copy then fails with `AccessDenied`; (5) closing
+    /// the copy succeeds; (6) closing it again fails with `BadHandle`. It
+    /// exits with status 0, or with the number of the first check that
+    /// failed.
+    Handles,
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
