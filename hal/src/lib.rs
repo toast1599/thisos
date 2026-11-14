@@ -6,7 +6,7 @@
 #![forbid(unsafe_code)]
 
 use core::fmt;
-use core::ops::Range;
+use core::ops::{Deref, Range};
 
 use thisos_frames::Frame;
 
@@ -225,6 +225,18 @@ pub enum UserProgram {
     /// exits with status 0, or with the number of the first check that
     /// failed.
     Handles,
+    /// Gets a process handle as its argument, then checks, in order: (1)
+    /// creating a 4097-byte memory object fails with `OutOfRange`; (2)
+    /// creating an 8 KiB one succeeds; (3) mapping all of it read-write at
+    /// `0x40_0000` succeeds, and it writes 42 at its second page; (4) mapping
+    /// that page read-only at `0x42_0000` succeeds and reads the 42 there;
+    /// (5) mapping a page at `0x40_1000` fails with `AddressInUse`; (6)
+    /// mapping it read-execute at `0x41_0000` fails with `Conflict`; (7)
+    /// mapping the process handle fails with `WrongType`; (8) unmapping
+    /// `0x40_0000` succeeds; (9) mapping the object read-execute at
+    /// `0x41_0000` then succeeds. It exits with status 0, or with the number
+    /// of the first check that failed.
+    Memory,
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
@@ -370,14 +382,14 @@ pub trait Platform {
     /// Writes code that only returns at the start of `frame`, for
     /// [`Probe::ExecuteUser`] to find if the CPU ever let it run. For
     /// tests.
-    fn write_return(frame: &Frame);
+    fn write_return(frame: &mut Frame);
 
     /// Raises the interrupt [`Trap::Spurious`] reports, and returns once
     /// the trap handler does. For tests.
     fn raise_spurious();
 
     /// Writes `program` at the start of `frame`. For tests.
-    fn write_user_program(frame: &Frame, program: UserProgram);
+    fn write_user_program(frame: &mut Frame, program: UserProgram);
 
     /// Ends a QEMU test run through QEMU's debug exit device, reporting
     /// whether the tests passed. It touches the device only when it runs
@@ -388,8 +400,8 @@ pub trait Platform {
 /// The kernel's own page tables: the upper half every address space
 /// shares, with nothing mapped in the lower half. Pages are 4 KiB.
 pub trait PageTables: Send {
-    /// A user address space.
-    type AddressSpace: AddressSpace;
+    /// A user address space whose mappings each hold an `O`.
+    type AddressSpace<O: Deref<Target = [Frame]> + Send + Sync>: AddressSpace<O>;
 
     /// The virtual addresses [`PageTables::map`] maps into. The loader
     /// mapped nothing there.
@@ -432,7 +444,10 @@ pub trait PageTables: Send {
     /// A new address space with nothing in its lower half, sharing this
     /// upper half, with its first table from `alloc`. `None` if `alloc` has
     /// no frame.
-    fn new_space(&self, alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<Self::AddressSpace>;
+    fn new_space<O: Deref<Target = [Frame]> + Send + Sync>(
+        &self,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
+    ) -> Option<Self::AddressSpace<O>>;
 
     /// Makes the CPU use these tables, with an empty lower half, in place
     /// of whichever address space it used.
@@ -440,31 +455,41 @@ pub trait PageTables: Send {
 }
 
 /// A user address space: a lower half of its own, and the upper half of
-/// the kernel's [`PageTables`]. Dropping one without
-/// [`AddressSpace::destroy`] leaks its frames and its tables, as dropping a
-/// [`Frame`] does.
-pub trait AddressSpace: Send {
+/// the kernel's [`PageTables`]. Each mapping holds an `O`, whose frames it
+/// maps, and hands it back only once no page maps them, so frames can't be
+/// freed while user code reaches them. Mappings never overlap. Dropping a
+/// space without [`AddressSpace::destroy`] leaks its tables and the `O`s,
+/// as dropping a [`Frame`] does.
+///
+/// Its methods take `&self`, so that the threads sharing a space can
+/// switch to it without a lock; map and unmap take a lock of the space's
+/// own.
+pub trait AddressSpace<O>: Send + Sync {
     /// The virtual addresses [`AddressSpace::map`] maps into: the lower
     /// half, apart from the first pages, which stay unmapped so that a
     /// null pointer plus a small offset always faults, and on x86_64 the
     /// last page, which SYSRET couldn't return past.
     fn user_space(&self) -> Range<u64>;
 
-    /// Maps the page at `page` to `frame` for user code, with `protection`.
-    /// New tables on the way come from `alloc`. The space holds the frame
-    /// until [`AddressSpace::unmap`] or [`AddressSpace::destroy`].
+    /// Maps `pages` pages from `addr` for user code, with `protection`, to
+    /// `object`'s frames from index `first` on. New tables on the way come
+    /// from `alloc`. The space holds `object` until [`AddressSpace::unmap`]
+    /// or [`AddressSpace::destroy`]. On failure nothing is mapped, and the
+    /// error hands `object` back.
     fn map(
-        &mut self,
-        page: u64,
-        frame: Frame,
+        &self,
+        addr: u64,
+        object: O,
+        first: usize,
+        pages: usize,
         protection: Protection,
         alloc: &mut dyn FnMut() -> Option<Frame>,
-    ) -> Result<(), MapError>;
+    ) -> Result<(), MapError<O>>;
 
-    /// Unmaps the page at `page`, and returns the frame it mapped, or
-    /// `None` if nothing was mapped there. Tables it leaves empty stay
+    /// Unmaps the mapping that starts at `addr`, and returns its object,
+    /// or `None` if no mapping starts there. Tables it leaves empty stay
     /// until [`AddressSpace::destroy`].
-    fn unmap(&mut self, page: u64) -> Option<Frame>;
+    fn unmap(&self, addr: u64) -> Option<O>;
 
     /// Where `addr` is mapped in this space, or `None` if it isn't.
     fn translate(&self, addr: u64) -> Option<Translation>;
@@ -472,10 +497,10 @@ pub trait AddressSpace: Send {
     /// Makes the CPU use this space.
     fn activate(&self);
 
-    /// Ends the space: calls `mapped` with each frame still mapped, and
-    /// `free` with each frame of its tables. If the CPU uses this space, it
-    /// switches to the kernel's [`PageTables`] first.
-    fn destroy(self, mapped: &mut dyn FnMut(Frame), free: &mut dyn FnMut(Frame));
+    /// Ends the space: calls `free` with each frame of its tables, then
+    /// `unmapped` with each mapping's object. If the CPU uses this space,
+    /// it switches to the kernel's [`PageTables`] first.
+    fn destroy(self, unmapped: &mut dyn FnMut(O), free: &mut dyn FnMut(Frame));
 }
 
 /// What user code may do with a page. No page is both writable and
@@ -520,14 +545,14 @@ pub struct TimerFrequencies {
     pub measured: Option<TimerFrequency>,
 }
 
-/// Why [`PageTables::map`] or [`AddressSpace::map`] failed. It hands the
-/// frame back.
+/// Why [`PageTables::map`] or [`AddressSpace::map`] failed. It hands back
+/// the frame or object that wasn't mapped.
 #[derive(Debug)]
-pub struct MapError {
+pub struct MapError<T = Frame> {
     /// What was wrong.
     pub kind: MapErrorKind,
-    /// The frame that wasn't mapped.
-    pub frame: Frame,
+    /// The frame or object that wasn't mapped.
+    pub given: T,
 }
 
 /// What was wrong with a [`PageTables::map`] or [`AddressSpace::map`].
@@ -539,8 +564,11 @@ pub enum MapErrorKind {
     OutsideKernelSpace,
     /// The page is outside [`AddressSpace::user_space`].
     OutsideUserSpace,
-    /// The page is mapped already.
+    /// The page is mapped already, or the range overlaps a mapping.
     Mapped,
+    /// The range is empty, runs past the end of the object, or past the
+    /// end of the address space.
+    OutOfRange,
     /// `alloc` had no frame for a table.
     NoFrames,
 }

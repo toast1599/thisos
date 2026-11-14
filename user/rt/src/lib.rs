@@ -1,8 +1,12 @@
 //! The runtime every ThisOS program links: its entry point, its syscalls,
-//! [`Handle`], [`print!`] and [`println!`], and its panic handler. A
-//! program names its main function with [`entry!`].
+//! [`Handle`], [`print!`] and [`println!`], its panic handler, and a heap
+//! behind `alloc`. A program names its main function with [`entry!`].
 
 #![no_std]
+
+// Host tests run on std's allocator.
+#[cfg(not(test))]
+mod heap;
 
 use core::arch::asm;
 #[cfg(not(test))]
@@ -131,8 +135,7 @@ impl Handle {
     pub fn duplicate(&self, rights: Rights) -> Result<Handle, Error> {
         let value = syscall(
             Syscall::Duplicate,
-            u64::from(self.0),
-            u64::from(rights.bits()),
+            [u64::from(self.0), u64::from(rights.bits()), 0, 0, 0],
         )?;
         let Ok(handle) = u32::try_from(value) else {
             panic!("the kernel returned {value:#x}, which isn't a handle");
@@ -144,8 +147,7 @@ impl Handle {
     pub fn restrict(&mut self, rights: Rights) -> Result<(), Error> {
         syscall(
             Syscall::Restrict,
-            u64::from(self.0),
-            u64::from(rights.bits()),
+            [u64::from(self.0), u64::from(rights.bits()), 0, 0, 0],
         )
         .map(|_| ())
     }
@@ -153,15 +155,16 @@ impl Handle {
 
 impl Drop for Handle {
     fn drop(&mut self) {
-        if let Err(e) = syscall(Syscall::Close, u64::from(self.0), 0) {
+        if let Err(e) = syscall(Syscall::Close, [u64::from(self.0), 0, 0, 0, 0]) {
             panic!("closing handle {:#x} failed: {e:?}", self.0);
         }
     }
 }
 
-/// Makes `number`, a syscall that takes at most two arguments and reads
-/// and writes no user memory, and returns its value.
-fn syscall(number: Syscall, a: u64, b: u64) -> Result<u64, Error> {
+/// Makes `number`, a syscall that takes at most five arguments, `args`,
+/// and reads, writes, maps and unmaps no user memory, and returns its
+/// value.
+fn syscall(number: Syscall, args: [u64; 5]) -> Result<u64, Error> {
     let code;
     let value;
     // SAFETY: By ADR 0007, a syscall changes only RAX, RDX, RCX and R11,
@@ -170,14 +173,47 @@ fn syscall(number: Syscall, a: u64, b: u64) -> Result<u64, Error> {
         asm!(
             "syscall",
             inlateout("rax") number.number() => code,
-            in("rdi") a,
-            in("rsi") b,
-            lateout("rdx") value,
+            in("rdi") args[0],
+            in("rsi") args[1],
+            inlateout("rdx") args[2] => value,
+            in("r10") args[3],
+            in("r8") args[4],
             lateout("rcx") _,
             lateout("r11") _,
             options(nostack, nomem),
         );
     }
+    result(code, value)
+}
+
+/// Makes the map syscall with `args`, and returns its value. Unlike
+/// [`syscall`], the compiler may not move memory accesses across it, since
+/// it makes memory appear.
+#[cfg_attr(test, expect(dead_code, reason = "only the heap maps memory"))]
+fn map_syscall(args: [u64; 5]) -> Result<u64, Error> {
+    let code;
+    let value;
+    // SAFETY: By ADR 0007, a syscall changes only RAX, RDX, RCX and R11.
+    // Map only adds pages where none were mapped, so no memory Rust
+    // reaches changes.
+    unsafe {
+        asm!(
+            "syscall",
+            inlateout("rax") Syscall::Map.number() => code,
+            in("rdi") args[0],
+            in("rsi") args[1],
+            inlateout("rdx") args[2] => value,
+            in("r10") args[3],
+            in("r8") args[4],
+            lateout("rcx") _,
+            lateout("r11") _,
+            options(nostack),
+        );
+    }
+    result(code, value)
+}
+
+fn result(code: u64, value: u64) -> Result<u64, Error> {
     match code {
         0 => Ok(value),
         code => Err(error(code)),

@@ -15,6 +15,7 @@ extern crate alloc;
 mod frames;
 mod heap;
 mod logger;
+mod memory;
 mod paging;
 mod panic;
 mod process;

@@ -108,6 +108,7 @@ dependencies = [
  "thisos-fdt",
  "thisos-frames",
  "thisos-hal",
+ "thisos-regions",
 ]
 
 [[package]]
@@ -120,6 +121,7 @@ dependencies = [
  "thisos-abi",
  "thisos-frames",
  "thisos-hal",
+ "thisos-regions",
  "uart_16550",
  "x86_64",
 ]
@@ -178,12 +180,23 @@ dependencies = [
  "thisos-frames",
  "thisos-hal",
  "thisos-handles",
+ "thisos-regions",
+]
+
+[[package]]
+name = "thisos-regions"
+version = "0.0.0"
+dependencies = [
+ "thisos-abi",
+ "thisos-hal",
 ]
 
 [[package]]
 name = "thisos-rt"
 version = "0.0.0"
 dependencies = [
+ "spin",
+ "talc",
  "thisos-abi",
 ]
 

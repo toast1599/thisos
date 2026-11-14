@@ -178,7 +178,7 @@ impl Platform for X86_64 {
         paging::copy_from_user(phys_offset(), addr, buf)
     }
 
-    fn write_return(frame: &Frame) {
+    fn write_return(frame: &mut Frame) {
         paging::write_return(phys_offset(), frame);
     }
 
@@ -192,7 +192,7 @@ impl Platform for X86_64 {
         }
     }
 
-    fn write_user_program(frame: &Frame, program: UserProgram) {
+    fn write_user_program(frame: &mut Frame, program: UserProgram) {
         user::write_program(phys_offset(), frame, program);
     }
 

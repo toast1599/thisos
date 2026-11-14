@@ -11,7 +11,8 @@ use thisos_hal::{
     AddressSpace as _, Cpu, MapErrorKind, Platform, Protection, Trap, TrapFrame as _,
 };
 
-use crate::process::{End, Process};
+use crate::memory::{Mapping, MemoryObject};
+use crate::process::{End, Object, Process};
 use crate::{Arch, frames, paging, thread};
 
 /// The size of a program's stack, which ends where user space does.
@@ -101,25 +102,25 @@ fn new_init() -> (Arc<Process>, u32) {
 enum LoadError {
     /// The file isn't an executable the kernel loads.
     Elf(thisos_elf::Error),
-    /// The page at `page` couldn't be mapped.
-    Map { page: u64, kind: MapErrorKind },
-    /// No frame was free.
-    NoFrames,
+    /// The pages at `addr` couldn't be mapped.
+    Map { addr: u64, kind: MapErrorKind },
+    /// No memory was free.
+    NoMemory,
 }
 
 impl fmt::Display for LoadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LoadError::Elf(e) => write!(f, "not an executable the kernel loads: {e:?}"),
-            LoadError::Map { page, kind } => write!(f, "mapping {page:#x} failed: {kind:?}"),
-            LoadError::NoFrames => write!(f, "no free frame"),
+            LoadError::Map { addr, kind } => write!(f, "mapping {addr:#x} failed: {kind:?}"),
+            LoadError::NoMemory => write!(f, "no free memory"),
         }
     }
 }
 
 /// A program loaded into an address space of its own, with a stack.
 struct Program {
-    space: paging::AddressSpace,
+    space: Arc<paging::AddressSpace>,
     entry: u64,
     stack_top: u64,
 }
@@ -133,18 +134,19 @@ impl Program {
 }
 
 /// Loads the executable in `file` into a new address space, with a zeroed
-/// stack at the end of user space.
+/// stack at the end of user space. Each segment and the stack are a memory
+/// object of their own.
 fn load(file: &[u8]) -> Result<Program, LoadError> {
     let elf = Elf::new(file).map_err(LoadError::Elf)?;
-    let mut space = paging::new_space().ok_or(LoadError::NoFrames)?;
-    match map_program(&elf, &mut space) {
+    let space = paging::new_space().ok_or(LoadError::NoMemory)?;
+    match map_program(&elf, &space) {
         Ok(stack_top) => Ok(Program {
-            space,
+            space: Arc::new(space),
             entry: elf.entry(),
             stack_top,
         }),
         Err(e) => {
-            space.destroy(&mut frames::free, &mut frames::free);
+            space.destroy(&mut drop, &mut frames::free);
             Err(e)
         }
     }
@@ -152,7 +154,7 @@ fn load(file: &[u8]) -> Result<Program, LoadError> {
 
 /// Maps `elf`'s segments and a stack into `space`, and returns the stack's
 /// top.
-fn map_program(elf: &Elf, space: &mut paging::AddressSpace) -> Result<u64, LoadError> {
+fn map_program(elf: &Elf, space: &paging::AddressSpace) -> Result<u64, LoadError> {
     for segment in elf.segments() {
         // Elf::new rejects segments both writable and executable.
         let protection = if segment.executable {
@@ -162,34 +164,39 @@ fn map_program(elf: &Elf, space: &mut paging::AddressSpace) -> Result<u64, LoadE
         } else {
             Protection::ReadOnly
         };
-        for page in segment.pages() {
-            map_page(space, page.address, page.offset, page.data, protection)?;
+        let range = segment.page_range();
+        let mut object = new_object(range.end - range.start)?;
+        for (frame, page) in object.frames_mut().iter_mut().zip(segment.pages()) {
+            Arch::fill_frame(frame, page.offset, page.data);
         }
+        map_object(space, range.start, object, protection)?;
     }
     let top = space.user_space().end;
-    for page in (top - STACK_SIZE..top).step_by(4096) {
-        map_page(space, page, 0, &[], Protection::ReadWrite)?;
-    }
+    let stack = new_object(STACK_SIZE)?;
+    map_object(space, top - STACK_SIZE, stack, Protection::ReadWrite)?;
     Ok(top)
 }
 
-/// Maps a new frame at `page` in `space`, holding `data` from `offset`
-/// and zeroes everywhere else.
-fn map_page(
-    space: &mut paging::AddressSpace,
-    page: u64,
-    offset: usize,
-    data: &[u8],
+/// A memory object of `size` bytes, a multiple of 4096.
+fn new_object(size: u64) -> Result<MemoryObject, LoadError> {
+    let pages = usize::try_from(size / 4096).map_err(|_| LoadError::NoMemory)?;
+    MemoryObject::new(pages).map_err(|_| LoadError::NoMemory)
+}
+
+/// Maps all of `object`, which nothing else holds, at `addr` in `space`.
+fn map_object(
+    space: &paging::AddressSpace,
+    addr: u64,
+    object: MemoryObject,
     protection: Protection,
 ) -> Result<(), LoadError> {
-    let mut frame = frames::alloc().ok_or(LoadError::NoFrames)?;
-    Arch::fill_frame(&mut frame, offset, data);
+    let pages = object.pages();
+    let Ok(mapping) = Mapping::new(Arc::new(object), protection) else {
+        unreachable!("a new object has no mappings to conflict with");
+    };
     space
-        .map(page, frame, protection, &mut frames::alloc)
-        .map_err(|e| {
-            frames::free(e.frame);
-            LoadError::Map { page, kind: e.kind }
-        })
+        .map(addr, mapping, 0, pages, protection, &mut frames::alloc)
+        .map_err(|e| LoadError::Map { addr, kind: e.kind })
 }
 
 /// Handles a trap that [`TrapFrame::raised_by_user`](thisos_hal::TrapFrame::raised_by_user)
@@ -232,6 +239,9 @@ fn syscall(number: u64, args: [u64; 6]) -> Result<u64, Error> {
         Syscall::Restrict => process()
             .restrict(handle(args[0])?, rights(args[1])?)
             .map(|()| 0),
+        Syscall::MemoryCreate => memory_create(args[0]),
+        Syscall::Map => map(args[0], args[1], args[2], args[3], args[4]),
+        Syscall::Unmap => space().unmap(args[0]).map(|_| 0).ok_or(Error::BadAddress),
     }
 }
 
@@ -254,6 +264,14 @@ fn process() -> Arc<Process> {
     process
 }
 
+/// The running thread's address space.
+fn space() -> Arc<paging::AddressSpace> {
+    let Some(space) = thread::space() else {
+        panic!("a kernel thread trapped as user code");
+    };
+    space
+}
+
 fn handle(arg: u64) -> Result<u32, Error> {
     u32::try_from(arg).map_err(|_| Error::BadHandle)
 }
@@ -263,6 +281,68 @@ fn rights(arg: u64) -> Result<Rights, Error> {
         .ok()
         .and_then(Rights::from_bits)
         .ok_or(Error::BadRights)
+}
+
+/// The pages in `len` bytes, which must be a nonzero multiple of 4096.
+fn pages(len: u64) -> Result<usize, Error> {
+    if len == 0 || len % 4096 != 0 {
+        return Err(Error::OutOfRange);
+    }
+    usize::try_from(len / 4096).map_err(|_| Error::OutOfRange)
+}
+
+/// Makes a memory object of `size` bytes, as the memory-create syscall
+/// does, and returns a handle to it.
+fn memory_create(size: u64) -> Result<u64, Error> {
+    let object = MemoryObject::new(pages(size)?)?;
+    process()
+        .insert(Object::Memory(Arc::new(object)), Rights::ALL)
+        .map(u64::from)
+}
+
+/// Maps `len` bytes of the memory object `handle` names from `offset` at
+/// `addr`, with the rights in `rights`, as the map syscall does.
+fn map(handle_arg: u64, offset: u64, len: u64, addr: u64, rights_arg: u64) -> Result<u64, Error> {
+    let (object, held) = process().get(handle(handle_arg)?)?;
+    let Object::Memory(object) = object else {
+        return Err(Error::WrongType);
+    };
+    let wanted = rights(rights_arg)?;
+    let protection = if wanted == Rights::READ {
+        Protection::ReadOnly
+    } else if wanted == Rights::READ | Rights::WRITE {
+        Protection::ReadWrite
+    } else if wanted == Rights::READ | Rights::EXECUTE {
+        Protection::ReadExecute
+    } else {
+        return Err(Error::BadRights);
+    };
+    if !held.contains(wanted) {
+        return Err(Error::AccessDenied);
+    }
+    if offset % 4096 != 0 {
+        return Err(Error::BadAddress);
+    }
+    let pages = pages(len)?;
+    let first = usize::try_from(offset / 4096).map_err(|_| Error::OutOfRange)?;
+    if first
+        .checked_add(pages)
+        .is_none_or(|end| end > object.pages())
+    {
+        return Err(Error::OutOfRange);
+    }
+    let mapping = Mapping::new(object, protection)?;
+    space()
+        .map(addr, mapping, first, pages, protection, &mut frames::alloc)
+        .map_err(|e| match e.kind {
+            MapErrorKind::Mapped => Error::AddressInUse,
+            MapErrorKind::NoFrames => Error::NoMemory,
+            MapErrorKind::Unaligned
+            | MapErrorKind::OutsideUserSpace
+            | MapErrorKind::OutsideKernelSpace
+            | MapErrorKind::OutOfRange => Error::BadAddress,
+        })?;
+    Ok(0)
 }
 
 /// Logs the `len` bytes of text at `buf` in user space as the write
@@ -375,27 +455,27 @@ mod tests {
         setup: impl FnOnce(u64, &Arc<Process>) -> (Vec<u8>, u64),
     ) -> (End, u64) {
         let before = frames::free_frames();
-        let Some(mut space) = paging::new_space() else {
+        let Some(space) = paging::new_space() else {
             panic!("no free frame for a space");
         };
         let code = space.user_space().start;
         let stack = code + 4096;
         let process = Process::new();
         let (bytes, arg) = setup(stack, &process);
-        let code_frame = page_frame();
-        Arch::write_user_program(&code_frame, program);
-        let mut stack_frame = page_frame();
-        Arch::fill_frame(&mut stack_frame, 0, &bytes);
-        for (page, frame, protection) in [
-            (code, code_frame, Protection::ReadExecute),
-            (stack, stack_frame, Protection::ReadWrite),
+        let mut code_object = page_object();
+        Arch::write_user_program(&mut code_object.frames_mut()[0], program);
+        let mut stack_object = page_object();
+        Arch::fill_frame(&mut stack_object.frames_mut()[0], 0, &bytes);
+        for (page, object, protection) in [
+            (code, code_object, Protection::ReadExecute),
+            (stack, stack_object, Protection::ReadWrite),
         ] {
-            if let Err(e) = space.map(page, frame, protection, &mut frames::alloc) {
-                panic!("mapping {page:#x} failed: {:?}", e.kind);
+            if let Err(e) = map_object(&space, page, object, protection) {
+                panic!("{e}");
             }
         }
         let program = Program {
-            space,
+            space: Arc::new(space),
             entry: code,
             stack_top: stack + 4096,
         };
@@ -437,11 +517,11 @@ mod tests {
         end
     }
 
-    fn page_frame() -> thisos_frames::Frame {
-        let Some(frame) = frames::alloc() else {
-            panic!("no free frame");
+    fn page_object() -> MemoryObject {
+        let Ok(object) = MemoryObject::new(1) else {
+            panic!("no memory for a page");
         };
-        frame
+        object
     }
 
     fn static_address(target: &AtomicU64) -> u64 {
@@ -473,6 +553,17 @@ mod tests {
     #[test_case]
     fn handle_syscalls_check_handles_and_rights() {
         let (end, _) = run(UserProgram::Handles, |_, process| {
+            let Ok(handle) = process.insert_self(INIT_RIGHTS) else {
+                panic!("a new handle table is full");
+            };
+            u64::from(handle)
+        });
+        assert_eq!(end, End::Exited(0));
+    }
+
+    #[test_case]
+    fn memory_syscalls_create_map_share_and_unmap() {
+        let (end, _) = run(UserProgram::Memory, |_, process| {
             let Ok(handle) = process.insert_self(INIT_RIGHTS) else {
                 panic!("a new handle table is full");
             };

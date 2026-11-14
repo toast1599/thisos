@@ -11,11 +11,12 @@ use thisos_frames::Frame;
 use thisos_hal::Translation;
 use thisos_hal::{MapError, PageTables as _, Platform};
 
+use crate::memory::Mapping;
 use crate::{Arch, frames};
 
 type PageTables = <Arch as Platform>::PageTables;
-/// A user address space.
-pub type AddressSpace = <PageTables as thisos_hal::PageTables>::AddressSpace;
+/// A user address space, whose mappings hold memory objects.
+pub type AddressSpace = <PageTables as thisos_hal::PageTables>::AddressSpace<Mapping>;
 
 static PAGE_TABLES: Mutex<Option<Kernel>> = Mutex::new(None);
 
@@ -148,6 +149,7 @@ fn lower_half_mapped() -> bool {
 
 #[cfg(test)]
 mod tests {
+    use alloc::sync::Arc;
     use alloc::vec::Vec;
     use core::ptr;
     use core::sync::atomic::AtomicU64;
@@ -155,6 +157,7 @@ mod tests {
     use thisos_hal::{Access, AddressSpace as _, MapErrorKind, Probe, Protection, Trap};
 
     use super::*;
+    use crate::memory::MemoryObject;
     use crate::testing;
 
     static PROBE: AtomicU64 = AtomicU64::new(0);
@@ -274,11 +277,11 @@ mod tests {
             panic!("{page:#x} was mapped twice");
         };
         assert_eq!(e.kind, MapErrorKind::Mapped);
-        let Err(e) = map(space.start - 4096, e.frame, false) else {
+        let Err(e) = map(space.start - 4096, e.given, false) else {
             panic!("a page below kernel space was mapped");
         };
         assert_eq!(e.kind, MapErrorKind::OutsideKernelSpace);
-        frames::free(e.frame);
+        frames::free(e.given);
     }
 
     fn translate_active(addr: u64) -> Option<Translation> {
@@ -299,32 +302,54 @@ mod tests {
         space
     }
 
-    fn map_user(space: &mut AddressSpace, page: u64, protection: Protection) -> u64 {
-        let frame = frame();
-        let phys = frame.start();
-        if let Err(e) = space.map(page, frame, protection, &mut frames::alloc) {
-            panic!("mapping {page:#x} failed: {:?}", e.kind);
+    fn object(pages: usize) -> MemoryObject {
+        let Ok(object) = MemoryObject::new(pages) else {
+            panic!("no memory for {pages} pages");
+        };
+        object
+    }
+
+    fn mapping(object: &Arc<MemoryObject>, protection: Protection) -> Mapping {
+        let Ok(mapping) = Mapping::new(Arc::clone(object), protection) else {
+            panic!("a {protection:?} mapping conflicted");
+        };
+        mapping
+    }
+
+    /// Maps a new one-page object at `page` in `space`, and returns its
+    /// frame's address.
+    fn map_user(space: &AddressSpace, page: u64, protection: Protection) -> u64 {
+        map_object(space, page, &Arc::new(object(1)), protection)
+    }
+
+    /// Maps all of `object` at `addr` in `space`, and returns its first
+    /// frame's address.
+    fn map_object(
+        space: &AddressSpace,
+        addr: u64,
+        object: &Arc<MemoryObject>,
+        protection: Protection,
+    ) -> u64 {
+        let mapping = mapping(object, protection);
+        let (phys, pages) = (mapping[0].start(), mapping.len());
+        if let Err(e) = space.map(addr, mapping, 0, pages, protection, &mut frames::alloc) {
+            panic!("mapping {addr:#x} failed: {:?}", e.kind);
         }
         phys
     }
 
-    /// Destroys `space`, frees every frame, and returns the addresses of
-    /// those it still mapped.
+    /// Destroys `space`, and returns the address of the first frame of
+    /// each mapping it still had, in order of address.
     fn destroy(space: AddressSpace) -> Vec<u64> {
         let mut mapped = Vec::new();
-        space.destroy(
-            &mut |frame| {
-                mapped.push(frame.start());
-                frames::free(frame);
-            },
-            &mut frames::free,
-        );
+        space.destroy(&mut |m| mapped.push(m[0].start()), &mut frames::free);
         mapped
     }
 
     #[test_case]
     fn a_space_maps_translates_and_unmaps() {
-        let mut space = space();
+        let before = frames::free_frames();
+        let space = space();
         let pages = [
             (Protection::ReadOnly, false, false),
             (Protection::ReadWrite, true, false),
@@ -333,7 +358,7 @@ mod tests {
         let mut mapped = Vec::new();
         for (i, (protection, writable, executable)) in (0u64..).zip(pages) {
             let page = 0x40_0000 + 4096 * i;
-            let phys = map_user(&mut space, page, protection);
+            let phys = map_user(&space, page, protection);
             assert_eq!(
                 space.translate(page + 8),
                 Some(Translation {
@@ -347,48 +372,136 @@ mod tests {
             mapped.push((page, phys));
         }
         for (page, phys) in mapped {
-            let Some(frame) = space.unmap(page) else {
+            let Some(mapping) = space.unmap(page) else {
                 panic!("{page:#x} wasn't mapped");
             };
-            assert_eq!(frame.start(), phys);
-            frames::free(frame);
+            assert_eq!(mapping[0].start(), phys);
             assert_eq!(space.translate(page), None);
             assert!(space.unmap(page).is_none(), "{page:#x} unmapped twice");
         }
         assert_eq!(destroy(space), []);
+        assert_eq!(frames::free_frames(), before);
     }
 
     #[test_case]
-    fn user_maps_stay_in_user_space() {
-        let mut space = space();
-        let lowest = space.user_space().start;
-        for (page, kind) in [
-            (0x40_0001, MapErrorKind::Unaligned),
-            (lowest - 4096, MapErrorKind::OutsideUserSpace),
-            (space.user_space().end, MapErrorKind::OutsideUserSpace),
-            (kernel_space().start, MapErrorKind::OutsideUserSpace),
-        ] {
-            let Err(e) = space.map(page, frame(), Protection::ReadOnly, &mut frames::alloc) else {
-                panic!("{page:#x} was mapped");
-            };
-            assert_eq!(e.kind, kind, "{page:#x}");
-            frames::free(e.frame);
+    fn a_mapping_covers_its_pages_and_unmaps_only_whole() {
+        let space = space();
+        let object = Arc::new(object(4));
+        let frames: Vec<u64> = mapping(&object, Protection::ReadOnly)
+            .iter()
+            .map(Frame::start)
+            .collect();
+        let addr = 0x40_0000;
+        let mapping = mapping(&object, Protection::ReadWrite);
+        if let Err(e) = space.map(
+            addr,
+            mapping,
+            1,
+            2,
+            Protection::ReadWrite,
+            &mut frames::alloc,
+        ) {
+            panic!("mapping {addr:#x} failed: {:?}", e.kind);
         }
-        let phys = map_user(&mut space, lowest, Protection::ReadOnly);
-        let Err(e) = space.map(lowest, frame(), Protection::ReadOnly, &mut frames::alloc) else {
-            panic!("{lowest:#x} was mapped twice");
+        let phys = |page| space.translate(page).map(|t| t.phys);
+        assert_eq!(phys(addr), Some(frames[1]));
+        assert_eq!(phys(addr + 4096), Some(frames[2]));
+        assert_eq!(phys(addr + 2 * 4096), None);
+        assert!(
+            space.unmap(addr + 4096).is_none(),
+            "unmapped half a mapping"
+        );
+        assert!(space.unmap(addr).is_some());
+        assert_eq!(phys(addr + 4096), None);
+        assert_eq!(destroy(space), []);
+    }
+
+    #[test_case]
+    fn a_failed_map_maps_nothing_and_hands_the_object_back() {
+        let space = space();
+        let object = Arc::new(object(2));
+        let lowest = space.user_space().start;
+        let end = space.user_space().end;
+        for (addr, first, pages, kind) in [
+            (0x40_0001, 0, 1, MapErrorKind::Unaligned),
+            (lowest - 4096, 0, 1, MapErrorKind::OutsideUserSpace),
+            (end, 0, 1, MapErrorKind::OutsideUserSpace),
+            (kernel_space().start, 0, 1, MapErrorKind::OutsideUserSpace),
+            (end - 4096, 0, 2, MapErrorKind::OutOfRange),
+            (lowest, 0, 0, MapErrorKind::OutOfRange),
+            (lowest, 1, 2, MapErrorKind::OutOfRange),
+            (lowest, usize::MAX, 2, MapErrorKind::OutOfRange),
+        ] {
+            let mapping = mapping(&object, Protection::ReadOnly);
+            let Err(e) = space.map(
+                addr,
+                mapping,
+                first,
+                pages,
+                Protection::ReadOnly,
+                &mut frames::alloc,
+            ) else {
+                panic!("{addr:#x} was mapped");
+            };
+            assert_eq!(e.kind, kind, "{addr:#x}, {first}, {pages}");
+        }
+        let phys = map_object(&space, lowest + 4096, &object, Protection::ReadOnly);
+        for addr in [lowest, lowest + 2 * 4096] {
+            let mapping = mapping(&object, Protection::ReadOnly);
+            let Err(e) = space.map(
+                addr,
+                mapping,
+                0,
+                2,
+                Protection::ReadOnly,
+                &mut frames::alloc,
+            ) else {
+                panic!("{addr:#x} overlapped a mapping");
+            };
+            assert_eq!(e.kind, MapErrorKind::Mapped);
+        }
+        assert_eq!(space.translate(lowest), None);
+        // Far from the first mapping, so new tables are needed, and none
+        // comes.
+        let far = 0x40_0000_0000;
+        let mapping = mapping(&object, Protection::ReadOnly);
+        let Err(e) = space.map(far, mapping, 0, 2, Protection::ReadOnly, &mut || None) else {
+            panic!("{far:#x} was mapped without tables");
         };
-        assert_eq!(e.kind, MapErrorKind::Mapped);
-        frames::free(e.frame);
+        assert_eq!(e.kind, MapErrorKind::NoFrames);
+        assert_eq!(space.translate(far), None);
+        assert!(space.unmap(far).is_none());
+        drop(e);
+        assert_eq!(Arc::strong_count(&object), 2, "the object and one mapping");
         assert_eq!(destroy(space), [phys]);
+        assert_eq!(Arc::strong_count(&object), 1);
+    }
+
+    #[test_case]
+    fn spaces_share_an_objects_frames() {
+        let before = frames::free_frames();
+        let (a, b) = (space(), space());
+        let object = Arc::new(object(1));
+        let page = 0x40_0000;
+        let phys = map_object(&a, page, &object, Protection::ReadWrite);
+        assert_eq!(
+            map_object(&b, page + 4096, &object, Protection::ReadOnly),
+            phys
+        );
+        assert_eq!(b.translate(page + 4096).map(|t| t.phys), Some(phys));
+        drop(object);
+        assert_eq!(destroy(a), [phys]);
+        assert_eq!(b.translate(page + 4096).map(|t| t.phys), Some(phys));
+        assert_eq!(destroy(b), [phys]);
+        assert_eq!(frames::free_frames(), before);
     }
 
     #[test_case]
     fn each_space_sees_its_own_lower_half() {
         let page = 0x40_0000;
-        let (mut a, mut b) = (space(), space());
-        let phys_a = map_user(&mut a, page, Protection::ReadWrite);
-        let phys_b = map_user(&mut b, page, Protection::ReadWrite);
+        let (a, b) = (space(), space());
+        let phys_a = map_user(&a, page, Protection::ReadWrite);
+        let phys_b = map_user(&b, page, Protection::ReadWrite);
         let Ok(statics) = u64::try_from(ptr::from_ref(&PROBE).addr()) else {
             panic!("a static's address doesn't fit a u64");
         };
@@ -410,17 +523,15 @@ mod tests {
     #[test_case]
     fn destroying_the_active_space_gives_back_every_frame() {
         let before = frames::free_frames();
-        let mut space = space();
+        let space = space();
         let pages = [0x1_0000, 0x40_0000_0000, space.user_space().end - 4096];
-        let mut phys: Vec<u64> = pages
+        let phys: Vec<u64> = pages
             .iter()
-            .map(|&page| map_user(&mut space, page, Protection::ReadWrite))
+            .map(|&page| map_user(&space, page, Protection::ReadWrite))
             .collect();
         space.activate();
-        let mut mapped = destroy(space);
+        let mapped = destroy(space);
         assert_eq!(translate_active(pages[0]), None, "still in the space");
-        phys.sort_unstable();
-        mapped.sort_unstable();
         assert_eq!(mapped, phys);
         assert_eq!(frames::free_frames(), before);
     }
@@ -449,19 +560,16 @@ mod tests {
     fn probe_user(
         probe: Probe,
         protection: Protection,
-        fill: fn(&Frame),
+        fill: fn(&mut Frame),
         expected: fn(Trap) -> bool,
     ) {
         let Some(target) = Arch::probe_target(probe) else {
             panic!("{probe:?} has no target");
         };
-        let mut space = space();
-        let frame = frame();
-        fill(&frame);
-        let phys = frame.start();
-        if let Err(e) = space.map(target, frame, protection, &mut frames::alloc) {
-            panic!("mapping {target:#x} failed: {:?}", e.kind);
-        }
+        let space = space();
+        let mut object = object(1);
+        fill(&mut object.frames_mut()[0]);
+        let phys = map_object(&space, target, &Arc::new(object), protection);
         space.activate();
         // Mapped for user code, so only SMEP or SMAP can make it fault.
         assert_eq!(

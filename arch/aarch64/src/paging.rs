@@ -7,14 +7,16 @@
 
 use core::arch::asm;
 use core::marker::PhantomData;
-use core::ops::Range;
+use core::ops::{Deref, Range};
 use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use aarch64_cpu::asm::barrier::{self, ISH, ISHST};
 use aarch64_cpu::registers::{ID_AA64MMFR1_EL1, MAIR_EL1, Readable, TCR_EL1, TTBR0_EL1, TTBR1_EL1};
+use spin::Mutex;
 use thisos_frames::Frame;
 use thisos_hal::{MapError, MapErrorKind, Protection, Translation};
+use thisos_regions::Regions;
 
 use crate::heap::{self, Heap};
 use crate::ptr_at;
@@ -206,7 +208,7 @@ impl PageTables {
                 let _ = frame.into_start();
                 Ok(())
             }
-            Err(kind) => Err(MapError { kind, frame }),
+            Err(kind) => Err(MapError { kind, given: frame }),
         }
     }
 
@@ -215,8 +217,9 @@ impl PageTables {
     ///
     /// # Safety
     ///
-    /// `phys` must be a frame the caller hands to these tables, or device
-    /// registers.
+    /// `phys` must be a frame the caller hands to these tables, a frame
+    /// that stays allocated while the page maps it and that the kernel
+    /// holds no reference into, or device registers.
     unsafe fn map_address(
         &self,
         page: u64,
@@ -270,14 +273,28 @@ impl PageTables {
     /// other memory through the page once it is gone, and `flush` must drop
     /// every TLB entry for the page.
     unsafe fn unmap_page(&self, page: u64, flush: impl FnOnce(u64)) -> Option<Frame> {
+        // SAFETY: As for this call.
+        let phys = unsafe { self.clear_leaf(page, flush) }?;
+        // SAFETY: map_page stored into_start of the frame there, and the
+        // entry, now clear, was its only holder.
+        Some(unsafe { Frame::reclaim(phys) })
+    }
+
+    /// Unmaps `page` and returns the address it mapped, or `None` if it
+    /// isn't mapped as a 4 KiB page. Then drops it from the TLB with
+    /// `flush`.
+    ///
+    /// # Safety
+    ///
+    /// Nothing may reach other memory through the page once it is gone,
+    /// and `flush` must drop every TLB entry for the page.
+    unsafe fn clear_leaf(&self, page: u64, flush: impl FnOnce(u64)) -> Option<u64> {
         let leaf = self.leaf(page)?;
         // SAFETY: The caller guarantees nothing reaches other memory through
         // the page once it is gone.
         let value = unsafe { leaf.clear() };
         flush(page);
-        // SAFETY: map_page stored into_start of the frame there, and the
-        // entry, now clear, was its only holder.
-        Some(unsafe { Frame::reclaim(value & ADDRESS) })
+        Some(value & ADDRESS)
     }
 
     /// Where `addr` is mapped in these tables, which map the half of the
@@ -304,37 +321,29 @@ impl PageTables {
         None
     }
 
-    /// Calls `mapped` with the frame of each leaf under the level `level`
-    /// table at `table`, and `free` with each table below it.
+    /// Calls `free` with each table below the level `level` table at
+    /// `table`. The frames that level 3 entries map are left alone: they
+    /// are a user space's, whose mappings' objects hold them.
     ///
     /// # Safety
     ///
     /// Nothing may use the tables or the pages they map any more, and every
-    /// frame in them must have come from `map_page` or `new_table`.
-    unsafe fn release(
-        &self,
-        table: u64,
-        level: u8,
-        mapped: &mut dyn FnMut(Frame),
-        free: &mut dyn FnMut(Frame),
-    ) {
+    /// table in them must have come from `new_table`.
+    unsafe fn release(&self, table: u64, level: u8, free: &mut dyn FnMut(Frame)) {
+        if level == 3 {
+            return;
+        }
         for index in 0..512 {
             let value = self.entry(table, index).load();
             if value & VALID == 0 {
                 continue;
             }
             let frame = value & ADDRESS;
-            if level == 3 {
-                // SAFETY: map_page stored into_start of the frame there,
-                // and the caller guarantees nothing uses it any more.
-                mapped(unsafe { Frame::reclaim(frame) });
-            } else {
-                // SAFETY: As for this call.
-                unsafe { self.release(frame, level + 1, mapped, free) };
-                // SAFETY: new_table took the frame with into_start, and
-                // nothing uses the table any more.
-                free(unsafe { Frame::reclaim(frame) });
-            }
+            // SAFETY: As for this call.
+            unsafe { self.release(frame, level + 1, free) };
+            // SAFETY: new_table took the frame with into_start, and nothing
+            // uses the table any more.
+            free(unsafe { Frame::reclaim(frame) });
         }
     }
 }
@@ -720,7 +729,7 @@ fn space_start(index: u64) -> u64 {
 }
 
 impl thisos_hal::PageTables for KernelPageTables {
-    type AddressSpace = UserSpace;
+    type AddressSpace<O: Deref<Target = [Frame]> + Send + Sync> = UserSpace<O>;
 
     fn kernel_space(&self) -> Range<u64> {
         let start = space_start(self.space);
@@ -734,7 +743,7 @@ impl thisos_hal::PageTables for KernelPageTables {
         writable: bool,
         alloc: &mut dyn FnMut() -> Option<Frame>,
     ) -> Result<(), MapError> {
-        let fail = |kind, frame| Err(MapError { kind, frame });
+        let fail = |kind, given| Err(MapError { kind, given });
         if page % 4096 != 0 {
             return fail(MapErrorKind::Unaligned, frame);
         }
@@ -797,7 +806,10 @@ impl thisos_hal::PageTables for KernelPageTables {
         (0..512).any(|i| ttbr0.entry(ttbr0.level_0, i).load() & VALID != 0)
     }
 
-    fn new_space(&self, alloc: &mut dyn FnMut() -> Option<Frame>) -> Option<UserSpace> {
+    fn new_space<O: Deref<Target = [Frame]> + Send + Sync>(
+        &self,
+        alloc: &mut dyn FnMut() -> Option<Frame>,
+    ) -> Option<UserSpace<O>> {
         let level_0 = self.tables.new_table(alloc()?);
         Some(UserSpace {
             tables: PageTables {
@@ -805,6 +817,7 @@ impl thisos_hal::PageTables for KernelPageTables {
                 level_0,
             },
             kernel: self.tables.level_0,
+            mappings: Mutex::new(Regions::new()),
         })
     }
 
@@ -815,66 +828,126 @@ impl thisos_hal::PageTables for KernelPageTables {
 
 /// A user address space: a level 0 table for TTBR0. Only
 /// `KernelPageTables::new_space` makes one.
-#[derive(Debug)]
-pub struct UserSpace {
+pub struct UserSpace<O> {
     tables: PageTables,
     /// The kernel's level 0 table, which maps the upper half for every
     /// space.
     kernel: u64,
+    /// Every page mapped in the lower half is in one of these, and maps a
+    /// frame of its object. Map and unmap change the tables only while
+    /// they hold this lock.
+    mappings: Mutex<Regions<O>>,
 }
 
-impl UserSpace {
+impl<O> UserSpace<O> {
     /// Whether the CPU translates the lower half through this space.
     fn active(&self) -> bool {
         ttbr0_walks() && TTBR0_EL1.get_baddr() == self.tables.level_0
     }
 }
 
-impl thisos_hal::AddressSpace for UserSpace {
+impl<O: Deref<Target = [Frame]> + Send + Sync> thisos_hal::AddressSpace<O> for UserSpace<O> {
     fn user_space(&self) -> Range<u64> {
         USER_SPACE
     }
 
     fn map(
-        &mut self,
-        page: u64,
-        frame: Frame,
+        &self,
+        addr: u64,
+        object: O,
+        first: usize,
+        pages: usize,
         protection: Protection,
         alloc: &mut dyn FnMut() -> Option<Frame>,
-    ) -> Result<(), MapError> {
-        let fail = |kind, frame| Err(MapError { kind, frame });
-        if page % 4096 != 0 {
-            return fail(MapErrorKind::Unaligned, frame);
+    ) -> Result<(), MapError<O>> {
+        let fail = |kind, given| Err(MapError { kind, given });
+        if addr % 4096 != 0 {
+            return fail(MapErrorKind::Unaligned, object);
         }
-        if !USER_SPACE.contains(&page) {
-            return fail(MapErrorKind::OutsideUserSpace, frame);
+        if !USER_SPACE.contains(&addr) {
+            return fail(MapErrorKind::OutsideUserSpace, object);
         }
+        let end = u64::try_from(pages)
+            .ok()
+            .and_then(|pages| pages.checked_mul(4096))
+            .and_then(|len| addr.checked_add(len))
+            .filter(|&end| end <= USER_SPACE.end);
+        let in_object = first
+            .checked_add(pages)
+            .is_some_and(|last| last <= object.len());
+        let Some(end) = end.filter(|_| pages > 0 && in_object) else {
+            return fail(MapErrorKind::OutOfRange, object);
+        };
         let flags = match protection {
             Protection::ReadOnly => READ_ONLY | UXN,
             Protection::ReadWrite => UXN,
             Protection::ReadExecute => READ_ONLY,
         };
-        self.tables
-            .map_page(page, frame, LEAF | EL0 | NOT_GLOBAL | PXN | flags, alloc)
+        let active = self.active();
+        let flush = |page| {
+            if active {
+                flush_user_page(page);
+            }
+        };
+        let mut mappings = self.mappings.lock();
+        let object = match mappings.insert(addr..end, object) {
+            Ok(object) => object,
+            Err(object) => return fail(MapErrorKind::Mapped, object),
+        };
+        let mut done = addr;
+        let mapped = object[first..first + pages].iter().try_for_each(|frame| {
+            // SAFETY: The mapping now holds the object, which holds the
+            // frame, until unmap or destroy clears the page. The kernel
+            // never reaches user pages but through user copies.
+            unsafe {
+                self.tables.map_address(
+                    done,
+                    frame.start(),
+                    LEAF | EL0 | NOT_GLOBAL | PXN | flags,
+                    alloc,
+                )
+            }?;
+            done += 4096;
+            Ok(())
+        });
+        let Err(kind) = mapped else {
+            return Ok(());
+        };
+        for page in (addr..done).step_by(4096) {
+            // SAFETY: This call mapped the page a moment ago, and returns no
+            // address in it, so nothing reaches it.
+            unsafe { self.tables.clear_leaf(page, flush) };
+        }
+        let Some((_, object)) = mappings.remove(addr) else {
+            panic!("the mapping at {addr:#x} went missing");
+        };
+        fail(kind, object)
     }
 
-    fn unmap(&mut self, page: u64) -> Option<Frame> {
-        if page % 4096 != 0 || !USER_SPACE.contains(&page) {
-            return None;
-        }
+    fn unmap(&self, addr: u64) -> Option<O> {
+        let mut mappings = self.mappings.lock();
+        let (range, object) = mappings.remove(addr)?;
         let active = self.active();
-        // SAFETY: Only map maps in the lower half, through map_page. The
-        // kernel never reaches user pages but through user copies, which
-        // fault on an unmapped page. Every space uses ASID 0, and switching
-        // spaces drops ASID 0's entries, so the TLB holds the page only
-        // while this space is active.
-        unsafe {
-            self.tables.unmap_page(page, |page| {
-                if active {
-                    flush_user_page(page);
-                }
-            })
+        for page in range.step_by(4096) {
+            // SAFETY: Only map maps in the lower half, every page of the
+            // mapping, and the frames stay the object's, so nothing but
+            // user code reaches memory through them, and the object goes
+            // back only after the pages are gone. Every space uses ASID 0,
+            // and switching spaces drops ASID 0's entries, so the TLB holds
+            // the page only while this space is active.
+            let cleared = unsafe {
+                self.tables.clear_leaf(page, |page| {
+                    if active {
+                        flush_user_page(page);
+                    }
+                })
+            };
+            assert!(
+                cleared.is_some(),
+                "mapped page {page:#x} wasn't in the tables"
+            );
         }
+        Some(object)
     }
 
     fn translate(&self, addr: u64) -> Option<Translation> {
@@ -893,8 +966,8 @@ impl thisos_hal::AddressSpace for UserSpace {
     }
 
     fn activate(&self) {
-        // SAFETY: Only map maps in the space, through map_page, with frames
-        // the space holds from then on.
+        // SAFETY: Only map maps in the space, with frames its mappings'
+        // objects hold until the pages are gone.
         unsafe { write_ttbr0(self.tables.level_0) };
         // Without it the TCR write could take effect first, and walks
         // would start from the TTBR0 a destroyed space left.
@@ -904,16 +977,20 @@ impl thisos_hal::AddressSpace for UserSpace {
         flush_user();
     }
 
-    fn destroy(self, mapped: &mut dyn FnMut(Frame), free: &mut dyn FnMut(Frame)) {
+    fn destroy(self, unmapped: &mut dyn FnMut(O), free: &mut dyn FnMut(Frame)) {
         if self.active() {
             empty_lower_half();
         }
         // SAFETY: self is gone after this, TTBR0's walks don't use its
-        // tables, and every frame in them came from map_page or new_table.
-        unsafe { self.tables.release(self.tables.level_0, 0, mapped, free) };
+        // tables, and every table in them came from new_table.
+        unsafe { self.tables.release(self.tables.level_0, 0, free) };
         // SAFETY: new_space took the level 0 frame with into_start, and
         // nothing uses the table any more.
         free(unsafe { Frame::reclaim(self.tables.level_0) });
+        // No table maps the objects' frames any more.
+        for (_, object) in self.mappings.into_inner().take_all() {
+            unmapped(object);
+        }
     }
 }
 
@@ -937,12 +1014,13 @@ pub fn translate_active(phys_offset: u64, addr: u64) -> Option<Translation> {
 
 /// Writes `ret` at the start of `frame`, and makes instruction fetches see
 /// it.
-pub fn write_return(phys_offset: u64, frame: &Frame) {
+pub fn write_return(phys_offset: u64, frame: &mut Frame) {
     // A physical address, reached through the physical-memory mapping.
     let word = ptr_at::<u32>(phys_offset + frame.start());
-    // SAFETY: The caller holds the frame, and page tables hold every frame
-    // they map, so nothing maps it but the physical-memory mapping, and no
-    // Rust reference to its memory exists.
+    // SAFETY: The caller holds the frame mutably. Kernel page tables hold
+    // the frames they map, and a user space holds an object that shares
+    // the frames it maps, so neither maps this one: nothing maps it but the
+    // physical-memory mapping, and no Rust reference to its memory exists.
     unsafe { word.write_volatile(0xd65f_03c0) };
     // SAFETY: Cleaning the data cache line to the point of unification and
     // invalidating the instruction cache change no memory, only which copy

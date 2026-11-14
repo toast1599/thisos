@@ -219,7 +219,7 @@ impl Platform for Aarch64 {
         not_ported("Platform::copy_from_user")
     }
 
-    fn write_return(frame: &Frame) {
+    fn write_return(frame: &mut Frame) {
         paging::write_return(boot::phys_offset(), frame);
     }
 
@@ -227,7 +227,7 @@ impl Platform for Aarch64 {
         not_ported("Platform::raise_spurious");
     }
 
-    fn write_user_program(_: &Frame, _: UserProgram) {
+    fn write_user_program(_: &mut Frame, _: UserProgram) {
         not_ported("Platform::write_user_program")
     }
 

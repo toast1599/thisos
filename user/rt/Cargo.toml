@@ -11,6 +11,8 @@ doctest = false
 bench = false
 
 [dependencies]
+spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex", "lock_api"] }
+talc = "5.1"
 thisos-abi.workspace = true
 
 [lints]

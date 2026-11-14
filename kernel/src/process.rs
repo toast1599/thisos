@@ -12,6 +12,7 @@ use thisos_hal::{Cpu, Trap};
 use thisos_handles::Table;
 
 use crate::Arch;
+use crate::memory::MemoryObject;
 
 /// A kernel object, as a handle names it.
 #[derive(Clone)]
@@ -23,6 +24,7 @@ pub enum Object {
         )]
         Arc<Process>,
     ),
+    Memory(Arc<MemoryObject>),
 }
 
 /// How a process ended.
@@ -56,6 +58,18 @@ impl Process {
     pub fn insert_self(self: &Arc<Self>, rights: Rights) -> Result<u32, Error> {
         let object = Object::Process(Arc::clone(self));
         self.handles.lock().insert(object, rights)
+    }
+
+    /// Puts `object` in the table with `rights`, and returns its handle.
+    pub fn insert(&self, object: Object, rights: Rights) -> Result<u32, Error> {
+        self.handles.lock().insert(object, rights)
+    }
+
+    /// The object `handle` names, and the handle's rights.
+    pub fn get(&self, handle: u32) -> Result<(Object, Rights), Error> {
+        let handles = self.handles.lock();
+        let (object, rights) = handles.get(handle)?;
+        Ok((object.clone(), rights))
     }
 
     pub fn close(&self, handle: u32) -> Result<(), Error> {

@@ -38,6 +38,32 @@ pub enum Syscall {
     /// [`Error::BadHandle`] or [`Error::BadRights`], and then changes
     /// nothing.
     Restrict,
+    /// Makes a memory object of as many zeroed bytes as its first
+    /// argument, a multiple of 4096. Its value is a handle to it with
+    /// [`Rights::ALL`]. Fails with [`Error::OutOfRange`] for a size that
+    /// is 0 or not a multiple, with [`Error::NoMemory`], or with
+    /// [`Error::NoHandles`].
+    MemoryCreate,
+    /// Maps the memory object of the handle in its first argument into the
+    /// calling process: as many bytes as its third argument, from the
+    /// object's byte offset in its second, at the address in its fourth,
+    /// with the [`Rights`] in its fifth: [`Rights::READ`], with
+    /// [`Rights::WRITE`] or [`Rights::EXECUTE`] or neither. The handle
+    /// must have those rights. The length and offset are multiples of
+    /// 4096, and so is the address. The mapping holds the object until it
+    /// is unmapped, closing the handle or not. No object is mapped writable
+    /// and executable at once. Fails with [`Error::BadHandle`],
+    /// [`Error::WrongType`], [`Error::BadRights`],
+    /// [`Error::AccessDenied`], with [`Error::BadAddress`] for an offset or
+    /// address not a multiple of 4096 or a range outside user space, with
+    /// [`Error::OutOfRange`] for a length that is 0 or not a multiple, or a
+    /// range past the object's end, with [`Error::AddressInUse`],
+    /// [`Error::Conflict`] or [`Error::NoMemory`], and then maps nothing.
+    Map,
+    /// Unmaps the mapping that starts at the address in its first
+    /// argument, all of it. Fails with [`Error::BadAddress`] if no mapping
+    /// starts there.
+    Unmap,
 }
 
 impl Syscall {
@@ -49,6 +75,9 @@ impl Syscall {
             Syscall::Close => 2,
             Syscall::Duplicate => 3,
             Syscall::Restrict => 4,
+            Syscall::MemoryCreate => 5,
+            Syscall::Map => 6,
+            Syscall::Unmap => 7,
         }
     }
 }
@@ -63,6 +92,9 @@ impl TryFrom<u64> for Syscall {
             2 => Ok(Syscall::Close),
             3 => Ok(Syscall::Duplicate),
             4 => Ok(Syscall::Restrict),
+            5 => Ok(Syscall::MemoryCreate),
+            6 => Ok(Syscall::Map),
+            7 => Ok(Syscall::Unmap),
             _ => Err(Error::UnknownSyscall),
         }
     }
@@ -90,6 +122,18 @@ pub enum Error {
     BadRights,
     /// A handle lacks a right the syscall needs.
     AccessDenied,
+    /// No free memory is left for the request.
+    NoMemory,
+    /// An address range overlaps a mapping.
+    AddressInUse,
+    /// A size or length is 0 or not a multiple of 4096, or a range runs
+    /// past the end of its object.
+    OutOfRange,
+    /// The object's other mappings forbid this one: no object is mapped
+    /// writable and executable at once.
+    Conflict,
+    /// A handle names an object of another type than the syscall takes.
+    WrongType,
 }
 
 impl Error {
@@ -104,6 +148,11 @@ impl Error {
             Error::NoHandles => 6,
             Error::BadRights => 7,
             Error::AccessDenied => 8,
+            Error::NoMemory => 9,
+            Error::AddressInUse => 10,
+            Error::OutOfRange => 11,
+            Error::Conflict => 12,
+            Error::WrongType => 13,
         }
     }
 
@@ -118,6 +167,11 @@ impl Error {
             6 => Some(Error::NoHandles),
             7 => Some(Error::BadRights),
             8 => Some(Error::AccessDenied),
+            9 => Some(Error::NoMemory),
+            10 => Some(Error::AddressInUse),
+            11 => Some(Error::OutOfRange),
+            12 => Some(Error::Conflict),
+            13 => Some(Error::WrongType),
             _ => None,
         }
     }

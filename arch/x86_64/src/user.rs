@@ -58,7 +58,7 @@ pub fn enter_user(ip: u64, sp: u64, arg: u64) -> ! {
 }
 
 /// The bytes each program has, from the start of its slot.
-const SLOT: usize = 256;
+const SLOT: usize = 512;
 
 // One program per slot, in UserProgram's order, as write_program numbers
 // them. The .org fails to assemble if a program outgrows its slot, and
@@ -219,29 +219,133 @@ global_asm!(
     "syscall",
     "ud2",
     ".org thisos_user_programs + 8 * {slot}, 0xcc",
+    // Memory. RBX holds the new object's handle and R12 the process
+    // handle in RDI; EDI is set to each check's number before it's tested,
+    // as in Handles.
+    "mov r12, rdi",
+    "mov edi, 4097",
+    "mov eax, {memory_create}",
+    "syscall",
+    "mov edi, 1",
+    "cmp rax, {out_of_range}",
+    "jne 2f",
+    "mov edi, 8192",
+    "mov eax, {memory_create}",
+    "syscall",
+    "mov edi, 2",
+    "test rax, rax",
+    "jnz 2f",
+    "mov rbx, rdx",
+    "mov rdi, rbx",
+    "mov esi, 0",
+    "mov edx, 8192",
+    "mov r10d, {a}",
+    "mov r8d, {read_write}",
+    "mov eax, {map}",
+    "syscall",
+    "mov edi, 3",
+    "test rax, rax",
+    "jnz 2f",
+    "mov byte ptr [{a} + 4096], 42",
+    "mov rdi, rbx",
+    "mov esi, 4096",
+    "mov edx, 4096",
+    "mov r10d, {c}",
+    "mov r8d, {read}",
+    "mov eax, {map}",
+    "syscall",
+    "mov edi, 4",
+    "test rax, rax",
+    "jnz 2f",
+    "cmp byte ptr [{c}], 42",
+    "jne 2f",
+    "mov rdi, rbx",
+    "mov esi, 0",
+    "mov edx, 4096",
+    "mov r10d, {a} + 4096",
+    "mov r8d, {read}",
+    "mov eax, {map}",
+    "syscall",
+    "mov edi, 5",
+    "cmp rax, {address_in_use}",
+    "jne 2f",
+    "mov rdi, rbx",
+    "mov esi, 0",
+    "mov edx, 4096",
+    "mov r10d, {b}",
+    "mov r8d, {read_execute}",
+    "mov eax, {map}",
+    "syscall",
+    "mov edi, 6",
+    "cmp rax, {conflict}",
+    "jne 2f",
+    "mov rdi, r12",
+    "mov esi, 0",
+    "mov edx, 4096",
+    "mov r10d, {b}",
+    "mov r8d, {read}",
+    "mov eax, {map}",
+    "syscall",
+    "mov edi, 7",
+    "cmp rax, {wrong_type}",
+    "jne 2f",
+    "mov edi, {a}",
+    "mov eax, {unmap}",
+    "syscall",
+    "mov edi, 8",
+    "test rax, rax",
+    "jnz 2f",
+    "mov rdi, rbx",
+    "mov esi, 0",
+    "mov edx, 4096",
+    "mov r10d, {b}",
+    "mov r8d, {read_execute}",
+    "mov eax, {map}",
+    "syscall",
+    "mov edi, 9",
+    "test rax, rax",
+    "jnz 2f",
+    "xor edi, edi",
+    "2:",
+    "mov eax, {exit}",
+    "syscall",
+    "ud2",
+    ".org thisos_user_programs + 9 * {slot}, 0xcc",
     ".popsection",
     exit = const Syscall::Exit.number(),
     write = const Syscall::Write.number(),
     close = const Syscall::Close.number(),
     duplicate = const Syscall::Duplicate.number(),
     restrict = const Syscall::Restrict.number(),
+    memory_create = const Syscall::MemoryCreate.number(),
+    map = const Syscall::Map.number(),
+    unmap = const Syscall::Unmap.number(),
     read = const Rights::READ.bits(),
     write_right = const Rights::WRITE.bits(),
     read_duplicate = const Rights::READ.union(Rights::DUPLICATE).bits(),
     bad_handle = const Error::BadHandle.code(),
     bad_rights = const Error::BadRights.code(),
     access_denied = const Error::AccessDenied.code(),
+    out_of_range = const Error::OutOfRange.code(),
+    address_in_use = const Error::AddressInUse.code(),
+    conflict = const Error::Conflict.code(),
+    wrong_type = const Error::WrongType.code(),
+    read_write = const Rights::READ.union(Rights::WRITE).bits(),
+    read_execute = const Rights::READ.union(Rights::EXECUTE).bits(),
+    a = const 0x40_0000,
+    b = const 0x41_0000,
+    c = const 0x42_0000,
     slot = const SLOT,
     cycles = const 1 << 28,
 );
 
 unsafe extern "C" {
-    static thisos_user_programs: [u8; 8 * SLOT];
+    static thisos_user_programs: [u8; 9 * SLOT];
 }
 
 /// Writes `program` at the start of `frame`, through the physical-memory
 /// mapping at `phys_offset`.
-pub fn write_program(phys_offset: VirtAddr, frame: &Frame, program: UserProgram) {
+pub fn write_program(phys_offset: VirtAddr, frame: &mut Frame, program: UserProgram) {
     let slot = match program {
         UserProgram::Syscalls => 0,
         UserProgram::Read => 1,
@@ -251,6 +355,7 @@ pub fn write_program(phys_offset: VirtAddr, frame: &Frame, program: UserProgram)
         UserProgram::Write => 5,
         UserProgram::Debug => 6,
         UserProgram::Handles => 7,
+        UserProgram::Memory => 8,
     };
     let source = (&raw const thisos_user_programs)
         .cast::<u8>()
@@ -258,8 +363,9 @@ pub fn write_program(phys_offset: VirtAddr, frame: &Frame, program: UserProgram)
     // A physical address, reached through the physical-memory mapping.
     let target = (phys_offset + frame.start()).as_mut_ptr::<u8>();
     // SAFETY: source is one slot of thisos_user_programs, which nothing
-    // writes. The caller holds the frame, and page tables hold every frame
-    // they map, so nothing maps it but the physical-memory mapping, and no
-    // Rust reference to its memory exists. A slot is smaller than a frame.
+    // writes. The caller holds the frame mutably, so, as in
+    // paging::fill_frame, nothing maps it but the physical-memory mapping,
+    // and no Rust reference to its memory exists. A slot is smaller than a
+    // frame.
     unsafe { ptr::copy_nonoverlapping(source, target, SLOT) };
 }

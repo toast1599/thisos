@@ -1,0 +1,18 @@
+[package]
+name = "thisos-regions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+bench = false
+
+[dependencies]
+thisos-abi.workspace = true
+thisos-hal.workspace = true
+
+[lints]
+workspace = true

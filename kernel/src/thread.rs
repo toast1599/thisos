@@ -2,7 +2,7 @@
 //! CPU to the next ready thread, and the idle thread runs only when no
 //! thread is ready. The boot thread runs on the loader's stack; every other
 //! thread has a stack from `paging::map_stack`. A user thread is a kernel
-//! thread that owns an address space and belongs to a process, and has
+//! thread that shares an address space and belongs to a process, and has
 //! left for user code in it; every switch loads the next thread's space, or
 //! the kernel's tables.
 //!
@@ -49,8 +49,8 @@ struct Thread {
     /// What it runs, until it starts.
     run: Option<Box<dyn FnOnce() + Send>>,
     /// The address space it runs user code in, or `None` for a kernel
-    /// thread.
-    space: Option<paging::AddressSpace>,
+    /// thread. The last thread to drop it destroys it.
+    space: Option<Arc<paging::AddressSpace>>,
     /// The process it belongs to, or `None` for a kernel thread.
     process: Option<Arc<Process>>,
     /// The tick at which it stops being blocked, while it is.
@@ -66,7 +66,7 @@ impl Thread {
         context: Option<Context>,
         stack: Option<Range<u64>>,
         run: Option<Box<dyn FnOnce() + Send>>,
-        space: Option<paging::AddressSpace>,
+        space: Option<Arc<paging::AddressSpace>>,
         process: Option<Arc<Process>>,
     ) -> Self {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
@@ -182,16 +182,22 @@ pub fn spawn(run: impl FnOnce() + Send + 'static) {
 
 /// Starts a thread of `process` that runs user code at `ip` in `space`,
 /// with stack pointer `sp` and `arg` as its first argument. It ends through
-/// `user::trap`, and its space is destroyed along with it. Panics if
-/// kernel space or the frames run out.
-pub fn spawn_user(process: Arc<Process>, space: paging::AddressSpace, ip: u64, sp: u64, arg: u64) {
+/// `user::trap`, and its space is destroyed along with the last thread that
+/// holds it. Panics if kernel space or the frames run out.
+pub fn spawn_user(
+    process: Arc<Process>,
+    space: Arc<paging::AddressSpace>,
+    ip: u64,
+    sp: u64,
+    arg: u64,
+) {
     spawn_in(Some(space), Some(process), move || {
         Arch::enter_user(ip, sp, arg)
     });
 }
 
 fn spawn_in(
-    space: Option<paging::AddressSpace>,
+    space: Option<Arc<paging::AddressSpace>>,
     process: Option<Arc<Process>>,
     run: impl FnOnce() + Send + 'static,
 ) {
@@ -264,6 +270,11 @@ pub fn id() -> u64 {
 /// The running thread's process, or `None` for a kernel thread.
 pub fn process() -> Option<Arc<Process>> {
     with(|scheduler| running(scheduler).process.clone())
+}
+
+/// The running thread's address space, or `None` for a kernel thread.
+pub fn space() -> Option<Arc<paging::AddressSpace>> {
+    with(|scheduler| running(scheduler).space.clone())
 }
 
 fn running(scheduler: &mut Scheduler) -> &mut Thread {
@@ -488,9 +499,10 @@ fn arrived(from: Context) {
 }
 
 /// Frees every thread that exited: unmaps its stack and frees its frames,
-/// closes its process's handles, destroys its address space, then drops
-/// it. A process has one thread, so that thread's end is the process's. Interrupts are on, since the
-/// page tables', the frames' and the heap's locks may be held by a thread a
+/// closes its process's handles, destroys its address space if no other
+/// thread holds it, then drops it. A process has one thread, so that
+/// thread's end is the process's. Interrupts are on, since the page
+/// tables', the frames' and the heap's locks may be held by a thread a
 /// tick preempted.
 fn reap() {
     while let Some(mut thread) = with(|scheduler| {
@@ -511,8 +523,8 @@ fn reap() {
         if let Some(process) = thread.process.take() {
             process.close_handles();
         }
-        if let Some(space) = thread.space.take() {
-            space.destroy(&mut frames::free, &mut frames::free);
+        if let Some(space) = thread.space.take().and_then(Arc::into_inner) {
+            space.destroy(&mut drop, &mut frames::free);
         }
     }
 }
