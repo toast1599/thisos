@@ -4,6 +4,7 @@
 //! cycle that a handle to itself makes.
 
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use core::mem;
 
 use spin::Mutex;
@@ -12,6 +13,7 @@ use thisos_hal::{Cpu, Trap};
 use thisos_handles::Table;
 
 use crate::Arch;
+use crate::channel::Endpoint;
 use crate::memory::MemoryObject;
 
 /// A kernel object, as a handle names it.
@@ -25,6 +27,7 @@ pub enum Object {
         Arc<Process>,
     ),
     Memory(Arc<MemoryObject>),
+    Channel(Arc<Endpoint>),
 }
 
 /// How a process ended.
@@ -76,6 +79,54 @@ impl Process {
         // The object drops after the lock is released.
         let _closed = self.handles.lock().remove(handle)?;
         Ok(())
+    }
+
+    /// Closes every handle in `handles` and returns their objects and
+    /// rights, if each names an object `check` accepts; see
+    /// [`Table::remove_all`]. `check` runs under the table's lock.
+    pub fn take(
+        &self,
+        handles: &[u32],
+        check: impl FnMut(&Object, Rights) -> Result<(), Error>,
+    ) -> Result<Vec<(Object, Rights)>, Error> {
+        self.handles.lock().remove_all(handles, check)
+    }
+
+    /// Puts every one of `objects` in the table, then calls `then` with
+    /// their handles, in order, all under the table's lock. If there isn't
+    /// room for them all, or `then` fails, it fails with that error and
+    /// hands `objects` back, leaving the table as it was.
+    pub fn insert_all<R>(
+        &self,
+        objects: Vec<(Object, Rights)>,
+        then: impl FnOnce(&[u32]) -> Result<R, Error>,
+    ) -> Result<R, (Error, Vec<(Object, Rights)>)> {
+        let mut table = self.handles.lock();
+        if table.room() < objects.len() {
+            return Err((Error::NoHandles, objects));
+        }
+        // Both reserved first, so that undoing allocates nothing.
+        let (mut handles, mut undone) = (Vec::new(), Vec::new());
+        if handles.try_reserve_exact(objects.len()).is_err()
+            || undone.try_reserve_exact(objects.len()).is_err()
+        {
+            return Err((Error::NoMemory, objects));
+        }
+        for (object, rights) in objects {
+            let Ok(handle) = table.insert(object, rights) else {
+                unreachable!("the table had room");
+            };
+            handles.push(handle);
+        }
+        then(&handles).map_err(|e| {
+            for &handle in &handles {
+                let Ok(entry) = table.remove(handle) else {
+                    unreachable!("{handle:#x} was made under the same lock");
+                };
+                undone.push(entry);
+            }
+            (e, undone)
+        })
     }
 
     pub fn duplicate(&self, handle: u32, rights: Rights) -> Result<u32, Error> {

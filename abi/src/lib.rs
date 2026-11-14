@@ -9,6 +9,15 @@ use core::ops::BitOr;
 /// The most bytes one [`Syscall::Write`] takes.
 pub const MAX_WRITE: usize = 1024;
 
+/// The most bytes a channel message holds.
+pub const MAX_MESSAGE_BYTES: usize = 64 << 10;
+
+/// The most handles a channel message holds.
+pub const MAX_MESSAGE_HANDLES: usize = 64;
+
+/// The most messages a channel queues toward one endpoint.
+pub const MAX_QUEUED: usize = 64;
+
 /// A syscall, by its number in RAX.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Syscall {
@@ -64,6 +73,40 @@ pub enum Syscall {
     /// argument, all of it. Fails with [`Error::BadAddress`] if no mapping
     /// starts there.
     Unmap,
+    /// Makes a channel: two endpoints, each with [`Rights::READ`],
+    /// [`Rights::WRITE`] and [`Rights::TRANSFER`], where what is sent on
+    /// one is received on the other. Its value holds one endpoint's handle
+    /// in its low 32 bits and the other's in its high 32. Fails with
+    /// [`Error::NoMemory`] or [`Error::NoHandles`].
+    ChannelCreate,
+    /// Sends a message on the channel endpoint of the handle in its first
+    /// argument, which needs [`Rights::WRITE`]: as many bytes as its third
+    /// argument, at most [`MAX_MESSAGE_BYTES`], from the address in its
+    /// second, and as many handles as its fifth, at most
+    /// [`MAX_MESSAGE_HANDLES`], from the array of `u32`s at its fourth.
+    /// Each handle needs [`Rights::TRANSFER`] and moves out of the
+    /// caller's table, keeping its rights. Fails with
+    /// [`Error::BadHandle`], also for a handle named twice,
+    /// [`Error::WrongType`], [`Error::AccessDenied`], [`Error::TooLong`],
+    /// [`Error::BadAddress`], with [`Error::Cycle`] if the message carries
+    /// either endpoint of the channel, with [`Error::PeerClosed`], with
+    /// [`Error::ShouldWait`] if [`MAX_QUEUED`] messages wait at the other
+    /// endpoint already, or with [`Error::NoMemory`], and then sends
+    /// nothing and moves no handle.
+    Send,
+    /// Receives the oldest message waiting at the channel endpoint of the
+    /// handle in its first argument, which needs [`Rights::READ`]: writes
+    /// its bytes at the address in its second argument, which has room for
+    /// as many as its third, and its handles, as `u32`s, at the address in
+    /// its fourth, which has room for as many as its fifth. Its value holds
+    /// the number of bytes in its low 32 bits and the number of handles in
+    /// its high 32. Fails with [`Error::BadHandle`], [`Error::WrongType`],
+    /// [`Error::AccessDenied`], with [`Error::ShouldWait`] if no message
+    /// waits, with [`Error::PeerClosed`] if none waits and the other
+    /// endpoint is closed, with [`Error::BufferTooSmall`],
+    /// [`Error::BadAddress`] or [`Error::NoHandles`], and then leaves the
+    /// message waiting.
+    Receive,
 }
 
 impl Syscall {
@@ -78,6 +121,9 @@ impl Syscall {
             Syscall::MemoryCreate => 5,
             Syscall::Map => 6,
             Syscall::Unmap => 7,
+            Syscall::ChannelCreate => 8,
+            Syscall::Send => 9,
+            Syscall::Receive => 10,
         }
     }
 }
@@ -95,6 +141,9 @@ impl TryFrom<u64> for Syscall {
             5 => Ok(Syscall::MemoryCreate),
             6 => Ok(Syscall::Map),
             7 => Ok(Syscall::Unmap),
+            8 => Ok(Syscall::ChannelCreate),
+            9 => Ok(Syscall::Send),
+            10 => Ok(Syscall::Receive),
             _ => Err(Error::UnknownSyscall),
         }
     }
@@ -110,7 +159,8 @@ pub enum Error {
     BadAddress,
     /// Text isn't UTF-8.
     NotUtf8,
-    /// A buffer is longer than the syscall takes.
+    /// A buffer is longer than the syscall takes, or a message has more
+    /// handles than one holds.
     TooLong,
     /// A handle doesn't name an object in the calling process's table:
     /// it was never made, or was closed.
@@ -134,6 +184,14 @@ pub enum Error {
     Conflict,
     /// A handle names an object of another type than the syscall takes.
     WrongType,
+    /// The call would have to wait: a channel is full, or has no message.
+    ShouldWait,
+    /// The other endpoint of a channel is closed.
+    PeerClosed,
+    /// A buffer is too small for what the syscall would write there.
+    BufferTooSmall,
+    /// A message carries an endpoint of the channel it is sent on.
+    Cycle,
 }
 
 impl Error {
@@ -153,6 +211,10 @@ impl Error {
             Error::OutOfRange => 11,
             Error::Conflict => 12,
             Error::WrongType => 13,
+            Error::ShouldWait => 14,
+            Error::PeerClosed => 15,
+            Error::BufferTooSmall => 16,
+            Error::Cycle => 17,
         }
     }
 
@@ -172,6 +234,10 @@ impl Error {
             11 => Some(Error::OutOfRange),
             12 => Some(Error::Conflict),
             13 => Some(Error::WrongType),
+            14 => Some(Error::ShouldWait),
+            15 => Some(Error::PeerClosed),
+            16 => Some(Error::BufferTooSmall),
+            17 => Some(Error::Cycle),
             _ => None,
         }
     }

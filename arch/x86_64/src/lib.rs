@@ -182,6 +182,10 @@ impl Platform for X86_64 {
         paging::copy_from_user(phys_offset(), addr, buf)
     }
 
+    fn copy_to_user(addr: u64, buf: &[u8]) -> bool {
+        paging::copy_to_user(phys_offset(), addr, buf)
+    }
+
     fn write_return(frame: &mut Frame) {
         paging::write_return(phys_offset(), frame);
     }

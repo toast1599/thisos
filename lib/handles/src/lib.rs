@@ -23,6 +23,8 @@ pub struct Table<T> {
     slots: Vec<Slot<T>>,
     /// The first free slot, whose entry names the next.
     free: Option<u16>,
+    /// How many slots are free.
+    free_len: usize,
 }
 
 struct Slot<T> {
@@ -42,6 +44,7 @@ impl<T> Table<T> {
         Self {
             slots: Vec::new(),
             free: None,
+            free_len: 0,
         }
     }
 
@@ -54,6 +57,7 @@ impl<T> Table<T> {
                 panic!("free slot {index} isn't free");
             };
             self.free = next;
+            self.free_len -= 1;
             slot.entry = Entry::Used { object, rights };
             index
         } else {
@@ -87,6 +91,7 @@ impl<T> Table<T> {
         let entry = if let Some(generation) = slot.generation.checked_add(1) {
             slot.generation = generation;
             let next = self.free.replace(index);
+            self.free_len += 1;
             Entry::Free { next }
         } else {
             Entry::Retired
@@ -95,6 +100,41 @@ impl<T> Table<T> {
             Entry::Used { object, rights } => Ok((object, rights)),
             Entry::Free { .. } | Entry::Retired => unreachable!("get found it used"),
         }
+    }
+
+    /// How many more handles [`insert`](Self::insert) can make before the
+    /// table is full.
+    pub fn room(&self) -> usize {
+        MAX_SLOTS - self.slots.len() + self.free_len
+    }
+
+    /// Closes every handle in `handles` and returns their objects and
+    /// rights, in order, if each names an object that `check` accepts.
+    /// Otherwise fails with the first error, [`Error::BadHandle`] for a
+    /// handle named twice, and closes none.
+    pub fn remove_all(
+        &mut self,
+        handles: &[u32],
+        mut check: impl FnMut(&T, Rights) -> Result<(), Error>,
+    ) -> Result<Vec<(T, Rights)>, Error> {
+        for (i, &handle) in handles.iter().enumerate() {
+            if handles[..i].contains(&handle) {
+                return Err(Error::BadHandle);
+            }
+            let (object, rights) = self.get(handle)?;
+            check(object, rights)?;
+        }
+        let mut removed = Vec::new();
+        removed
+            .try_reserve_exact(handles.len())
+            .map_err(|_| Error::NoMemory)?;
+        for &handle in handles {
+            let Ok(entry) = self.remove(handle) else {
+                unreachable!("{handle:#x} was checked");
+            };
+            removed.push(entry);
+        }
+        Ok(removed)
     }
 
     /// Leaves `handle` with only `rights`. Fails with
@@ -153,6 +193,8 @@ fn split(handle: u32) -> (u16, u16) {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     const ALL_BUT_DUPLICATE: Rights = Rights::READ.union(Rights::WRITE).union(Rights::TRANSFER);
@@ -215,7 +257,9 @@ mod tests {
             .map(|_| table.insert((), Rights::NONE).unwrap())
             .collect();
         assert_eq!(table.insert((), Rights::NONE), Err(Error::NoHandles));
+        assert_eq!(table.room(), 0);
         table.remove(handles[7]).unwrap();
+        assert_eq!(table.room(), 1);
         assert_eq!(table.insert((), Rights::NONE).map(|h| h & 0xffff), Ok(7));
     }
 
@@ -231,6 +275,36 @@ mod tests {
         assert_eq!(table.duplicate(c, Rights::WRITE), Err(Error::BadRights));
         let d = table.duplicate(c, Rights::NONE).unwrap();
         assert_eq!(table.get(d), Ok((&'c', Rights::NONE)));
+    }
+
+    #[test]
+    fn remove_all_closes_all_or_none() {
+        let mut table = Table::new();
+        let a = table.insert('a', Rights::ALL).unwrap();
+        let b = table.insert('b', Rights::READ).unwrap();
+        let none = |_: &char, _| Ok(());
+        let transfer = |_: &char, rights: Rights| {
+            if rights.contains(Rights::TRANSFER) {
+                Ok(())
+            } else {
+                Err(Error::AccessDenied)
+            }
+        };
+        assert_eq!(
+            table.remove_all(&[a, b], transfer),
+            Err(Error::AccessDenied)
+        );
+        assert_eq!(table.remove_all(&[a, a], none), Err(Error::BadHandle));
+        assert_eq!(table.remove_all(&[a, 0], none), Err(Error::BadHandle));
+        assert_eq!(table.get(a), Ok((&'a', Rights::ALL)));
+        let room = table.room();
+        assert_eq!(
+            table.remove_all(&[b, a], none),
+            Ok(vec![('b', Rights::READ), ('a', Rights::ALL)])
+        );
+        assert_eq!(table.get(a), Err(Error::BadHandle));
+        assert_eq!(table.room(), room + 2);
+        assert_eq!(table.remove_all(&[], none), Ok(vec![]));
     }
 
     #[test]

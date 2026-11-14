@@ -2,15 +2,18 @@
 //! raises, its syscalls and the faults that end it.
 
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use core::{fmt, str};
 
 use spin::Mutex;
-use thisos_abi::{Error, MAX_WRITE, Rights, Syscall};
+use thisos_abi::{Error, MAX_MESSAGE_BYTES, MAX_MESSAGE_HANDLES, MAX_WRITE, Rights, Syscall};
+use thisos_channels::Message;
 use thisos_elf::Elf;
 use thisos_hal::{
     AddressSpace as _, Cpu, MapErrorKind, Platform, Protection, Trap, TrapFrame as _,
 };
 
+use crate::channel::{self, ENDPOINT_RIGHTS, Endpoint};
 use crate::memory::{Mapping, MemoryObject};
 use crate::process::{End, Object, Process};
 use crate::{Arch, frames, paging, thread};
@@ -242,6 +245,9 @@ fn syscall(number: u64, args: [u64; 6]) -> Result<u64, Error> {
         Syscall::MemoryCreate => memory_create(args[0]),
         Syscall::Map => map(args[0], args[1], args[2], args[3], args[4]),
         Syscall::Unmap => space().unmap(args[0]).map(|_| 0).ok_or(Error::BadAddress),
+        Syscall::ChannelCreate => channel_create(),
+        Syscall::Send => send(args[0], args[1], args[2], args[3], args[4]),
+        Syscall::Receive => receive(args[0], args[1], args[2], args[3], args[4]),
     }
 }
 
@@ -345,6 +351,115 @@ fn map(handle_arg: u64, offset: u64, len: u64, addr: u64, rights_arg: u64) -> Re
     Ok(0)
 }
 
+/// Makes a channel, as the channel-create syscall does, and returns its
+/// endpoints' handles, the first in the low 32 bits.
+fn channel_create() -> Result<u64, Error> {
+    let (first, second) = channel::create();
+    let endpoints = alloc::vec![
+        (Object::Channel(Arc::new(first)), ENDPOINT_RIGHTS),
+        (Object::Channel(Arc::new(second)), ENDPOINT_RIGHTS),
+    ];
+    // On failure the endpoints drop here, after the table's lock is gone.
+    process()
+        .insert_all(endpoints, |handles| {
+            Ok(u64::from(handles[1]) << 32 | u64::from(handles[0]))
+        })
+        .map_err(|(e, _)| e)
+}
+
+/// The channel endpoint `handle_arg` names, if its handle has `rights`.
+fn endpoint(handle_arg: u64, rights: Rights) -> Result<Arc<Endpoint>, Error> {
+    let (object, held) = process().get(handle(handle_arg)?)?;
+    let Object::Channel(endpoint) = object else {
+        return Err(Error::WrongType);
+    };
+    if !held.contains(rights) {
+        return Err(Error::AccessDenied);
+    }
+    Ok(endpoint)
+}
+
+/// A count from user code, if it is at most `max`.
+fn count(arg: u64, max: usize) -> Result<usize, Error> {
+    usize::try_from(arg)
+        .ok()
+        .filter(|&n| n <= max)
+        .ok_or(Error::TooLong)
+}
+
+/// Sends the `len` bytes at `buf` and the `count` handles at `handles`
+/// over the endpoint `handle_arg` names, as the send syscall does.
+fn send(handle_arg: u64, buf: u64, len: u64, handles: u64, count_arg: u64) -> Result<u64, Error> {
+    let endpoint = endpoint(handle_arg, Rights::WRITE)?;
+    let len = count(len, MAX_MESSAGE_BYTES)?;
+    let count = count(count_arg, MAX_MESSAGE_HANDLES)?;
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(len).map_err(|_| Error::NoMemory)?;
+    bytes.resize(len, 0);
+    if !copy_from_user(buf, &mut bytes) {
+        return Err(Error::BadAddress);
+    }
+    let mut raw = [0; 4 * MAX_MESSAGE_HANDLES];
+    let raw = &mut raw[..4 * count];
+    if !copy_from_user(handles, raw) {
+        return Err(Error::BadAddress);
+    }
+    let mut numbers = [0; MAX_MESSAGE_HANDLES];
+    for (number, chunk) in numbers.iter_mut().zip(raw.as_chunks::<4>().0) {
+        *number = u32::from_le_bytes(*chunk);
+    }
+    let process = process();
+    endpoint.send(|| {
+        let handles = process.take(&numbers[..count], |object, rights| {
+            if !rights.contains(Rights::TRANSFER) {
+                return Err(Error::AccessDenied);
+            }
+            match object {
+                Object::Channel(carried) if carried.same_channel(&endpoint) => Err(Error::Cycle),
+                _ => Ok(()),
+            }
+        })?;
+        Ok(Message { bytes, handles })
+    })?;
+    Ok(0)
+}
+
+/// Receives the oldest message at the endpoint `handle_arg` names into the
+/// `len` bytes at `buf` and the `count` handles at `handles`, as the
+/// receive syscall does, and returns the byte count in the low 32 bits and
+/// the handle count in the high 32.
+fn receive(handle_arg: u64, buf: u64, len: u64, handles: u64, count: u64) -> Result<u64, Error> {
+    let endpoint = endpoint(handle_arg, Rights::READ)?;
+    let len = usize::try_from(len).unwrap_or(usize::MAX);
+    let count = usize::try_from(count).unwrap_or(usize::MAX);
+    let process = process();
+    endpoint.receive(|message| {
+        if message.bytes.len() > len || message.handles.len() > count {
+            return Err((Error::BufferTooSmall, message));
+        }
+        let Message {
+            bytes,
+            handles: objects,
+        } = message;
+        // Both are at most the limits, so they fit 32 bits.
+        let value = u64::try_from(objects.len()).unwrap_or(0) << 32
+            | u64::try_from(bytes.len()).unwrap_or(0);
+        process
+            .insert_all(objects, |numbers| {
+                let mut raw = [0; 4 * MAX_MESSAGE_HANDLES];
+                for (chunk, number) in raw.as_chunks_mut::<4>().0.iter_mut().zip(numbers) {
+                    chunk.copy_from_slice(&number.to_le_bytes());
+                }
+                if copy_to_user(buf, &bytes) && copy_to_user(handles, &raw[..4 * numbers.len()]) {
+                    Ok(value)
+                } else {
+                    Err(Error::BadAddress)
+                }
+            })
+            .map_err(|(e, handles)| (e, Message { bytes, handles }))
+    })
+}
+
 /// Logs the `len` bytes of text at `buf` in user space as the write
 /// syscall does, one record per line, and returns `len`. Copies the text
 /// into a buffer on the stack first.
@@ -376,6 +491,28 @@ fn write(buf: u64, len: u64) -> Result<u64, Error> {
         }
     });
     Ok(len)
+}
+
+/// Copies `bytes` to `addr` in user space, as [`Platform::copy_to_user`]
+/// does, one page at a time with interrupts off, as [`copy_from_user`]
+/// does.
+fn copy_to_user(addr: u64, bytes: &[u8]) -> bool {
+    let mut addr = addr;
+    let mut rest = bytes;
+    while !rest.is_empty() {
+        let in_page = 4096 - addr % 4096;
+        let len = rest
+            .len()
+            .min(usize::try_from(in_page).unwrap_or(usize::MAX));
+        let (chunk, after) = rest.split_at(len);
+        if !Arch::without_interrupts(|| Arch::copy_to_user(addr, chunk)) {
+            return false;
+        }
+        // The page was user space, so the next one's address fits.
+        addr += in_page;
+        rest = after;
+    }
+    true
 }
 
 /// Copies the bytes at `addr` in user space into `bytes`, as
@@ -547,7 +684,10 @@ mod tests {
             run_in(program, before, &process, u64::from(handle)),
             End::Exited(0)
         );
-        assert_eq!(take_written(), "hello from init, holding handle 0x10000");
+        assert_eq!(
+            take_written(),
+            "hello from init, holding handle 0x10000; sent itself \"ping\" and 1 handle over a channel"
+        );
     }
 
     #[test_case]
@@ -564,6 +704,17 @@ mod tests {
     #[test_case]
     fn memory_syscalls_create_map_share_and_unmap() {
         let (end, _) = run(UserProgram::Memory, |_, process| {
+            let Ok(handle) = process.insert_self(INIT_RIGHTS) else {
+                panic!("a new handle table is full");
+            };
+            u64::from(handle)
+        });
+        assert_eq!(end, End::Exited(0));
+    }
+
+    #[test_case]
+    fn channel_syscalls_move_bytes_and_handles() {
+        let (end, _) = run(UserProgram::Channel, |_, process| {
             let Ok(handle) = process.insert_self(INIT_RIGHTS) else {
                 panic!("a new handle table is full");
             };

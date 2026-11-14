@@ -219,6 +219,10 @@ impl Platform for Aarch64 {
         not_ported("Platform::copy_from_user")
     }
 
+    fn copy_to_user(_: u64, _: &[u8]) -> bool {
+        not_ported("Platform::copy_to_user")
+    }
+
     fn write_return(frame: &mut Frame) {
         paging::write_return(boot::phys_offset(), frame);
     }

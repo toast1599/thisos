@@ -12,6 +12,7 @@
 
 extern crate alloc;
 
+mod channel;
 mod frames;
 mod heap;
 mod logger;

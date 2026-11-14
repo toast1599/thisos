@@ -888,6 +888,38 @@ pub fn copy_from_user(phys_offset: VirtAddr, addr: u64, buf: &mut [u8]) -> bool 
     true
 }
 
+/// Copies `buf` to `addr` in the tables CR3 points at; see
+/// `Platform::copy_to_user`.
+pub fn copy_to_user(phys_offset: VirtAddr, addr: u64, buf: &[u8]) -> bool {
+    assert!(
+        !cpu::interrupts_enabled(),
+        "copying to user memory with interrupts on"
+    );
+    let (mut at, mut rest) = (addr, buf);
+    while !rest.is_empty() {
+        // Under a page, so it fits a usize.
+        let room = usize::try_from(4096 - at % 4096).unwrap_or(4096);
+        let (chunk, tail) = rest.split_at(room.min(rest.len()));
+        rest = tail;
+        let Some(translation) = translate_active(phys_offset, at) else {
+            return false;
+        };
+        if !translation.user || !translation.writable || !USER_SPACE.contains(&at) {
+            return false;
+        }
+        // A physical address, reached through the physical-memory mapping.
+        let target = (phys_offset + translation.phys).as_mut_ptr::<u8>();
+        // SAFETY: As in copy_from_user: chunk's bytes land inside the page
+        // at, whose frame is RAM that the physical-memory mapping maps,
+        // nothing else runs meanwhile, and the kernel holds no reference
+        // into user pages, so none aliases the bytes written.
+        unsafe { ptr::copy_nonoverlapping(chunk.as_ptr(), target, chunk.len()) };
+        // USER_SPACE ends below the last page, so this doesn't overflow.
+        at += u64::try_from(chunk.len()).unwrap_or(4096);
+    }
+    true
+}
+
 /// Writes `ret` at the start of `frame`.
 pub fn write_return(phys_offset: VirtAddr, frame: &mut Frame) {
     // A physical address, reached through the physical-memory mapping.
@@ -1281,6 +1313,43 @@ mod tests {
         // Kernel pages aren't user pages.
         let start = kernel.kernel_space().start;
         assert!(!copy_from_user(phys_offset, start, &mut byte));
+
+        assert!(copy_to_user(phys_offset, 0x40_0ffe, b"wxyz"));
+        assert!(copy_from_user(phys_offset, 0x40_0ffd, &mut buf));
+        assert_eq!(&buf, b"awxyzf");
+        assert!(!copy_to_user(phys_offset, start, b"k"));
+    }
+
+    #[test]
+    fn user_copies_need_writable_pages_to_write() {
+        let mut memory = Memory::new();
+        let kernel = kernel(&mut memory);
+        let space = new_space(&kernel, &mut memory);
+        let phys_offset = memory.phys_offset;
+        let mut frames: Vec<Frame> = (0..2).map(|_| memory.frame()).collect();
+        fill_frame(phys_offset, &mut frames[0], 0, b"");
+        fill_frame(phys_offset, &mut frames[1], 0, b"ro");
+        let object = Object(Arc::new(frames));
+        let mapped = space.map(
+            0x40_0000,
+            object.clone(),
+            0,
+            1,
+            Protection::ReadWrite,
+            &mut || memory.frames.alloc(),
+        );
+        assert!(mapped.is_ok());
+        let mapped = space.map(0x40_1000, object, 1, 1, Protection::ReadOnly, &mut || {
+            memory.frames.alloc()
+        });
+        assert!(mapped.is_ok());
+        space.activate();
+
+        // The first page takes its byte before the second refuses one.
+        assert!(!copy_to_user(phys_offset, 0x40_0fff, b"ab"));
+        let mut buf = [0; 3];
+        assert!(copy_from_user(phys_offset, 0x40_0fff, &mut buf));
+        assert_eq!(&buf, b"aro");
     }
 
     #[test]

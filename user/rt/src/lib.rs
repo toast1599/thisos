@@ -4,25 +4,31 @@
 
 #![no_std]
 
+extern crate alloc;
+
 // Host tests run on std's allocator.
 #[cfg(not(test))]
 mod heap;
 
+use alloc::vec::Vec;
 use core::arch::asm;
 #[cfg(not(test))]
 use core::arch::naked_asm;
 use core::fmt::{self, Write as _};
+use core::marker::PhantomData;
+use core::mem;
 #[cfg(not(test))]
 use core::panic::PanicInfo;
 #[cfg(not(test))]
 use core::sync::atomic::{AtomicBool, Ordering};
 
 pub use thisos_abi::{Error, Rights};
+pub use thisos_abi::{MAX_MESSAGE_BYTES, MAX_MESSAGE_HANDLES};
 use thisos_abi::{MAX_WRITE, Syscall};
 
-/// Makes `main`, a `fn(Handle) -> u64`, the program's main function. It
-/// gets the handle its creator started it with, and the process ends
-/// through [`exit`] with the status it returns.
+/// Makes `main`, a `fn(Handle<Process>) -> u64`, the program's main
+/// function. It gets the handle its creator started it with, and the
+/// process ends through [`exit`] with the status it returns.
 #[macro_export]
 macro_rules! entry {
     ($main:path) => {
@@ -31,7 +37,7 @@ macro_rules! entry {
         const _: () = {
             #[unsafe(export_name = "__thisos_main")]
             fn __thisos_main(arg: u64) -> u64 {
-                let main: fn($crate::Handle) -> u64 = $main;
+                let main: fn($crate::Handle<$crate::Process>) -> u64 = $main;
                 main($crate::Handle::__from_start(arg))
             }
         };
@@ -110,53 +116,222 @@ fn write_bytes(bytes: &[u8]) -> u64 {
     error
 }
 
-/// A handle to a kernel object, which closes when it drops.
+/// A process, as [`Handle<Process>`] names it.
 #[derive(Debug)]
-pub struct Handle(u32);
+pub enum Process {}
 
-impl Handle {
-    /// The handle the kernel started the program with, in `arg`. Only
-    /// [`entry!`] calls this.
-    #[doc(hidden)]
-    pub fn __from_start(arg: u64) -> Handle {
-        let Ok(handle) = u32::try_from(arg) else {
-            panic!("the program started with {arg:#x}, which isn't a handle");
+/// A memory object, as [`Handle<Memory>`] names it.
+#[derive(Debug)]
+pub enum Memory {}
+
+/// A channel endpoint, as [`Handle<Channel>`] names it.
+#[derive(Debug)]
+pub enum Channel {}
+
+/// An object of a type the program hasn't claimed, as a message's handles
+/// arrive; [`Handle::cast`] claims one.
+#[derive(Debug)]
+pub enum Unknown {}
+
+/// A handle to a kernel object of type `T`, which closes when it drops.
+/// The type is the program's claim: the kernel checks the object's type on
+/// each syscall, and fails with [`Error::WrongType`] if the claim is
+/// wrong.
+#[derive(Debug)]
+pub struct Handle<T> {
+    /// 0, which is never a handle, once the value has moved elsewhere and
+    /// the handle no longer closes it.
+    value: u32,
+    kind: PhantomData<T>,
+}
+
+impl<T> Handle<T> {
+    fn new(value: u32) -> Self {
+        Handle {
+            value,
+            kind: PhantomData,
+        }
+    }
+
+    /// The handle with `value`, which the kernel returned.
+    fn from_kernel(value: u64) -> Self {
+        let Ok(value) = u32::try_from(value) else {
+            panic!("the kernel returned {value:#x}, which isn't a handle");
         };
-        Handle(handle)
+        Handle::new(value)
     }
 
     /// The handle's value in the process's table.
     pub fn value(&self) -> u32 {
-        self.0
+        self.value
+    }
+
+    /// The value, which this no longer closes.
+    fn into_value(mut self) -> u32 {
+        mem::take(&mut self.value)
     }
 
     /// Makes another handle to the same object with `rights`, which must
     /// be ones this handle has. Needs [`Rights::DUPLICATE`].
-    pub fn duplicate(&self, rights: Rights) -> Result<Handle, Error> {
+    pub fn duplicate(&self, rights: Rights) -> Result<Handle<T>, Error> {
         let value = syscall(
             Syscall::Duplicate,
-            [u64::from(self.0), u64::from(rights.bits()), 0, 0, 0],
+            [u64::from(self.value), u64::from(rights.bits()), 0, 0, 0],
         )?;
-        let Ok(handle) = u32::try_from(value) else {
-            panic!("the kernel returned {value:#x}, which isn't a handle");
-        };
-        Ok(Handle(handle))
+        Ok(Handle::from_kernel(value))
     }
 
     /// Leaves this handle with only `rights`, which must be ones it has.
     pub fn restrict(&mut self, rights: Rights) -> Result<(), Error> {
         syscall(
             Syscall::Restrict,
-            [u64::from(self.0), u64::from(rights.bits()), 0, 0, 0],
+            [u64::from(self.value), u64::from(rights.bits()), 0, 0, 0],
         )
         .map(|_| ())
     }
+
+    /// The same handle, with its type forgotten, as a message carries it.
+    pub fn into_unknown(self) -> Handle<Unknown> {
+        Handle::new(self.into_value())
+    }
 }
 
-impl Drop for Handle {
+impl Handle<Process> {
+    /// The handle the kernel started the program with, in `arg`. Only
+    /// [`entry!`] calls this.
+    #[doc(hidden)]
+    pub fn __from_start(arg: u64) -> Handle<Process> {
+        let Ok(value) = u32::try_from(arg) else {
+            panic!("the program started with {arg:#x}, which isn't a handle");
+        };
+        Handle::new(value)
+    }
+}
+
+impl Handle<Unknown> {
+    /// The same handle, claimed to name an object of type `T`.
+    pub fn cast<T>(self) -> Handle<T> {
+        Handle::new(self.into_value())
+    }
+}
+
+impl Handle<Memory> {
+    /// Makes a memory object of `size` zeroed bytes, a multiple of 4096,
+    /// with every right.
+    pub fn create(size: usize) -> Result<Handle<Memory>, Error> {
+        let Ok(size) = u64::try_from(size) else {
+            unreachable!("x86_64 addresses are 64 bits");
+        };
+        let value = syscall(Syscall::MemoryCreate, [size, 0, 0, 0, 0])?;
+        Ok(Handle::from_kernel(value))
+    }
+}
+
+impl Handle<Channel> {
+    /// Makes a channel, and returns its two endpoints.
+    pub fn create() -> Result<(Handle<Channel>, Handle<Channel>), Error> {
+        let value = syscall(Syscall::ChannelCreate, [0; 5])?;
+        Ok((
+            Handle::from_kernel(value & 0xffff_ffff),
+            Handle::from_kernel(value >> 32),
+        ))
+    }
+
+    /// Sends `bytes` and `handles` to the other endpoint. Needs
+    /// [`Rights::WRITE`] here and [`Rights::TRANSFER`] on each handle. On
+    /// failure nothing is sent, and the handles come back.
+    pub fn send(
+        &self,
+        bytes: &[u8],
+        handles: Vec<Handle<Unknown>>,
+    ) -> Result<(), (Error, Vec<Handle<Unknown>>)> {
+        if handles.len() > MAX_MESSAGE_HANDLES {
+            return Err((Error::TooLong, handles));
+        }
+        let mut values = [0; MAX_MESSAGE_HANDLES];
+        for (value, handle) in values.iter_mut().zip(&handles) {
+            *value = handle.value;
+        }
+        let code;
+        // SAFETY: By ADR 0007, send reads the bytes.len() bytes at
+        // bytes.as_ptr() and the handles.len() u32s at values, which those
+        // hold, writes no user memory, and changes only RAX, RDX, RCX and
+        // R11.
+        unsafe {
+            asm!(
+                "syscall",
+                inlateout("rax") Syscall::Send.number() => code,
+                in("rdi") u64::from(self.value),
+                in("rsi") bytes.as_ptr(),
+                inlateout("rdx") bytes.len() => _,
+                in("r10") values.as_ptr(),
+                in("r8") handles.len(),
+                lateout("rcx") _,
+                lateout("r11") _,
+                options(nostack, readonly),
+            );
+        }
+        match result(code, 0) {
+            Ok(_) => {
+                // They moved to the receiver, so they no longer close here.
+                for handle in handles {
+                    handle.into_value();
+                }
+                Ok(())
+            }
+            Err(e) => Err((e, handles)),
+        }
+    }
+
+    /// Receives the oldest message waiting here: its bytes replace what
+    /// `bytes` held, and its handles are returned. Needs [`Rights::READ`].
+    /// `bytes` grows to [`MAX_MESSAGE_BYTES`] for the call, so a loop that
+    /// reuses it allocates once, and is left empty on failure.
+    pub fn receive(&self, bytes: &mut Vec<u8>) -> Result<Vec<Handle<Unknown>>, Error> {
+        bytes.resize(MAX_MESSAGE_BYTES, 0);
+        let mut values = [0u32; MAX_MESSAGE_HANDLES];
+        let code;
+        let value;
+        // SAFETY: By ADR 0007, receive writes at most bytes.len() bytes at
+        // bytes.as_mut_ptr() and at most MAX_MESSAGE_HANDLES u32s at
+        // values, which those hold, reads no user memory, and changes only
+        // RAX, RDX, RCX and R11.
+        unsafe {
+            asm!(
+                "syscall",
+                inlateout("rax") Syscall::Receive.number() => code,
+                in("rdi") u64::from(self.value),
+                in("rsi") bytes.as_mut_ptr(),
+                inlateout("rdx") bytes.len() => value,
+                in("r10") values.as_mut_ptr(),
+                in("r8") MAX_MESSAGE_HANDLES,
+                lateout("rcx") _,
+                lateout("r11") _,
+                options(nostack),
+            );
+        }
+        let value = result(code, value).inspect_err(|_| bytes.clear())?;
+        let (Ok(len), Ok(count)) = (
+            usize::try_from(value & 0xffff_ffff),
+            usize::try_from(value >> 32),
+        ) else {
+            unreachable!("x86_64 addresses are 64 bits");
+        };
+        bytes.truncate(len);
+        let Some(values) = values.get(..count) else {
+            panic!("the kernel received {count} handles, more than a message holds");
+        };
+        Ok(values.iter().map(|&value| Handle::new(value)).collect())
+    }
+}
+
+impl<T> Drop for Handle<T> {
     fn drop(&mut self) {
-        if let Err(e) = syscall(Syscall::Close, [u64::from(self.0), 0, 0, 0, 0]) {
-            panic!("closing handle {:#x} failed: {e:?}", self.0);
+        if self.value == 0 {
+            return;
+        }
+        if let Err(e) = syscall(Syscall::Close, [u64::from(self.value), 0, 0, 0, 0]) {
+            panic!("closing handle {:#x} failed: {e:?}", self.value);
         }
     }
 }

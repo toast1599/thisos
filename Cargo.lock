@@ -127,6 +127,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "thisos-channels"
+version = "0.0.0"
+dependencies = [
+ "thisos-abi",
+]
+
+[[package]]
 name = "thisos-console"
 version = "0.0.0"
 dependencies = [
@@ -175,6 +182,7 @@ dependencies = [
  "thisos-abi",
  "thisos-arch-aarch64",
  "thisos-arch-x86_64",
+ "thisos-channels",
  "thisos-console",
  "thisos-elf",
  "thisos-frames",

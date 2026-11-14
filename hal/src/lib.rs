@@ -237,6 +237,19 @@ pub enum UserProgram {
     /// `0x41_0000` then succeeds. It exits with status 0, or with the number
     /// of the first check that failed.
     Memory,
+    /// Gets a process handle with transfer rights as its argument, then
+    /// checks, in order: (1) creating a channel succeeds; (2) receiving
+    /// at its second endpoint fails with `ShouldWait`; (3) sending `abc`
+    /// and the process handle on the first succeeds; (4) closing the
+    /// process handle then fails with `BadHandle`, since it moved; (5)
+    /// sending the second endpoint on the first fails with `Cycle`; (6)
+    /// receiving into a 2-byte buffer fails with `BufferTooSmall`; (7)
+    /// receiving then gets 3 bytes, `abc`, and one handle; (8) closing
+    /// that handle succeeds; (9) closing the first endpoint succeeds; (10)
+    /// sending on the second fails with `PeerClosed`; (11) so does
+    /// receiving there. It exits with status 0, or with the number of the
+    /// first check that failed.
+    Channel,
 }
 
 /// The most frames [`Cpu::backtrace`] reports.
@@ -378,6 +391,13 @@ pub trait Platform {
     /// Panics if interrupts are on: with them off, nothing can unmap the
     /// pages or write them during the copy.
     fn copy_from_user(addr: u64, buf: &mut [u8]) -> bool;
+
+    /// Copies `buf` to `addr` in the address space the CPU uses, as
+    /// [`copy_from_user`](Self::copy_from_user) copies the other way.
+    /// Returns `false`, with the pages before the first bad one written,
+    /// unless every byte is in a page mapped writable for user code.
+    /// Panics if interrupts are on.
+    fn copy_to_user(addr: u64, buf: &[u8]) -> bool;
 
     /// Writes code that only returns at the start of `frame`, for
     /// [`Probe::ExecuteUser`] to find if the CPU ever let it run. For
