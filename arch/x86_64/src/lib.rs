@@ -5,6 +5,10 @@
 #![no_std]
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 
+// paging's tests run on the host, under Miri too.
+#[cfg(test)]
+extern crate std;
+
 mod apic;
 mod backtrace;
 mod catch;

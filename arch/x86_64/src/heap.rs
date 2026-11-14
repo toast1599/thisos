@@ -13,7 +13,8 @@ use x86_64::VirtAddr;
 /// The heap's share of the reserved level 4 entry, from its start.
 pub const SIZE: u64 = 64 << 30;
 
-#[global_allocator]
+// The host's allocator serves the tests, which never grow this heap.
+#[cfg_attr(not(test), global_allocator)]
 static TALC: TalcLock<spin::Mutex<()>, Manual> = TalcLock::new(Manual);
 
 /// The heap's pages, mapped from `base` up to `mapped` bytes above it, and

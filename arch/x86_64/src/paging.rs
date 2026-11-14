@@ -12,10 +12,9 @@ use spin::Mutex;
 use thisos_frames::Frame;
 use thisos_hal::{MapError, MapErrorKind, Protection, Translation};
 use thisos_regions::Regions;
-use x86_64::instructions::{interrupts, tlb};
-use x86_64::registers::control::{Cr3, Cr4, Cr4Flags};
-use x86_64::structures::paging::{Page, PageTableIndex, PhysFrame, Size4KiB};
-use x86_64::{PhysAddr, VirtAddr};
+use x86_64::VirtAddr;
+use x86_64::registers::control::{Cr4, Cr4Flags};
+use x86_64::structures::paging::{Page, PageTableIndex, Size4KiB};
 
 use crate::heap::{self, Heap};
 use crate::once::Once;
@@ -41,6 +40,46 @@ const UPPER_HALF: u16 = 256;
 /// boundary, where SYSCALL would save a RIP that SYSRET can't return to.
 pub const USER_SPACE: Range<u64> = 0x1_0000..0x0000_7fff_ffff_f000;
 
+/// The CPU state the tables depend on: CR3, the TLB and the interrupt flag.
+/// Host tests swap in `tests::cpu`, a fake per test thread.
+#[cfg(not(test))]
+mod cpu {
+    use x86_64::instructions::{interrupts, tlb};
+    use x86_64::registers::control::Cr3;
+    use x86_64::structures::paging::PhysFrame;
+    use x86_64::{PhysAddr, VirtAddr};
+
+    /// The level 4 table CR3 points at.
+    pub fn level_4() -> u64 {
+        Cr3::read().0.start_address().as_u64()
+    }
+
+    /// Points CR3 at the level 4 table at `level_4`, keeping its flags.
+    ///
+    /// # Safety
+    ///
+    /// The table must map everything the kernel reaches as the tables CR3
+    /// points at now do.
+    pub unsafe fn set_level_4(level_4: u64) {
+        let (_, flags) = Cr3::read();
+        let frame = PhysFrame::containing_address(PhysAddr::new(level_4));
+        // SAFETY: The caller guarantees the kernel's memory stays where it
+        // is.
+        unsafe { Cr3::write(frame, flags) };
+    }
+
+    pub fn flush(page: VirtAddr) {
+        tlb::flush(page);
+    }
+
+    pub fn interrupts_enabled() -> bool {
+        interrupts::are_enabled()
+    }
+}
+
+#[cfg(test)]
+use tests::cpu;
+
 /// The page tables at `level_4`. Whoever makes one is the only user of the
 /// tables while it lives, apart from the CPU's page walker, and apart from
 /// the upper half of a user space's, which only the kernel's changes. A
@@ -60,10 +99,9 @@ impl PageTables {
     /// `phys_offset` must be where the loader mapped all physical memory,
     /// and nothing else may use the page tables while this exists.
     pub unsafe fn current(phys_offset: VirtAddr) -> Self {
-        let (frame, _) = Cr3::read();
         Self {
             phys_offset,
-            level_4: frame.start_address().as_u64(),
+            level_4: cpu::level_4(),
         }
     }
 
@@ -97,7 +135,7 @@ impl PageTables {
 
     /// Whether CR3 points at these tables.
     fn active(&self) -> bool {
-        Cr3::read().0.start_address().as_u64() == self.level_4
+        cpu::level_4() == self.level_4
     }
 
     /// Makes `frame` an empty table, and returns its physical address. The
@@ -219,7 +257,7 @@ impl PageTables {
         // yet, and the caller keeps the frame for it.
         unsafe { leaf.store(phys | PRESENT | flags) };
         if flush {
-            tlb::flush(page.start_address());
+            cpu::flush(page.start_address());
         }
         Ok(())
     }
@@ -254,7 +292,7 @@ impl PageTables {
         // the page once it is gone.
         let value = unsafe { leaf.clear() };
         if flush {
-            tlb::flush(page.start_address());
+            cpu::flush(page.start_address());
         }
         Some(value & ADDRESS)
     }
@@ -398,13 +436,11 @@ impl Entry<'_> {
 /// The table's upper half must map everything the kernel reaches as the
 /// tables CR3 points at now do.
 unsafe fn load(level_4: u64) {
-    let (current, flags) = Cr3::read();
-    let frame = PhysFrame::containing_address(PhysAddr::new(level_4));
-    if frame == current {
+    if cpu::level_4() == level_4 {
         return;
     }
     // SAFETY: The caller guarantees the kernel's memory stays where it is.
-    unsafe { Cr3::write(frame, flags) };
+    unsafe { cpu::set_level_4(level_4) };
 }
 
 /// The page tables the kernel built and runs on. Only `take` makes one,
@@ -791,10 +827,9 @@ impl<O: Deref<Target = [Frame]> + Send + Sync> thisos_hal::AddressSpace<O> for U
 pub fn translate_active(phys_offset: VirtAddr, addr: u64) -> Option<Translation> {
     // Only reads entries, one atomic load each, so it can share the tables
     // with their owner.
-    let (frame, _) = Cr3::read();
     PageTables {
         phys_offset,
-        level_4: frame.start_address().as_u64(),
+        level_4: cpu::level_4(),
     }
     .translate(addr)
 }
@@ -823,7 +858,7 @@ pub fn fill_frame(phys_offset: VirtAddr, frame: &mut Frame, offset: usize, bytes
 /// `Platform::copy_from_user`.
 pub fn copy_from_user(phys_offset: VirtAddr, addr: u64, buf: &mut [u8]) -> bool {
     assert!(
-        !interrupts::are_enabled(),
+        !cpu::interrupts_enabled(),
         "copying from user memory with interrupts on"
     );
     let (mut at, mut rest) = (addr, buf);
@@ -861,4 +896,518 @@ pub fn write_return(phys_offset: VirtAddr, frame: &mut Frame) {
     // nothing maps it but the physical-memory mapping, and no Rust
     // reference to its memory exists.
     unsafe { byte.write_volatile(0xc3) };
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::vec::Vec;
+    use std::{thread, vec};
+
+    use thisos_frames::{FLOOR, Frames};
+    use thisos_hal::{AddressSpace as _, PageTables as _};
+
+    use super::*;
+
+    /// The CPU as the tables see it, faked per test thread: CR3 starts at
+    /// 0, which no table is at, the TLB is a list of flushed pages, and
+    /// interrupts are always off.
+    pub mod cpu {
+        use core::cell::{Cell, RefCell};
+        use std::vec::Vec;
+
+        use x86_64::VirtAddr;
+
+        std::thread_local! {
+            static LEVEL_4: Cell<u64> = const { Cell::new(0) };
+            static FLUSHED: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+        }
+
+        pub fn level_4() -> u64 {
+            LEVEL_4.get()
+        }
+
+        /// # Safety
+        ///
+        /// None; it is unsafe as the real one is.
+        pub unsafe fn set_level_4(level_4: u64) {
+            LEVEL_4.set(level_4);
+        }
+
+        pub fn flush(page: VirtAddr) {
+            FLUSHED.with_borrow_mut(|flushed| flushed.push(page.as_u64()));
+        }
+
+        /// The pages flushed since the last call.
+        pub fn flushed() -> Vec<u64> {
+            FLUSHED.take()
+        }
+
+        pub fn interrupts_enabled() -> bool {
+            false
+        }
+    }
+
+    const ACCESSED: u64 = 1 << 5;
+    const DIRTY: u64 = 1 << 6;
+
+    /// Physical memory ends here; the frames from `FLOOR` up are free.
+    const END: u64 = 0x14_0000;
+    const PAGES: usize = 0x140;
+    const _: () = assert!(END == 4096 * 0x140);
+
+    #[derive(Clone)]
+    #[repr(C, align(4096))]
+    struct Phys([u8; 4096]);
+
+    /// A buffer standing in for physical memory from 0 to `END`, and the
+    /// frame allocator over it.
+    struct Memory {
+        frames: Frames<5>,
+        phys_offset: VirtAddr,
+        _buffer: Vec<Phys>,
+    }
+
+    impl Memory {
+        fn new() -> Self {
+            let mut buffer = vec![Phys([0; 4096]); PAGES];
+            // The tables reach the buffer only through this address, as the
+            // kernel reaches RAM through the physical-memory mapping, so the
+            // buffer's provenance has to be exposed.
+            let start = buffer.as_mut_ptr().expose_provenance();
+            let Ok(start) = u64::try_from(start) else {
+                panic!("a host address wider than 64 bits");
+            };
+            let mut frames = Frames::new();
+            assert_eq!(frames.add(FLOOR..END), 0);
+            Self {
+                frames,
+                phys_offset: VirtAddr::new(start),
+                _buffer: buffer,
+            }
+        }
+
+        fn frame(&mut self) -> Frame {
+            let Some(frame) = self.frames.alloc() else {
+                panic!("the test's physical memory is used up");
+            };
+            frame
+        }
+
+        fn object(&mut self, pages: usize) -> Object {
+            Object(Arc::new((0..pages).map(|_| self.frame()).collect()))
+        }
+
+        fn free_object(&mut self, object: Object) {
+            let Some(frames) = Arc::into_inner(object.0) else {
+                panic!("an object is still shared");
+            };
+            for frame in frames {
+                self.frames.free(frame);
+            }
+        }
+    }
+
+    /// A memory object as the kernel's `Mapping` is: frames that mappings
+    /// share.
+    #[derive(Clone)]
+    struct Object(Arc<Vec<Frame>>);
+
+    impl Deref for Object {
+        type Target = [Frame];
+
+        fn deref(&self) -> &[Frame] {
+            &self.0
+        }
+    }
+
+    /// Kernel page tables as `take` leaves them, without the loader's
+    /// upper half: the reserved level 4 entry and its level 3 table.
+    fn kernel(memory: &mut Memory) -> KernelPageTables {
+        let space = PageTableIndex::new(300);
+        let mut tables = PageTables {
+            phys_offset: memory.phys_offset,
+            level_4: 0,
+        };
+        tables.level_4 = tables.new_table(memory.frame());
+        let level_3 = tables.new_table(memory.frame());
+        // SAFETY: The tables aren't in use.
+        unsafe {
+            tables
+                .entry(tables.level_4, space)
+                .store(level_3 | PRESENT | WRITABLE);
+        }
+        KernelPageTables {
+            tables,
+            space,
+            // SAFETY: Nothing is mapped in the space entry, and the test
+            // never grows the heap.
+            heap: unsafe { Heap::new(space_start(space)) },
+        }
+    }
+
+    fn new_space(kernel: &KernelPageTables, memory: &mut Memory) -> UserSpace<Object> {
+        let Some(space) = kernel.new_space(&mut || memory.frames.alloc()) else {
+            panic!("no frame for a level 4 table");
+        };
+        space
+    }
+
+    /// Destroys `space`, frees every frame it held, and checks that the
+    /// frame count is back to `free`.
+    fn destroy(space: UserSpace<Object>, memory: &mut Memory, free: usize) {
+        let mut objects = Vec::new();
+        space.destroy(&mut |object| objects.push(object), &mut |frame| {
+            memory.frames.free(frame);
+        });
+        for object in objects {
+            memory.free_object(object);
+        }
+        assert_eq!(memory.frames.free_frames(), free);
+    }
+
+    fn page(addr: u64) -> Page {
+        Page::containing_address(VirtAddr::new(addr))
+    }
+
+    #[test]
+    fn user_mappings_translate_and_unmap() {
+        let mut memory = Memory::new();
+        let kernel = kernel(&mut memory);
+        let free = memory.frames.free_frames();
+        let space = new_space(&kernel, &mut memory);
+        let data = memory.object(3);
+        let code = memory.object(1);
+        let (data_1, code_0) = (data[1].start(), code[0].start());
+        let mut alloc = || memory.frames.alloc();
+        let rw = space.map(
+            0x40_0000,
+            data.clone(),
+            0,
+            3,
+            Protection::ReadWrite,
+            &mut alloc,
+        );
+        let rx = space.map(0x40_3000, code, 0, 1, Protection::ReadExecute, &mut alloc);
+        let ro = space.map(0x80_0000, data, 1, 2, Protection::ReadOnly, &mut alloc);
+        assert!(rw.is_ok() && rx.is_ok() && ro.is_ok());
+        let translation = |phys, writable, executable| {
+            Some(Translation {
+                phys,
+                writable,
+                executable,
+                user: true,
+            })
+        };
+        assert_eq!(
+            space.translate(0x40_1234),
+            translation(data_1 + 0x234, true, false)
+        );
+        assert_eq!(
+            space.translate(0x40_3008),
+            translation(code_0 + 8, false, true)
+        );
+        assert_eq!(
+            space.translate(0x80_0010),
+            translation(data_1 + 0x10, false, false)
+        );
+        assert_eq!(space.translate(0x40_4000), None);
+
+        let other = memory.object(1);
+        let Err(error) = space.map(0x40_2000, other, 0, 1, Protection::ReadOnly, &mut || {
+            memory.frames.alloc()
+        }) else {
+            panic!("an overlapping mapping was made");
+        };
+        assert_eq!(error.kind, MapErrorKind::Mapped);
+        memory.free_object(error.given);
+
+        let Some(data) = space.unmap(0x40_0000) else {
+            panic!("the mapping at 0x40_0000 is gone");
+        };
+        assert_eq!(space.translate(0x40_1234), None);
+        assert!(space.unmap(0x40_0000).is_none());
+        // The read-only mapping still shares the frames.
+        assert_eq!(
+            space.translate(0x80_0010),
+            translation(data_1 + 0x10, false, false)
+        );
+        drop(data);
+        assert!(
+            cpu::flushed().is_empty(),
+            "flushed an inactive space's pages"
+        );
+        destroy(space, &mut memory, free);
+    }
+
+    #[test]
+    fn failed_map_takes_its_pages_back() {
+        let mut memory = Memory::new();
+        let kernel = kernel(&mut memory);
+        let free = memory.frames.free_frames();
+        let space = new_space(&kernel, &mut memory);
+        let object = memory.object(3);
+        // The third page needs a second level 1 table, and the frames run
+        // out after the first one.
+        let mut budget = 3;
+        let mut alloc = || {
+            budget -= 1;
+            (budget >= 0).then(|| memory.frames.alloc()).flatten()
+        };
+        let Err(error) = space.map(0x1f_e000, object, 0, 3, Protection::ReadWrite, &mut alloc)
+        else {
+            panic!("mapped with too few frames");
+        };
+        assert_eq!(error.kind, MapErrorKind::NoFrames);
+        assert_eq!(space.translate(0x1f_e000), None);
+        assert_eq!(space.translate(0x1f_f000), None);
+        // The range is free again.
+        let mapped = space.map(
+            0x1f_e000,
+            error.given,
+            0,
+            3,
+            Protection::ReadWrite,
+            &mut || memory.frames.alloc(),
+        );
+        assert!(mapped.is_ok());
+        destroy(space, &mut memory, free);
+    }
+
+    #[test]
+    fn only_the_active_space_flushes() {
+        let mut memory = Memory::new();
+        let kernel = kernel(&mut memory);
+        let free = memory.frames.free_frames();
+        let space = new_space(&kernel, &mut memory);
+        let object = memory.object(2);
+        space.activate();
+        let mapped = space.map(0x40_0000, object, 0, 2, Protection::ReadOnly, &mut || {
+            memory.frames.alloc()
+        });
+        assert!(mapped.is_ok());
+        assert_eq!(cpu::flushed(), [0x40_0000, 0x40_1000]);
+        let Some(object) = space.unmap(0x40_0000) else {
+            panic!("the mapping is gone");
+        };
+        assert_eq!(cpu::flushed(), [0x40_0000, 0x40_1000]);
+
+        kernel.activate();
+        let mapped = space.map(0x40_0000, object, 0, 2, Protection::ReadOnly, &mut || {
+            memory.frames.alloc()
+        });
+        assert!(mapped.is_ok());
+        assert!(space.unmap(0x40_0000).is_some_and(|object| {
+            memory.free_object(object);
+            true
+        }));
+        assert_eq!(cpu::flushed(), Vec::<u64>::new());
+
+        // Destroying the active space leaves the kernel's tables active.
+        space.activate();
+        destroy(space, &mut memory, free);
+        assert_eq!(cpu::level_4(), kernel.tables.level_4);
+    }
+
+    #[test]
+    fn kernel_space_maps_in_every_space() {
+        let mut memory = Memory::new();
+        let mut kernel = kernel(&mut memory);
+        let space = new_space(&kernel, &mut memory);
+        let start = kernel.kernel_space().start;
+        for (page, kind) in [
+            (start + 8, MapErrorKind::Unaligned),
+            (start - 4096, MapErrorKind::OutsideKernelSpace),
+        ] {
+            let frame = memory.frame();
+            let Err(error) = kernel.map(page, frame, true, &mut || memory.frames.alloc()) else {
+                panic!("mapped {page:#x}");
+            };
+            assert_eq!(error.kind, kind);
+            memory.frames.free(error.given);
+        }
+
+        let frame = memory.frame();
+        let phys = frame.start();
+        let mapped = kernel.map(start, frame, true, &mut || memory.frames.alloc());
+        assert!(mapped.is_ok());
+        assert_eq!(cpu::flushed(), [start]);
+        let expected = Some(Translation {
+            phys: phys + 0x10,
+            writable: true,
+            executable: false,
+            user: false,
+        });
+        assert_eq!(kernel.translate(start + 0x10), expected);
+        // The space was made before the page was mapped, and shares the
+        // level 3 table under the reserved entry.
+        assert_eq!(space.translate(start + 0x10), expected);
+        assert!(!kernel.lower_half_mapped());
+
+        let Some(frame) = kernel.unmap(start) else {
+            panic!("the page at {start:#x} is gone");
+        };
+        assert_eq!(frame.start(), phys);
+        assert!(kernel.unmap(start).is_none());
+        assert_eq!(space.translate(start + 0x10), None);
+        memory.frames.free(frame);
+    }
+
+    #[test]
+    fn user_copies_cross_pages() {
+        let mut memory = Memory::new();
+        let kernel = kernel(&mut memory);
+        let space = new_space(&kernel, &mut memory);
+        let phys_offset = memory.phys_offset;
+        let mut frames: Vec<Frame> = (0..3).map(|_| memory.frame()).collect();
+        fill_frame(phys_offset, &mut frames[0], 4093, b"abc");
+        fill_frame(phys_offset, &mut frames[1], 0, b"def");
+        write_return(phys_offset, &mut frames[2]);
+        let object = Object(Arc::new(frames));
+        let mapped = space.map(0x40_0000, object, 0, 3, Protection::ReadWrite, &mut || {
+            memory.frames.alloc()
+        });
+        assert!(mapped.is_ok());
+        space.activate();
+
+        let mut buf = [0; 6];
+        assert!(copy_from_user(phys_offset, 0x40_0ffd, &mut buf));
+        assert_eq!(&buf, b"abcdef");
+        let mut byte = [0];
+        assert!(copy_from_user(phys_offset, 0x40_2000, &mut byte));
+        assert_eq!(byte, [0xc3]);
+        // The last two bytes are past the mapping.
+        assert!(!copy_from_user(phys_offset, 0x40_2ffe, &mut [0; 4]));
+        // Kernel pages aren't user pages.
+        let start = kernel.kernel_space().start;
+        assert!(!copy_from_user(phys_offset, start, &mut byte));
+    }
+
+    #[test]
+    fn copied_tables_keep_large_pages_and_go_global() {
+        let mut memory = Memory::new();
+        let mut loader = PageTables {
+            phys_offset: memory.phys_offset,
+            level_4: 0,
+        };
+        loader.level_4 = loader.new_table(memory.frame());
+        let level_3 = loader.new_table(memory.frame());
+        let level_2 = loader.new_table(memory.frame());
+        let level_1 = loader.new_table(memory.frame());
+        let index = PageTableIndex::new;
+        let entries = [
+            (loader.level_4, 256, level_3 | PRESENT | WRITABLE),
+            (level_3, 0, level_2 | PRESENT | WRITABLE),
+            // 1 GiB and 2 MiB pages, and a table of 4 KiB ones.
+            (level_3, 1, 0x8000_0000 | PRESENT | PS_OR_PAT | NO_EXECUTE),
+            (level_2, 0, 0x4000_0000 | PRESENT | WRITABLE | PS_OR_PAT),
+            (level_2, 1, level_1 | PRESENT | WRITABLE),
+            (level_1, 3, 0x1234_5000 | PRESENT),
+        ];
+        for (table, i, value) in entries {
+            // SAFETY: The tables aren't in use.
+            unsafe { loader.entry(table, index(i)).store(value) };
+        }
+
+        let level_4 = loader.copy(loader.level_4, 4, UPPER_HALF..512, &mut || {
+            memory.frames.alloc()
+        });
+        let copy = PageTables {
+            phys_offset: memory.phys_offset,
+            level_4,
+        };
+        let base = space_start(index(256)).as_u64();
+        let at = |phys, writable, executable| {
+            Some(Translation {
+                phys,
+                writable,
+                executable,
+                user: false,
+            })
+        };
+        assert_eq!(
+            copy.translate(base + 0x4000_0123),
+            at(0x8000_0123, false, false)
+        );
+        assert_eq!(
+            copy.translate(base + 0x1f_ffff),
+            at(0x401f_ffff, true, true)
+        );
+        assert_eq!(
+            copy.translate(base + 0x20_3456),
+            at(0x1234_5456, false, true)
+        );
+        assert_eq!(copy.translate(base + 0x20_4000), None);
+        let Some(leaf) = copy.leaf(page(base + 0x20_3000)) else {
+            panic!("the 4 KiB page wasn't copied");
+        };
+        assert_eq!(leaf.load(), 0x1234_5000 | PRESENT | GLOBAL);
+        assert_ne!(copy.frame(page(base + 0x20_3000)), loader.frame(page(base)));
+        // The copy has tables of its own.
+        assert_ne!(
+            copy.entry(level_4, index(256)).load(),
+            loader.entry(loader.level_4, index(256)).load()
+        );
+    }
+
+    impl Entry<'_> {
+        /// Sets `bits` if the entry is present, in one atomic step, as the
+        /// CPU's page walker sets Accessed and Dirty.
+        fn walk(self, bits: u64) {
+            // SAFETY: As in load.
+            let entry = unsafe { AtomicU64::from_ptr(self.0) };
+            let _ = entry.try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                (value & PRESENT != 0).then_some(value | bits)
+            });
+        }
+    }
+
+    #[test]
+    fn walker_bits_survive_updates_and_unmaps() {
+        let mut memory = Memory::new();
+        let kernel = kernel(&mut memory);
+        let free = memory.frames.free_frames();
+        let space = new_space(&kernel, &mut memory);
+        for addr in [0x40_0000, 0x40_4000] {
+            let object = memory.object(4);
+            let mapped = space.map(addr, object, 0, 4, Protection::ReadWrite, &mut || {
+                memory.frames.alloc()
+            });
+            assert!(mapped.is_ok());
+        }
+        space.activate();
+        let tables = PageTables {
+            phys_offset: space.tables.phys_offset,
+            level_4: space.tables.level_4,
+        };
+        let walker = thread::spawn(move || {
+            for addr in (0x40_0000..0x40_8000).step_by(4096) {
+                if let Some(leaf) = tables.leaf(page(addr)) {
+                    leaf.walk(ACCESSED | DIRTY);
+                }
+            }
+        });
+        for addr in (0x40_0000..0x40_4000).step_by(4096) {
+            let Some(leaf) = space.tables.leaf(page(addr)) else {
+                panic!("{addr:#x} isn't mapped");
+            };
+            // SAFETY: Nothing reaches the page's memory.
+            unsafe { leaf.update(|value| value & !WRITABLE) };
+        }
+        let Some(object) = space.unmap(0x40_4000) else {
+            panic!("the mapping at 0x40_4000 is gone");
+        };
+        assert!(walker.join().is_ok());
+        memory.free_object(object);
+
+        for addr in (0x40_0000..0x40_4000).step_by(4096) {
+            let Some(leaf) = space.tables.leaf(page(addr)) else {
+                panic!("{addr:#x} isn't mapped");
+            };
+            let value = leaf.load();
+            assert_eq!(value & (WRITABLE | ACCESSED | DIRTY), ACCESSED | DIRTY);
+        }
+        assert_eq!(space.translate(0x40_4000), None);
+        destroy(space, &mut memory, free);
+    }
 }
